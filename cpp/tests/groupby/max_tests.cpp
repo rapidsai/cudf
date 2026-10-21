@@ -218,7 +218,7 @@ struct GroupByMaxFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GroupByMaxFixedPointTest, cudf::test::FixedPointTypes);
 
-TYPED_TEST(GroupByMaxFixedPointTest, MaxDecimalAsValue)
+TYPED_TEST(GroupByMaxFixedPointTest, GroupByHashMaxDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -236,8 +236,8 @@ TYPED_TEST(GroupByMaxFixedPointTest, MaxDecimalAsValue)
     auto const expect_keys     = cudf::test::fixed_width_column_wrapper<K>{1, 2, 3};
     auto const expect_vals_max = fp_wrapper{{6, 9, 8}, scale};
 
-    auto agg3 = cudf::make_max_aggregation<cudf::groupby_aggregation>();
-    test_single_agg(keys, vals, expect_keys, expect_vals_max, std::move(agg3));
+    auto agg7 = cudf::make_max_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals_max, std::move(agg7));
   }
 }
 

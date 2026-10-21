@@ -19,6 +19,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/functional>
 #include <cuda/std/tuple>
 #include <cuda/stream>
 #include <thrust/transform.h>
@@ -87,7 +88,9 @@ struct covariance_transform {
     auto const y = value(d_values_1, i);
 
     size_type const group_idx = d_group_labels[position];
-    return (x - d_means_0[group_idx]) * (y - d_means_1[group_idx]);
+    ResultType const xmean    = d_means_0[group_idx];
+    ResultType const ymean    = d_means_1[group_idx];
+    return (x - xmean) * (y - ymean);
   }
 };
 
@@ -98,18 +101,19 @@ struct covariance_finalizer {
   size_type const* d_group_sizes;
   size_type ddof;
 
-  __device__ void operator()(cuda::std::ptrdiff_t group, ResultType sum) const
+  __device__ void operator()(cuda::std::ptrdiff_t group_idx, ResultType sum) const
   {
-    auto const group_size = d_group_sizes[group];
+    size_type const group_size = d_group_sizes[group_idx];
     // prevent divide by zero error
-    d_result[group] = (group_size == 0 or group_size - ddof <= 0) ? 0.0 : sum / (group_size - ddof);
+    d_result[group_idx] =
+      (group_size == 0 or group_size - ddof <= 0) ? 0.0 : sum / (group_size - ddof);
   }
 };
 }  // namespace
 
 std::unique_ptr<column> group_covariance(column_view const& values_0,
                                          column_view const& values_1,
-                                         hash::group_reduction_plan const& grouped,
+                                         hash::grouped_rows const& grouped,
                                          cudf::device_span<size_type const> group_labels,
                                          size_type num_groups,
                                          column_view const& count,
@@ -153,17 +157,12 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
 
   // One pass over the grouped rows sums the centered products of each group directly from the
   // input columns; the division by the degrees of freedom happens once per group on the output.
-  auto const products =
+  auto corr_iter =
     cudf::detail::make_counting_transform_iterator(cudf::size_type{0}, covariance_transform_op);
   auto const outputs = cuda::tabulate_output_iterator{
     covariance_finalizer<result_type>{d_result, count.data<size_type>(), ddof}};
-  hash::reduce_groups(grouped,
-                      products,
-                      outputs,
-                      cuda::std::plus<result_type>{},
-                      result_type{0},
-                      stream,
-                      cudf::memory_resources{mr, cudf::get_current_device_resource_ref()});
+  hash::reduce_groups(
+    grouped, corr_iter, outputs, cuda::std::plus<result_type>(), result_type{0}, stream, mr);
 
   auto is_null = [ddof, min_periods] __device__(size_type group_size) {
     return not(group_size == 0 or group_size - ddof <= 0 or group_size < min_periods);

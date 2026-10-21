@@ -37,9 +37,9 @@ from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph.collectives.ordering import (
     _metadata_has_ordering,
 )
-from cudf_polars.streaming.actor_graph.collectives.sort import (
-    _can_sort_chunkwise,
-    _sort_to_order_keys,
+from cudf_polars.streaming.actor_graph.collectives.sort import _can_sort_chunkwise
+from cudf_polars.streaming.actor_graph.collectives.sort_utils import (
+    sort_to_order_keys,
 )
 from cudf_polars.streaming.actor_graph.core import evaluate_logical_plan
 from cudf_polars.streaming.actor_graph.utils import (
@@ -52,7 +52,6 @@ from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.utils.config import ConfigOptions
 from cudf_polars.utils.dtypes import make_empty_column
-from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 
 @pytest.fixture(scope="module")
@@ -118,7 +117,7 @@ def test_rapidsmpf_join_metadata(
         right,
         on="y",
         how="left",
-    ).filter(pl.col("x") > pl.col("zz"))
+    ).filter((pl.col("x") > pl.col("zz")) | pl.col("zz").is_null())
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     left_count = left.collect(engine=engine).height
     right_count = right.collect(engine=engine).height
@@ -598,9 +597,6 @@ def _make_order_scheme(
     )
 
 
-@pytest.mark.skipif(
-    POLARS_VERSION_LT_138, reason="set_sorted lowers to unsupported hint ir"
-)
 def test_set_sorted_dataframe_extracts_ordering_boundaries(spmd_engine_factory):
     engine = spmd_engine_factory(
         StreamingOptions(
@@ -1185,7 +1181,7 @@ def test_get_ordering(
         3, partitioning=Partitioning(inter_rank=scheme, local="inherit")
     )
 
-    order_keys = _sort_to_order_keys(sort_xy)
+    order_keys = sort_to_order_keys(sort_xy)
     partitioning = NormalizedPartitioning.from_keys(
         meta.partitioning, nranks=1, keys=order_keys
     )

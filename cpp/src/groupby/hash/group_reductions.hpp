@@ -15,14 +15,14 @@
 #include <memory>
 
 /** @internal @file Internal API in this file are mostly segmented reduction operations on column,
- * which are used after grouping keys with HashCSR.
+ * which are used in groupby aggregations.
  *
  */
 namespace cudf {
 namespace groupby {
 namespace detail {
 namespace hash {
-struct group_reduction_plan;
+struct grouped_rows;
 }  // namespace hash
 /**
  * @brief Internal API to compute histogram for each group in @p values.
@@ -142,12 +142,13 @@ std::unique_ptr<column> group_nunique(column_view const& values,
  * group_offsets = [0,        3,        5,       7, 8]
  * num_groups    = 4
  *
- * group_nth_element(n=0, null_policy::EXCLUDE) = [2, -1, 4, <NA>]
+ * group_nth_element(n=0, null_policy::EXCLUDE) = [2, -1, 4, <NA>]  (group_sizes = [3, 2, 1, 0])
  * group_nth_element(n=0, null_policy::INCLUDE) = [2, -1, <NA>, <NA>]
  * @endcode
  *
  * @param values Grouped values to get nth value of
- * @param group_sizes Number of elements per group
+ * @param group_sizes Number of elements per group; when null_handling is null_policy::EXCLUDE,
+ *  the number of valid elements per group
  * @param group_labels ID of group that the corresponding value belongs to
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param num_groups Number of groups ( unique values in @p group_labels )
@@ -183,7 +184,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
  * @param null_handling Exclude nulls while counting if null_policy::EXCLUDE,
  *        include nulls if null_policy::INCLUDE.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Memory resources used for temporary allocations and the returned column.
+ * @param mr Resources for temporary allocations and the returned column.
  */
 std::unique_ptr<column> group_collect(column_view const& values,
                                       cudf::device_span<size_type const> group_offsets,
@@ -287,17 +288,16 @@ std::unique_ptr<column> group_merge_histogram(column_view const& values,
 /**
  * @brief Internal API to find covariance of child columns of a non-nullable struct column.
  *
- * The children are read in their input order through the grouped rows, so no grouped copy of the
- * values is needed.
+ * The values are read through the grouped rows, so no grouped copy of the values is needed.
  *
  * @param values_0 The first ungrouped values column to compute covariance
  * @param values_1 The second ungrouped values column to compute covariance
  * @param grouped The input rows grouped by key with their reduction schedule
  * @param group_labels ID of the group of each grouped row
  * @param num_groups Number of groups.
- * @param count The count of rows valid in both columns of each group
- * @param mean_0 The mean of the first values column in each group
- * @param mean_1 The mean of the second values column in each group
+ * @param count The count of valid rows of the grouped values of both columns
+ * @param mean_0 The mean of the first grouped values column
+ * @param mean_1 The mean of the second grouped values column
  * @param min_periods The minimum number of non-null rows required to consider the covariance
  * @param ddof The delta degrees of freedom used in the calculation of the variance
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -305,7 +305,7 @@ std::unique_ptr<column> group_merge_histogram(column_view const& values,
  */
 std::unique_ptr<column> group_covariance(column_view const& values_0,
                                          column_view const& values_1,
-                                         hash::group_reduction_plan const& grouped,
+                                         hash::grouped_rows const& grouped,
                                          cudf::device_span<size_type const> group_labels,
                                          size_type num_groups,
                                          column_view const& count,

@@ -22,16 +22,17 @@
 
 namespace cudf::groupby::detail::hash {
 
-/// Stores each group's selected row and clears the validity of groups without a valid row.
+/// Stores each group's input row index and clears the validity of groups without a valid row.
 struct select_group_row_fn {
   size_type* out;
   bitmask_type* mask;
   column_device_view values;
 
-  __device__ void operator()(cuda::std::ptrdiff_t group, size_type row) const
+  __device__ void operator()(cuda::std::ptrdiff_t group, size_type row_index) const
   {
-    out[group] = row;
-    if (mask != nullptr && (row < 0 || row >= values.size() || values.is_null(row))) {
+    out[group] = row_index;
+    if (mask != nullptr &&
+        (row_index < 0 || row_index >= values.size() || values.is_null(row_index))) {
       cudf::clear_bit(mask, static_cast<size_type>(group));
     }
   }
@@ -63,11 +64,11 @@ std::unique_ptr<column> select_group_rows(reduction_context const& ctx,
                            ctx.nullable ? mask_state::ALL_VALID : mask_state::UNALLOCATED,
                            stream,
                            mr.get_output_mr());
-  auto const mask = reinterpret_cast<bitmask_type*>(null_mask.data());
+  auto const mask = null_mask.data();
   reduce(cuda::tabulate_output_iterator{select_group_row_fn{out, mask, ctx.d_values}});
   if (ctx.nullable) {
     auto const null_count = count_group_nulls(mask, ctx.num_groups, stream, mr);
-    result->set_null_mask(std::move(null_mask), null_count);
+    if (null_count > 0) { result->set_null_mask(std::move(null_mask), null_count); }
   }
   return result;
 }

@@ -16,13 +16,17 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/stream_compaction.hpp>
 
 #include <cuda/iterator>
 
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <type_traits>
 #include <vector>
 
@@ -682,7 +686,7 @@ TEST_F(groupby_key_shape_test, SingletonRepresentativesAcrossOperations)
     cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(cudf::rank_method::DENSE));
   auto const scan_result = gb.scan(scans, stream);
   EXPECT_EQ(scan_result.first->num_rows(), 3);
-  check_unique();  // Cached singleton metadata uses the group-offset prefix.
+  check_unique();  // Representatives come from the cached singleton metadata.
 
   std::vector<cudf::groupby::aggregation_request> requests(1);
   requests[0].values = values;
@@ -693,6 +697,67 @@ TEST_F(groupby_key_shape_test, SingletonRepresentativesAcrossOperations)
   auto const actual = cudf::sort(
     cudf::table_view{{result_keys->view().column(0), *results[0].results[0]}}, {}, {}, stream);
   CUDF_TEST_EXPECT_TABLES_EQUAL((cudf::table_view{{expected_keys, expected_sums}}), actual->view());
+}
+
+TEST_F(groupby_key_shape_test, StableGroupedRows)
+{
+  using int32s      = cudf::test::fixed_width_column_wrapper<int32_t>;
+  auto const stream = cudf::test::get_default_stream();
+  auto const scan   = [&](cudf::groupby::groupby& gb, cudf::column_view values) {
+    std::vector<cudf::groupby::scan_request> requests(1);
+    requests[0].values = values;
+    requests[0].aggregations.push_back(
+      cudf::make_sum_aggregation<cudf::groupby_scan_aggregation>());
+    auto [keys, results] = gb.scan(requests, stream);
+    auto columns         = keys->release();
+    columns.push_back(std::move(results[0].results[0]));
+    return std::make_unique<cudf::table>(std::move(columns));
+  };
+  // Stably sorting the hash-ordered groups by key retains the order within each group, which
+  // must be the input order for grouped values, and for scans that also use the group labels.
+  auto const check = [&](cudf::column_view keys) {
+    auto const values = cudf::sequence(keys.size(), cudf::numeric_scalar<int32_t>(0), stream);
+    auto const input  = cudf::table_view{{keys, *values}};
+    for (auto const nulls : {cudf::null_policy::EXCLUDE, cudf::null_policy::INCLUDE}) {
+      SCOPED_TRACE(::testing::Message() << "num_rows=" << keys.size() << " include_null_keys="
+                                        << (nulls == cudf::null_policy::INCLUDE));
+      auto const included = nulls == cudf::null_policy::EXCLUDE
+                              ? cudf::drop_nulls(input, {0}, stream)
+                              : std::make_unique<cudf::table>(input, stream);
+      auto const expected =
+        cudf::stable_sort_by_key(included->view(), included->select({0}), {}, {}, stream);
+
+      cudf::groupby::groupby grouped(cudf::table_view{{keys}}, nulls);
+      auto const groups        = grouped.get_groups(cudf::table_view{{*values}}, stream);
+      auto const actual_groups = cudf::stable_sort_by_key(
+        cudf::table_view{{groups.keys->get_column(0), groups.values->get_column(0)}},
+        groups.keys->view(),
+        {},
+        {},
+        stream);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), actual_groups->view());
+
+      cudf::groupby::groupby presorted(expected->select({0}), nulls, cudf::sorted::YES);
+      auto const expected_scan = scan(presorted, expected->get_column(1));
+      cudf::groupby::groupby hashed(cudf::table_view{{keys}}, nulls);
+      auto const actual_scan = scan(hashed, *values);
+      auto const sorted_scan =
+        cudf::stable_sort_by_key(actual_scan->view(), actual_scan->select({0}), {}, {}, stream);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_scan->view(), sorted_scan->view());
+    }
+  };
+
+  // Excluding the null key leaves only singletons, or a single group; including it adds a group.
+  check(int32s{{3, 0, 1, 2}, nulls_at({1})});
+  check(int32s{{5, 0, 5, 5}, nulls_at({1})});
+  // A single group without excluded rows, and repeated keys with and without excluded rows.
+  check(int32s{5, 5, 5});
+  check(int32s{{2, 0, 1, 2, 0, 1, 2}, nulls_at({1, 4})});
+  // A large input sizes its table from an estimate, so the build counts rows by hash slot.
+  constexpr cudf::size_type num_rows = (1 << 21) + 3;
+  auto const key_it =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 1000; });
+  check(int32s(key_it, key_it + num_rows, nulls_at_multiples_of(7)));
 }
 
 template <typename T>

@@ -46,7 +46,7 @@ dependencies:
 - kvikio==26.12.*,>=0.0.0a0
 - libcufile-dev
 - libkvikio==26.12.*,>=0.0.0a0
-- libnvcomp-dev==5.3.0.16
+- libnvcomp-dev==6.0.0.12
 - libnvjitlink-dev
 - librapidsmpf==26.12.*,>=0.0.0a0
 - librdkafka<2.15.0a0
@@ -77,10 +77,10 @@ dependencies:
 - packaging
 - pandas>=3.0.0,<3.1.0
 - pandoc
-- polars>=1.35,<1.45
+- polars>=2.0,<2.1
 - pre-commit
 - psutil
-- pyarrow>=19.0.0,<26.0.0
+- pyarrow>=19.0.0
 - pytables
 - pytest-benchmark
 - pytest-cases>=3.8.2

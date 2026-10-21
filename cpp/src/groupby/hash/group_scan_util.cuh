@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "group_struct_minmax_scan.hpp"
+#include "groupby/common/group_struct_minmax_scan.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -13,6 +13,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -199,8 +200,8 @@ struct group_scan_functor<K,
     if (values.is_empty()) { return cudf::empty_like(values); }
 
     // Create a gather map containing indices of the prefix min/max elements within each group.
-    auto gather_map =
-      cuda::device_buffer<size_type>(stream, mr.get_temporary_mr(), values.size(), cuda::no_init);
+    cuda::device_buffer<size_type> gather_map(
+      stream, mr.get_temporary_mr(), values.size(), cuda::no_init);
 
     scan_struct_argminmax(
       values, group_labels, gather_map.data(), K == aggregation::MIN, stream, mr);

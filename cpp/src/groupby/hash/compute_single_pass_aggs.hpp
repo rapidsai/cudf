@@ -58,7 +58,7 @@ bool is_single_pass_agg_supported(data_type values_type, aggregation::Kind kind)
  * Small groups use scalar folds, bounded groups use warp reductions, and long groups
  * use block-reduced chunks. Group IDs preserve the original output order.
  */
-struct group_reduction_plan {
+struct grouped_rows {
   device_span<size_type const> rows;     ///< Input row index at each grouped position
   device_span<size_type const> offsets;  ///< Group boundaries in rows
   cuda::device_buffer<size_type>
@@ -79,10 +79,10 @@ struct group_reduction_plan {
  * @param mr Device memory resources used to allocate the returned arrays and temporary storage
  * @return Grouped rows with the arrays required by the chosen reduction strategy
  */
-group_reduction_plan make_group_reduction_plan(device_span<size_type const> rows,
-                                               device_span<size_type const> offsets,
-                                               cuda::stream_ref stream,
-                                               cudf::memory_resources mr);
+grouped_rows make_grouped_rows(device_span<size_type const> rows,
+                               device_span<size_type const> offsets,
+                               cuda::stream_ref stream,
+                               cudf::memory_resources mr);
 
 /**
  * @brief Computes one single-pass aggregation per values column as a reduction over the grouped
@@ -102,7 +102,7 @@ std::vector<std::unique_ptr<column>> compute_single_pass_aggs(
   table_view const& values,
   host_span<aggregation::Kind const> agg_kinds,
   std::span<int8_t const> is_agg_intermediate,
-  group_reduction_plan const& grouped,
+  grouped_rows const& grouped,
   cuda::stream_ref stream,
   cudf::memory_resources mr);
 

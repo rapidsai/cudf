@@ -12,6 +12,8 @@
 
 #include <cudf/aggregation.hpp>
 
+#include <cuda/std/type_traits>
+
 #include <type_traits>
 
 using key_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
@@ -19,7 +21,7 @@ using key_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
 template <typename T>
 struct groupby_sum_scan_test : public cudf::test::BaseFixture {
   using V              = T;
-  using R              = std::conditional_t<std::is_integral_v<V>, int64_t, V>;
+  using R              = std::conditional_t<cuda::std::is_integral_v<V>, int64_t, V>;
   using value_wrapper  = cudf::test::fixed_width_column_wrapper<V, int32_t>;
   using result_wrapper = cudf::test::fixed_width_column_wrapper<R, int32_t>;
 };
@@ -140,7 +142,7 @@ struct GroupBySumScanFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GroupBySumScanFixedPointTest, cudf::test::FixedPointTypes);
 
-TYPED_TEST(GroupBySumScanFixedPointTest, SumScanDecimalAsValue)
+TYPED_TEST(GroupBySumScanFixedPointTest, GroupBySortSumScanDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;

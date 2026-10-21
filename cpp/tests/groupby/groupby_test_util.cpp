@@ -65,7 +65,7 @@ void test_single_agg(cudf::column_view const& keys,
       auto const sort_expect_order =
         cudf::sorted_order(cudf::table_view{{expect_keys}}, column_order, null_precedence);
       auto sorted_expect_keys = cudf::gather(cudf::table_view{{expect_keys}}, *sort_expect_order);
-      auto sorted_expect_vals = reorder_aggregation_values(expect_vals, *sort_expect_order);
+      auto sorted_expect_vals = cudf::gather(cudf::table_view{{expect_vals}}, *sort_expect_order);
       return std::make_pair(std::move(sorted_expect_keys), std::move(sorted_expect_vals));
     } else {
       auto sorted_expect_keys = std::make_unique<cudf::table>(cudf::table_view{{expect_keys}});
@@ -106,12 +106,13 @@ void test_single_agg(cudf::column_view const& keys,
 
   // --- Streaming groupby path (single-batch, validates against same expected output) ---
   // Skip streaming for: empty input (finalize throws), dictionary values (unsupported by
-  // streaming's row operators), ARGMIN/ARGMAX (batch-local row indices), or pre-sorted
-  // keys (streaming doesn't support sorted mode).
+  // streaming's row operators), unsupported aggregations, or pre-sorted keys (streaming
+  // doesn't support sorted mode).
   auto const skip_streaming =
     keys.size() == 0 || expect_keys.size() == 0 ||
-    values.type().id() == cudf::type_id::DICTIONARY32 || agg->kind == cudf::aggregation::ARGMIN ||
-    agg->kind == cudf::aggregation::ARGMAX || keys_are_sorted == cudf::sorted::YES;
+    values.type().id() == cudf::type_id::DICTIONARY32 ||
+    !cudf::groupby::is_streaming_groupby_supported(values.type(), agg->kind) ||
+    keys_are_sorted == cudf::sorted::YES;
 
   if (use_streaming == test_streaming::YES && !skip_streaming) {
     SCOPED_TRACE("streaming groupby path");
@@ -163,7 +164,7 @@ void test_sum_agg(cudf::column_view const& keys,
                   {},
                   {},
                   cudf::sorted::NO,
-                  test_streaming::NO,
+                  test_streaming::YES,
                   location);
 }
 
@@ -191,14 +192,20 @@ void test_single_scan(cudf::column_view const& keys,
 
   auto result = gb_obj.scan(requests);
 
-  // Group order is unspecified; preserve each group's row order when normalizing it.
-  auto const actual_order   = cudf::stable_sorted_order(result.first->view());
-  auto const expected_order = cudf::stable_sorted_order(cudf::table_view{{expect_keys}});
-  auto const actual_keys    = cudf::gather(result.first->view(), *actual_order);
-  auto const actual_values =
-    cudf::gather(cudf::table_view{{result.second[0].results[0]->view()}}, *actual_order);
-  auto const expected_keys   = cudf::gather(cudf::table_view{{expect_keys}}, *expected_order);
-  auto const expected_values = cudf::gather(cudf::table_view{{expect_vals}}, *expected_order);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_keys, *actual_keys);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_values->get_column(0), actual_values->get_column(0));
+  if (keys_are_sorted == cudf::sorted::YES) {
+    CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view({expect_keys}), result.first->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, *result.second[0].results[0]);
+  } else {
+    // Group order is unspecified; preserve each group's row order when normalizing it.
+    auto const actual_order   = cudf::stable_sorted_order(result.first->view());
+    auto const expected_order = cudf::stable_sorted_order(cudf::table_view{{expect_keys}});
+    auto const actual_keys    = cudf::gather(result.first->view(), *actual_order);
+    auto const actual_values =
+      cudf::gather(cudf::table_view{{result.second[0].results[0]->view()}}, *actual_order);
+    auto const expected_keys   = cudf::gather(cudf::table_view{{expect_keys}}, *expected_order);
+    auto const expected_values = cudf::gather(cudf::table_view{{expect_vals}}, *expected_order);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_keys, *actual_keys);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_values->get_column(0),
+                                        actual_values->get_column(0));
+  }
 }

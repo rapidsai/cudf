@@ -211,12 +211,13 @@ struct GroupByMinFixedPointTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GroupByMinFixedPointTest, cudf::test::FixedPointTypes);
 
-TYPED_TEST(GroupByMinFixedPointTest, MinDecimalAsValue)
+TYPED_TEST(GroupByMinFixedPointTest, GroupByHashMinDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using K          = int32_t;
 
   for (auto const i : {2, 1, 0, -1, -2}) {
     auto const scale = scale_type{i};
@@ -228,8 +229,8 @@ TYPED_TEST(GroupByMinFixedPointTest, MinDecimalAsValue)
     auto const expect_keys     = cudf::test::fixed_width_column_wrapper<K>{1, 2, 3};
     auto const expect_vals_min = fp_wrapper{{0, 1, 2}, scale};
 
-    auto agg2 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
-    test_single_agg(keys, vals, expect_keys, expect_vals_min, std::move(agg2));
+    auto agg6 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
+    test_single_agg(keys, vals, expect_keys, expect_vals_min, std::move(agg6));
   }
 }
 

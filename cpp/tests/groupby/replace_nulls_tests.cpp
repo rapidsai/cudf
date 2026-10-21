@@ -103,6 +103,21 @@ TYPED_TEST(GroupbyReplaceNullsFixedWidthTest, FollowingFillTrailingNulls)
   TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, cudf::replace_policy::FOLLOWING);
 }
 
+TYPED_TEST(GroupbyReplaceNullsFixedWidthTest, PrecedingFillNullKeys)
+{
+  // Rows with null keys are excluded and do not fill other rows.
+  // Group 0 value: {null, 24, null}  --> {null, 24, 24}
+  // Group 1 value: {7, null}         --> {7, 7}
+  cudf::test::fixed_width_column_wrapper<K> key({0, 0, 1, 0, 0, 1, 1}, {0, 1, 1, 1, 1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<TypeParam> val({5, 42, 7, 24, 1, 9, 1000},
+                                                        {1, 0, 1, 1, 0, 1, 0});
+
+  cudf::test::fixed_width_column_wrapper<K> expect_key({0, 0, 0, 1, 1}, no_nulls());
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_val({-1, 24, 24, 7, 7}, {0, 1, 1, 1, 1});
+
+  TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, cudf::replace_policy::PRECEDING);
+}
+
 struct GroupbyReplaceNullsStringsTest : public cudf::test::BaseFixture {};
 
 TEST_F(GroupbyReplaceNullsStringsTest, PrecedingFill)

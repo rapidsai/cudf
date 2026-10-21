@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -16,7 +16,9 @@
 #include <memory>
 #include <optional>
 
-namespace cudf::groupby::detail {
+namespace cudf {
+namespace groupby {
+namespace detail {
 /**
  * @brief Functor to dispatch aggregation with
  *
@@ -43,37 +45,50 @@ struct store_result_functor {
   [[nodiscard]] bool is_presorted() const { return helper.is_presorted(); }
 
   /**
-   * @brief Get the grouped values
+   * @brief Borrow grouped values in their original order within each group.
    *
    * Computes the grouped values from @p values on first invocation and returns
-   * the stored result on subsequent invocation
+   * the stored result on subsequent invocations, including after ownership has
+   * been transferred to a cached result by release_grouped_values().
    */
   column_view get_grouped_values()
   {
     if (is_presorted()) { return values; }
     if (grouped_values_view) { return *grouped_values_view; }
 
-    // Input order is required by NTH_ELEMENT, COLLECT_LIST and host UDFs even when a prior
-    // aggregation on the same values requested a value-sorted view.
-    return grouped_values ? grouped_values->view()
-                          : (grouped_values = helper.grouped_values(values, stream, mr))->view();
-  };
+    // Positional aggregations and host UDFs need input order within every group,
+    // even if an earlier aggregation requested a value-sorted view.
+    return grouped_values
+             ? grouped_values->view()
+             : (grouped_values = helper.grouped_values(values, stream, mr.get_output_mr()))->view();
+  }
 
   /**
-   * @brief Take ownership of the grouped values, keeping a view for later aggregations.
+   * @brief Transfer grouped values to a result, retaining a view for later aggregations.
    *
-   * The input itself is not ours to hand over, so presorted values are copied.
+   * Moves the owned column to the caller and retains a non-owning view so later
+   * aggregations can reuse the same storage without gathering the values again.
+   * The caller must keep the unmodified column alive in the result cache while
+   * later aggregations use that view. For presorted keys, copies the borrowed
+   * input values instead.
    */
-  std::unique_ptr<column> take_grouped_values()
+  std::unique_ptr<column> release_grouped_values()
   {
     if (is_presorted()) { return std::make_unique<column>(values, stream, mr.get_output_mr()); }
-    if (!grouped_values) { grouped_values = helper.grouped_values(values, stream, mr); }
+    if (!grouped_values) {
+      grouped_values = helper.grouped_values(values, stream, mr.get_output_mr());
+    }
     grouped_values_view = grouped_values->view();
     return std::move(grouped_values);
   }
 
   /**
-   * @brief Get grouped values for aggregations that do not depend on row order.
+   * @brief Borrow grouped values without requiring a particular order within each group.
+   *
+   * All cached layouts keep the helper's group order with the same group boundaries,
+   * so any of them can be used with helper.group_labels() and helper.group_offsets().
+   * Only the value order within each group may differ: original input order, sorted
+   * value order, or an unspecified order while the helper's rows are not yet stable.
    */
   column_view get_unordered_grouped_values()
   {
@@ -85,29 +100,26 @@ struct store_result_functor {
     if (helper.is_stable()) { return get_grouped_values(); }
 
     // Keep this cache separate: order-sensitive aggregations must always obtain a stable view.
-    return unordered_grouped_values
-             ? unordered_grouped_values->view()
-             : (unordered_grouped_values = helper.unordered_grouped_values(
-                  values,
-                  stream,
-                  cudf::memory_resources{mr.get_temporary_mr(), mr.get_temporary_mr()}))
-                 ->view();
+    return unordered_grouped_values ? unordered_grouped_values->view()
+                                    : (unordered_grouped_values = helper.unordered_grouped_values(
+                                         values, stream, mr.get_temporary_mr()))
+                                        ->view();
   }
 
   /**
    * @brief Get the grouped and sorted values
    *
    * Computes the grouped and sorted (within each group) values from @p values
-   * on first invocation and returns the stored result on subsequent invocation
+   * on first invocation and returns the stored result on subsequent invocations.
+   * This layout can coexist with the original-order grouped values: for example,
+   * NUNIQUE needs sorted values, while a later NTH_ELEMENT needs input order.
    */
   column_view get_sorted_values()
   {
-    return sorted_values ? sorted_values->view()
-                         : (sorted_values = helper.sorted_values(
-                              values,
-                              stream,
-                              cudf::memory_resources{mr.get_temporary_mr(), mr.get_temporary_mr()}))
-                             ->view();
+    return sorted_values
+             ? sorted_values->view()
+             : (sorted_values = helper.sorted_values(values, stream, mr.get_temporary_mr()))
+                 ->view();
   };
 
  protected:
@@ -116,12 +128,13 @@ struct store_result_functor {
   column_view const& values;          ///< Column of values to group and aggregate
 
   cuda::stream_ref stream;    ///< CUDA stream on which to execute kernels
-  cudf::memory_resources mr;  ///< Resources for returned values and temporary storage
+  cudf::memory_resources mr;  ///< Resources for results and temporary storage
 
-  std::unique_ptr<column> sorted_values;           ///< Memoised grouped and sorted values
-  std::unique_ptr<column> grouped_values;          ///< Memoised grouped values
-  std::optional<column_view> grouped_values_view;  ///< Grouped values handed to a result
-  std::unique_ptr<column>
-    unordered_grouped_values;  ///< Memoised values with no row-order guarantee
+  std::unique_ptr<column> sorted_values;             ///< Memoised grouped and sorted values
+  std::unique_ptr<column> grouped_values;            ///< Memoised grouped values
+  std::optional<column_view> grouped_values_view;    ///< Values now owned by a cached result
+  std::unique_ptr<column> unordered_grouped_values;  ///< Memoised grouped values in any row order
 };
-}  // namespace cudf::groupby::detail
+}  // namespace detail
+}  // namespace groupby
+}  // namespace cudf

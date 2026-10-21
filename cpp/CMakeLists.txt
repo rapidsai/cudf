@@ -733,6 +733,7 @@ add_library(
   src/filling/fill.cu
   src/filling/repeat.cu
   src/filling/sequence.cu
+  src/groupby/common/group_struct_minmax_scan.cu
   src/groupby/common/groupby_helper.cu
   src/groupby/common/groupby_helper_nested.cu
   src/groupby/common/m2_var_std.cu
@@ -759,7 +760,6 @@ add_library(
   src/groupby/hash/group_quantiles.cu
   src/groupby/hash/group_rank_scan.cu
   src/groupby/hash/group_replace_nulls.cu
-  src/groupby/hash/group_struct_minmax_scan.cu
   src/groupby/hash/group_sum_scan.cu
   src/groupby/hash/group_topk.cu
   src/groupby/hash/groupby.cpp
@@ -778,12 +778,9 @@ add_library(
   src/groupby/streaming_groupby/aggregate.cu
   src/groupby/streaming_groupby/impl.cu
   src/groupby/streaming_groupby/insert.cu
-  src/groupby/streaming_groupby/insert_first.cu
-  src/groupby/streaming_groupby/insert_first_nested.cu
   src/groupby/streaming_groupby/insert_nested.cu
-  src/groupby/streaming_groupby/insert_subsequent.cu
-  src/groupby/streaming_groupby/insert_subsequent_nested.cu
   src/groupby/streaming_groupby/merge.cu
+  src/groupby/streaming_groupby/warp_aggregate.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
@@ -1479,18 +1476,6 @@ if(TARGET conda_env)
 endif()
 
 rapids_cuda_set_runtime(cudf USE_STATIC ON)
-
-file(
-  WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
-  [=[
-SECTIONS
-{
-  .nvFatBinSegment : { *(.nvFatBinSegment) }
-  .nv_fatbin : { *(.nv_fatbin) }
-}
-]=]
-)
-target_link_options(cudf PRIVATE "$<HOST_LINK:${CUDF_BINARY_DIR}/fatbin.ld>")
 
 add_library(cudf::cudf ALIAS cudf)
 

@@ -149,12 +149,13 @@ struct FixedPointTestBothReps : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, MeanDecimalAsValue)
+TYPED_TEST(FixedPointTestBothReps, GroupByHashMeanDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using K          = int32_t;
 
   for (auto const i : {2, 1, 0, -1, -2}) {
     auto const scale = scale_type{i};

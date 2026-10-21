@@ -82,13 +82,6 @@ struct aggregation_result {
 
 /**
  * @brief Groups values by keys and computes aggregations on those groups.
- *
- * Aggregations, scans, and other grouped operations share grouping metadata. Keys not declared
- * presorted are grouped by hashing; keys declared presorted are grouped by comparing adjacent rows.
- *
- * Order-sensitive operations, such as NTH_ELEMENT and COLLECT_LIST, preserve input row order
- * within each group. Aggregations that require values in sorted order, such as QUANTILE and
- * MEDIAN, sort values within each group as needed.
  */
 class groupby {
  public:
@@ -103,10 +96,9 @@ class groupby {
    * @brief Construct a groupby object with the specified `keys`
    *
    * If the `keys` are already sorted, better performance may be achieved by
-   * passing `keys_are_sorted == sorted::YES`: equal keys are then expected to be
-   * adjacent and are grouped by comparing neighboring rows instead of hashing.
-   * Input sortedness is not detected or checked. Operations still build grouping metadata
-   * and filter rows with null keys when `null_handling == null_policy::EXCLUDE`.
+   * passing `keys_are_sorted == true` and indicating the  ascending/descending
+   * order of each column and null order in  `column_order` and
+   * `null_precedence`, respectively.
    *
    * @note This object does *not* maintain the lifetime of `keys`. It is the
    * user's responsibility to ensure the `groupby` object does not outlive the
@@ -116,13 +108,12 @@ class groupby {
    * @param null_handling Indicates whether rows in `keys` that contain
    * NULL values should be included
    * @param keys_are_sorted Indicates whether rows in `keys` are already sorted
-   * @param column_order If `keys_are_sorted == sorted::YES`, indicates whether each
-   * column is ascending/descending. Grouping presorted keys only relies on equal
-   * keys being adjacent, so this does not affect the result. Ignored if
-   * `keys_are_sorted == sorted::NO`.
-   * @param null_precedence If `keys_are_sorted == sorted::YES`, indicates the ordering
-   * of null values in each column. Like `column_order`, this does not affect the
-   * result. Ignored if `keys_are_sorted == sorted::NO`.
+   * @param column_order If `keys_are_sorted == YES`, indicates whether each
+   * column is ascending/descending. If empty, assumes all  columns are
+   * ascending. Ignored if `keys_are_sorted == false`.
+   * @param null_precedence If `keys_are_sorted == YES`, indicates the ordering
+   * of null values in each column. Else, ignored. If empty, assumes all columns
+   * use `null_order::AFTER`. Ignored if `keys_are_sorted == false`.
    */
   explicit groupby(table_view const& keys,
                    null_policy null_handling                      = null_policy::EXCLUDE,
@@ -209,8 +200,8 @@ class groupby {
    * `keys` given to groupby object. Element `i` across all aggregation results
    * belongs to the group at row `i` in the group labels table.
    *
-   * Groups appear in arbitrary order, while rows within each group retain their input order.
-   * Successive `groupby::scan` calls may return groups in different orders.
+   * The order of the rows in the group labels is arbitrary. Furthermore,
+   * successive `groupby::scan` calls may return results in different orders.
    *
    * @throws cudf::logic_error If `requests[i].values.size() !=
    * keys.num_rows()`.
@@ -394,12 +385,9 @@ class groupby {
    * @brief Get the grouping helper object
    *
    * The object is constructed on first invocation and subsequent invocations
-   * of this function return the memoized object. The first invocation retains the
-   * temporary resource for cached grouping data.
-   *
-   * @param mr Memory resources for the operation that initializes the helper
+   * of this function return the memoized object.
    */
-  detail::groupby_helper& helper(cudf::memory_resources mr);
+  detail::groupby_helper& helper();
 
   /**
    * @brief Compute scan requests over the cached groups.
@@ -433,10 +421,10 @@ struct streaming_aggregation_request {
  * `streaming_groupby` and the stateless `groupby` serve different use cases.  Use
  * the stateless `groupby` for single-shot aggregation when all input fits in memory
  * at once.  Use `streaming_groupby` when input arrives over multiple batches and
- * memory efficiency matters: peak memory does not scale with the number of *input*
- * rows, because only the distinct keys seen so far and one aggregation slot per
- * group are kept across batches.  Arbitrarily long high-duplicate streams therefore
- * accumulate without running out of memory.
+ * memory efficiency matters: only distinct keys and bounded partial aggregate state
+ * are retained across batches. Memory requirements depend on the capacity bound,
+ * distinct key data, requested aggregations, and batch sizes, rather than the
+ * cumulative number of input rows.
  *
  * If memory is not a concern, concatenating all batches and calling the stateless
  * `groupby` once is also a valid choice.  Reach for `streaming_groupby` when
@@ -448,11 +436,12 @@ struct streaming_aggregation_request {
  * can be combined via `merge()`, and final results are produced via `finalize()`.
  *
  * The `max_distinct_keys` parameter sets the upper bound on the number of distinct key
- * combinations across the lifetime of this object.  The persistent state is sized to
- * `max_distinct_keys` (constant for the lifetime of the object); the stored distinct
- * keys grow with the number of distinct keys actually seen, so the incremental key
- * storage is O(`distinct_keys()` × key_size) and does not scale with cumulative input
- * rows.
+ * combinations across the lifetime of this object. The hash set and companion key-index
+ * storage have fixed capacities determined by this bound. Aggregate capacity grows
+ * with observed groups and may hold multiple partials per group, with the number of
+ * partials bounded based on batch size. Stored distinct keys grow with the number of
+ * distinct keys actually seen, so incremental key storage is O(`distinct_keys()` × key_size)
+ * and does not scale with cumulative input rows.
  *
  * Cumulative input rows are not bounded — only cumulative distinct keys.  A single
  * batch may also not exceed `max_distinct_keys` rows; this is an implementation
@@ -493,11 +482,14 @@ class streaming_groupby {
    *
    * @param key_indices Indices of columns in the data table that serve as groupby keys
    * @param requests The aggregations to perform and which columns to aggregate
-   * @param max_distinct_keys Upper bound on distinct key combinations. The hash set,
-   *        companion vectors, and aggregation results table are all sized to this
-   *        capacity. Cumulative input rows are not bounded.
+   * @param max_distinct_keys Upper bound on distinct key combinations. The hash set is sized to
+   *        approximately twice this bound and companion vectors to this bound. Aggregate state
+   *        grows with observed groups and uses bounded partials based on batch size. Cumulative
+   *        input rows are not bounded.
    * @param null_handling Indicates whether rows in keys that contain NULL values should be included
-   * @param mr Device memory resource used to allocate the persistent hash table
+   * @param mr Device memory resource used to allocate all persistent state, including the hash
+   *        table, stored keys, and aggregate results. Temporary allocations made by aggregate()
+   *        and merge() use the current device memory resource.
    *
    * @throws std::invalid_argument if `max_distinct_keys <= 0`
    * @throws std::invalid_argument if any requested aggregation kind is unsupported

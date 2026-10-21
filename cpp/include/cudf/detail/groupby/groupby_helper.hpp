@@ -19,8 +19,8 @@
 
 namespace cudf::groupby::detail {
 namespace hash {
-struct grouped_keys;
-struct group_reduction_plan;
+class grouped_keys;
+struct grouped_rows;
 }  // namespace hash
 
 /**
@@ -45,16 +45,14 @@ struct groupby_helper {
    * @param include_null_keys Include rows in keys with nulls
    * @param keys_pre_sorted Indicate if the keys are already sorted. Enables
    *                        grouping by adjacent equality without hashing.
-   * @param mr Memory resources whose temporary resource is retained for cached grouping data
    */
-  groupby_helper(table_view const& keys,
-                 null_policy include_null_keys,
-                 sorted keys_pre_sorted,
-                 cudf::memory_resources mr);
+  groupby_helper(table_view const& keys, null_policy include_null_keys, sorted keys_pre_sorted);
 
   ~groupby_helper();
   groupby_helper(groupby_helper const&)            = delete;
   groupby_helper& operator=(groupby_helper const&) = delete;
+  groupby_helper(groupby_helper&&) noexcept;
+  groupby_helper& operator=(groupby_helper&&) noexcept;
 
   /**
    * @brief Groups a column of values according to `keys` and sorts within each
@@ -68,12 +66,12 @@ struct groupby_helper {
    *
    * @param values The value column to group and sort
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Memory resources for returned values and temporary allocations
+   * @param mr Device memory resource used to allocate the returned device memory
    * @return the sorted and grouped column
    */
   std::unique_ptr<column> sorted_values(column_view const& values,
                                         cuda::stream_ref stream,
-                                        cudf::memory_resources mr);
+                                        rmm::device_async_resource_ref mr);
 
   /**
    * @brief Groups a column of values according to `keys`
@@ -84,12 +82,12 @@ struct groupby_helper {
    *
    * @param values The value column to group
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Memory resources for returned values and temporary allocations
+   * @param mr Device memory resource used to allocate the returned device memory
    * @return the grouped column
    */
   std::unique_ptr<column> grouped_values(column_view const& values,
                                          cuda::stream_ref stream,
-                                         cudf::memory_resources mr);
+                                         rmm::device_async_resource_ref mr);
 
   /**
    * @brief Groups values without requiring their original order within each group.
@@ -99,41 +97,31 @@ struct groupby_helper {
    *
    * @param values The value column to group
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Memory resources for returned values and temporary allocations
+   * @param mr Device memory resource used to allocate the returned device memory
    * @return the grouped column with unspecified order within each group
    */
   std::unique_ptr<column> unordered_grouped_values(column_view const& values,
                                                    cuda::stream_ref stream,
-                                                   cudf::memory_resources mr);
+                                                   rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Get a table of distinct keys
+   * @brief Get a table of unique keys
    *
-   * @param stream CUDA stream used for device operations
-   * @param mr Memory resources for output and temporary allocations
    * @return a new table in which each row is a unique row in the grouped key table.
    */
-  std::unique_ptr<table> distinct_keys(cuda::stream_ref stream, cudf::memory_resources mr);
+  std::unique_ptr<table> unique_keys(cuda::stream_ref stream, rmm::device_async_resource_ref mr);
 
   /**
    * @brief Get a table of grouped keys
    *
-   * @param stream CUDA stream used for device operations
-   * @param mr Memory resources for output and temporary allocations
    * @return a new table containing the grouped keys.
    */
-  std::unique_ptr<table> grouped_keys(cuda::stream_ref stream, cudf::memory_resources mr);
+  std::unique_ptr<table> grouped_keys(cuda::stream_ref stream, rmm::device_async_resource_ref mr);
 
   /**
    * @brief Get the number of groups in `keys`
-   *
-   * @param stream CUDA stream used for device operations
-   * @param mr Memory resources whose temporary resource is used for operation scratch
    */
-  size_type num_groups(cuda::stream_ref stream, cudf::memory_resources mr)
-  {
-    return group_offsets(stream, mr).size() - 1;
-  }
+  size_type num_groups(cuda::stream_ref stream) { return group_offsets(stream).size() - 1; }
 
   /**
    * @brief Check whether grouped values can use the input order without filtering or gathering
@@ -151,11 +139,8 @@ struct groupby_helper {
    * When include_null_keys = YES, returned value is same as `keys.num_rows()`
    * When include_null_keys = NO, returned value is the number of rows in `keys`
    *  in which no element is null
-   *
-   * @param stream CUDA stream used for device operations
-   * @param mr Memory resources whose temporary resource is used for operation scratch
    */
-  size_type num_keys(cuda::stream_ref stream, cudf::memory_resources mr);
+  size_type num_keys(cuda::stream_ref stream);
 
   /**
    * @brief Get the grouped order of `keys`, retaining input order within each group.
@@ -169,101 +154,84 @@ struct groupby_helper {
    * the stored order on subsequent calls. Pass `keep_labels` when `group_labels`
    * will be requested too, so the labels sorted alongside the rows are kept.
    *
-   * @param keep_labels Retain group labels produced while stabilizing rows
-   * @param stream CUDA stream used for device operations
-   * @param mr Memory resources whose temporary resource is used for operation scratch
    * @return the grouped row indices for `keys`.
    */
-  column_view grouped_order(bool keep_labels, cuda::stream_ref stream, cudf::memory_resources mr);
+  column_view grouped_order(bool keep_labels, cuda::stream_ref stream);
 
   /**
    * @brief Get grouped row indices without requiring input order within each group.
    *
    * The returned span is invalidated if a later request materializes stable row order.
-   *
-   * @param stream CUDA stream used for device operations
-   * @param mr Memory resources whose temporary resource is used for operation scratch
    */
-  device_span<size_type const> unordered_grouped_order(cuda::stream_ref stream,
-                                                       cudf::memory_resources mr);
+  device_span<size_type const> unordered_grouped_order(cuda::stream_ref stream);
 
   /**
    * @brief Get cached row indices, offsets, and scheduling arrays for direct reductions.
    *
    * The returned reference is invalidated if a later request materializes stable row order.
-   *
-   * @param stream CUDA stream used for device operations
-   * @param mr Memory resources whose temporary resource is used for operation scratch
    */
-  hash::group_reduction_plan const& reduction_groups(cuda::stream_ref stream,
-                                                     cudf::memory_resources mr);
+  hash::grouped_rows const& reduction_groups(cuda::stream_ref stream);
 
   /**
    * @brief Get each group's offset into the grouped order of `keys`.
    *
    * Computes and stores the group offsets on first invocation and returns
    * the stored group offsets on subsequent calls.
-   * This returns a span of size `num_groups + 1` such that the size of
+   * This returns a span of size `num_groups() + 1` such that the size of
    * group `i` is `group_offsets[i+1] - group_offsets[i]`
    *
-   * @param stream CUDA stream used for device operations
-   * @param mr Memory resources whose temporary resource is used for operation scratch
    * @return span of offsets of the starting point of each group in the grouped
    * key table
    */
-  device_span<size_type const> group_offsets(cuda::stream_ref stream, cudf::memory_resources mr);
+  device_span<size_type const> group_offsets(cuda::stream_ref stream);
 
   /**
    * @brief Get the group labels corresponding to the grouped order of `keys`.
    *
    * Each group is assigned a unique numerical "label" in
-   * `[0, num_groups)`.
+   * `[0, 1, 2, ... , num_groups() - 1, num_groups(stream))`.
    * For a row in grouped `keys`, its corresponding group label indicates which
    * group it belongs to.
    *
    * Computes and stores labels on first invocation and returns stored labels on
    * subsequent calls.
    *
-   * @param stream CUDA stream used for device operations
-   * @param mr Memory resources whose temporary resource is used for operation scratch
    * @return span of group labels for each row in the grouped key column
    */
-  device_span<size_type const> group_labels(cuda::stream_ref stream, cudf::memory_resources mr);
+  device_span<size_type const> group_labels(cuda::stream_ref stream);
 
  private:
   /**
    * @brief Get the group label of every row of the ungrouped `keys`
    *
-   * For an included row the label equals its label in `group_labels`; a
-   * row excluded by `include_null_keys == NO` gets `num_groups`, which
+   * For an included row the label equals its label in `group_labels(stream)`; a
+   * row excluded by `include_null_keys == NO` gets `num_groups(stream)`, which
    * sorts after every group.
    *
    * Computes and stores the labels on first invocation and returns the stored
    * labels on subsequent calls.
    *
-   * @param stream CUDA stream used for device operations
-   * @param mr Memory resources whose temporary resource is used for operation scratch
    * @return span of group labels in the order of the ungrouped key table
    */
-  device_span<size_type const> input_labels(cuda::stream_ref stream, cudf::memory_resources mr);
+  device_span<size_type const> input_labels(cuda::stream_ref stream);
 
-  /// Materialize grouping metadata, optionally retaining rows and their input order.
-  void build_groups(bool stable_rows,
+  /// Materialize grouping metadata, optionally retaining grouped rows, their input order, and the
+  /// group labels sorted alongside them.
+  void build_groups(bool need_grouped_rows,
+                    bool stable_rows,
                     bool keep_labels,
-                    bool need_grouped_rows,
-                    cuda::stream_ref stream,
-                    cudf::memory_resources mr);
+                    cuda::stream_ref stream);
 
   /// Materialize a stable row permutation only when an ordered operation needs it.
-  void make_stable(bool keep_labels, cuda::stream_ref stream, cudf::memory_resources mr);
+  void make_stable(bool keep_labels, cuda::stream_ref stream);
 
-  cuda::mr::any_resource<cuda::mr::device_accessible> _mr;  ///< Owns the cached-data resource
   std::unique_ptr<cuda::device_buffer<size_type>>
     _input_labels;   ///< Labels in input order; excluded rows get num_groups
   table_view _keys;  ///< Input grouping keys
   std::unique_ptr<hash::grouped_keys> _groups;                    ///< HashCSR grouping metadata
-  std::unique_ptr<hash::group_reduction_plan> _reduction_groups;  ///< Cached reduction scheduling
+  std::unique_ptr<hash::grouped_rows> _reduction_groups;          ///< Cached reduction scheduling
   std::unique_ptr<cuda::device_buffer<size_type>> _group_labels;  ///< Labels in grouped order
+  size_type _num_keys{};           ///< Number of grouped rows, set when they are built
   sorted _keys_pre_sorted;         ///< Whether key groups are already contiguous
   null_policy _include_null_keys;  ///< Whether to retain null key rows
   bool _is_presorted;              ///< Whether grouped values can use the input directly

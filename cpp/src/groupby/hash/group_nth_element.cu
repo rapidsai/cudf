@@ -8,7 +8,6 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
@@ -22,7 +21,6 @@
 #include <cuda/iterator>
 #include <cuda/stream>
 #include <thrust/scan.h>
-#include <thrust/scatter.h>
 #include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
 

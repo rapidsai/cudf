@@ -11,10 +11,9 @@ size_type compute_nested_group_offsets(table_view const& keys,
                                        size_type const* sorted_order,
                                        size_type size,
                                        device_span<size_type> group_offsets,
-                                       cuda::stream_ref stream,
-                                       cudf::memory_resources mr)
+                                       cuda::stream_ref stream)
 {
-  return compute_group_offsets<true>(keys, sorted_order, size, group_offsets, stream, mr);
+  return compute_group_offsets<true>(keys, sorted_order, size, group_offsets, stream);
 }
 
 }  // namespace cudf::groupby::detail

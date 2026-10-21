@@ -83,7 +83,7 @@ TYPED_TEST(groupby_sum_overflow_test, Basic)
   }
 }
 
-TYPED_TEST(groupby_sum_overflow_test, MixedRequestsWithTdigest)
+TYPED_TEST(groupby_sum_overflow_test, SortPathWithTdigest)
 {
   using K = int32_t;
   using V = TypeParam;

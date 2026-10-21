@@ -5,24 +5,22 @@
 #pragma once
 
 #include <cudf/groupby.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <cuda/stream>
 
 #include <memory>
-#include <span>
 #include <utility>
 
-namespace cudf::groupby::detail {
-struct groupby_helper;
-namespace hash {
-
-/// Compute all aggregation requests using one cached grouping and result cache.
+namespace cudf {
+namespace groupby::detail::hash {
+// Hash-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   std::span<aggregation_request const> requests,
   groupby_helper& helper,
   cuda::stream_ref stream,
   cudf::memory_resources mr);
-
-}  // namespace hash
-}  // namespace cudf::groupby::detail
+}  // namespace groupby::detail::hash
+}  // namespace cudf

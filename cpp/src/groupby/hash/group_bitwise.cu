@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "groupby/common/utils.hpp"
-
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -12,6 +10,7 @@
 #include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -21,6 +20,7 @@
 #include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/functional>
+#include <cuda/std/type_traits>
 #include <cuda/stream>
 
 namespace cudf::groupby::detail {
@@ -28,7 +28,7 @@ namespace cudf::groupby::detail {
 namespace {
 
 struct bitwise_group_reduction_functor {
-  template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T>)>
+  template <typename T, CUDF_ENABLE_IF(cuda::std::is_integral_v<T>)>
   std::unique_ptr<column> operator()(bitwise_op bit_op,
                                      column_view const& values,
                                      device_span<size_type const> group_labels,
@@ -78,13 +78,13 @@ struct bitwise_group_reduction_functor {
                    cuda::std::logical_or{});
 
       auto [null_mask, null_count] =
-        make_mask_from_validity(validity.data(), validity.data() + validity.size(), stream, mr);
+        cudf::detail::valid_if(validity.begin(), validity.end(), cuda::std::identity{}, stream, mr);
       if (null_count > 0) { result->set_null_mask(std::move(null_mask), null_count); }
     }
     return result;
   }
 
-  template <typename T, typename... Args, CUDF_ENABLE_IF(!std::is_integral<T>())>
+  template <typename T, typename... Args, CUDF_ENABLE_IF(!cuda::std::is_integral<T>())>
   std::unique_ptr<column> operator()(Args...) const
   {
     CUDF_FAIL("Bitwise operations are only supported for integral types.");

@@ -73,8 +73,9 @@ struct grouped_fused_minmax_sum_fn {
   }
 };
 
+/// Stores each group's reduced values and validity in the requested outputs.
 template <typename Source, typename Result>
-struct split_fused_minmax_sum_fn {
+struct store_fused_minmax_sum_fn {
   Source* minimum;
   Source* maximum;
   Result* sum;
@@ -139,7 +140,7 @@ struct fused_minmax_sum_fn {
                                                       ctx.values.has_nulls(),
                                                       sum != nullptr,
                                                       identity});
-      auto const outputs = cuda::tabulate_output_iterator{split_fused_minmax_sum_fn<Source, Result>{
+      auto const outputs = cuda::tabulate_output_iterator{store_fused_minmax_sum_fn<Source, Result>{
         minimum ? minimum->mutable_view().template begin<Source>() : nullptr,
         maximum ? maximum->mutable_view().template begin<Source>() : nullptr,
         sum ? sum->mutable_view().template begin<Result>() : nullptr,
@@ -162,9 +163,9 @@ struct fused_minmax_sum_fn {
         if (masked == nullptr) {
           auto [null_mask, null_count] = make_mask_from_validity(
             group_valid.data(), group_valid.data() + group_valid.size(), stream, mr);
-          result->set_null_mask(std::move(null_mask), null_count);
+          if (null_count > 0) { result->set_null_mask(std::move(null_mask), null_count); }
           masked = result.get();
-        } else {
+        } else if (masked->has_nulls()) {
           // Every extremum and sum of the column shares the validity of the first one.
           result->set_null_mask(
             cudf::detail::copy_bitmask(

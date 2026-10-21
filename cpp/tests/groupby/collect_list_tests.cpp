@@ -91,6 +91,7 @@ TEST_F(GroupbyCollectListOwnershipTest, NullExclusionPreservesValuesForLaterAggr
   cudf::test::fixed_width_column_wrapper<int32_t> values{
     {23, 12, 0, 10, 21, 0, 0, 0}, {true, true, false, true, true, false, false, false}};
   cudf::test::fixed_width_column_wrapper<int32_t> expected_keys{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_nunique{2, 2, 0};
   std::array const first_validity{true, true, false};
   std::array const second_validity{true, false, true};
   std::array const all_nulls{false, false};
@@ -106,7 +107,9 @@ TEST_F(GroupbyCollectListOwnershipTest, NullExclusionPreservesValuesForLaterAggr
     std::vector<cudf::groupby::aggregation_request> requests(1);
     requests.front().values = values;
     auto& aggregations      = requests.front().aggregations;
-    std::vector<cudf::column_view> expected;
+    aggregations.push_back(
+      cudf::make_nunique_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE));
+    std::vector<cudf::column_view> expected{expected_nunique};
     if (include_first) {
       aggregations.push_back(
         cudf::make_collect_list_aggregation<cudf::groupby_aggregation>(cudf::null_policy::INCLUDE));

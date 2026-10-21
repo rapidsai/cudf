@@ -31,18 +31,16 @@ size_type compute_nested_group_offsets(table_view const& keys,
                                        size_type const* sorted_order,
                                        size_type size,
                                        device_span<size_type> group_offsets,
-                                       cuda::stream_ref stream,
-                                       cudf::memory_resources mr);
+                                       cuda::stream_ref stream);
 
 template <bool HasNested>
 size_type compute_group_offsets(table_view const& keys,
                                 size_type const* sorted_order,
                                 size_type size,
                                 device_span<size_type> group_offsets,
-                                cuda::stream_ref stream,
-                                cudf::memory_resources mr)
+                                cuda::stream_ref stream)
 {
-  auto const temp_mr     = mr.get_temporary_mr();
+  auto const temp_mr     = cudf::get_current_device_resource_ref();
   auto const comparator  = cudf::detail::row::equality::self_comparator{keys, stream, temp_mr};
   auto const d_key_equal = comparator.equal_to<HasNested>(
     cudf::nullate::DYNAMIC{cudf::has_nested_nulls(keys)}, null_equality::EQUAL);
@@ -58,7 +56,7 @@ size_type compute_group_offsets(table_view const& keys,
                     [d_key_equal, sorted_order] __device__(size_type row) {
                       return row == 0 || !d_key_equal(sorted_order[row], sorted_order[row - 1]);
                     });
-  return compact_group_offsets(result.data(), size, group_offsets.data(), stream, mr);
+  return compact_group_offsets(result.data(), size, group_offsets.data(), stream, temp_mr);
 }
 
 }  // namespace cudf::groupby::detail
