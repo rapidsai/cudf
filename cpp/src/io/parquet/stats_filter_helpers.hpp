@@ -38,8 +38,8 @@ namespace cudf::io::parquet::detail {
 /// Initial capacity for the chars host vector in host_column
 constexpr size_t initial_chars_capacity = 1024;
 
-/// Number of statistics columns per input table column: min, max and all-nulls
-auto constexpr stats_cols_per_column = 3;
+/// Number of statistics columns per input table column: min, max, all-nulls and has-NaN
+auto constexpr stats_cols_per_column = 4;
 
 /**
  * @brief Base utilities for converting and casting stats values
@@ -237,6 +237,23 @@ class stats_caster_base {
       }
     }
 
+    /**
+     * @brief Sets whether a column chunk or page holds any `NaN`, or null if its NaN count is
+     * unknown and so `NaN`s may be present
+     *
+     * @param index Row of the column chunk or page in this column
+     * @param nan_count Optional NaN count from the statistics or the column index
+     */
+    void inline set_has_nan(size_type index, std::optional<int64_t> nan_count)
+      requires(std::is_same_v<T, bool>)
+    {
+      if (nan_count.has_value()) {
+        val[index] = nan_count.value() > 0;
+      } else {
+        set_index(index, std::nullopt, {});
+      }
+    }
+
     static inline std::tuple<rmm::device_uvector<char>,
                              rmm::device_uvector<size_type>,
                              cuda::device_buffer<size_type>>
@@ -358,9 +375,10 @@ class stats_columns_collector final : public parquet_expression_simplifier {
  * @brief Converts AST expression to StatsAST for comparing with column statistics
  *
  * This is used in row group filtering based on predicate.
- * statistics min value of a column is referenced by column_index*3
- * statistics max value of a column is referenced by column_index*3+1
- * statistics all_nulls value of a column is referenced by column_index*3+2
+ * statistics min value of a column is referenced by column_index*stats_cols_per_column
+ * statistics max value of a column is referenced by column_index*stats_cols_per_column+1
+ * statistics all_nulls value of a column is referenced by column_index*stats_cols_per_column+2
+ * statistics has_nan value of a column is referenced by column_index*stats_cols_per_column+3
  */
 class stats_expression_converter final : public parquet_expression_simplifier {
  public:
@@ -420,6 +438,22 @@ class stats_expression_converter final : public parquet_expression_simplifier {
    */
   [[nodiscard]] ast::expression const& push_non_null_guard(size_type col_index,
                                                            ast::expression const& stats_expr);
+
+  /**
+   * @brief Returns `(is_nan(literal) OR has_nan) OR stats_expr` for a floating-point column, so
+   * that a predicate a `NaN` satisfies keeps a chunk that may hold one, and `stats_expr` otherwise
+   *
+   * The min and max exclude `NaN`s, so they cannot answer such a predicate on their own. The
+   * statistics' NaN count tells whether a chunk holds any.
+   *
+   * @param col_index Index of the column in the input table
+   * @param literal_ref Literal the column is compared against
+   * @param stats_expr Statistics expression to guard, already pushed onto the tree
+   * @return The guarded statistics expression
+   */
+  [[nodiscard]] ast::expression const& push_nan_guard(size_type col_index,
+                                                      ast::literal const& literal_ref,
+                                                      ast::expression const& stats_expr);
 
   simplified_expression_opt _stats_expr;
 };
