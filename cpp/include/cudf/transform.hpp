@@ -262,8 +262,7 @@ struct transform_program {
  * `(outputs[i]...) =  UDF(inputs[i]...)`.
  *
  * For both null-aware and non-null-aware UDFs, output values have the following initialization:
- * - Representation-compatible fixed-width outputs have uninitialized values.
- * - Decimal outputs have a valid scale matching the output column's scale.
+ * - Fixed-width outputs have uninitialized values.
  * - Mutable string outputs (`cuda::std::span<char>`, used with preallocated string offsets) contain
  *   a valid data pointer and size, but the character data is uninitialized.
  * - String-view outputs (`cudf::string_view`) have uninitialized values.
