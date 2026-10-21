@@ -12,7 +12,6 @@ import polars as pl
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph.union import _OrderedUnionPlan
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from cudf_polars.utils.versions import POLARS_VERSION_LT_141
 
 
 def test_union_shared_fanout_no_deadlock(streaming_engine):
@@ -142,9 +141,6 @@ def test_concat_preserves_order_with_duplicated_child(streaming_engine_factory):
 
 
 @pytest.mark.spmd
-@pytest.mark.skipif(
-    POLARS_VERSION_LT_141, reason="unordered concat needs polars >= 1.41"
-)
 def test_unordered_union(streaming_engine_factory):
     engine = streaming_engine_factory(StreamingOptions(max_rows_per_partition=10))
     lf = pl.LazyFrame({"a": range(50)})
