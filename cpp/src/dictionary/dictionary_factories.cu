@@ -12,10 +12,9 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/limits>
+#include <cuda/std/type_traits>
 #include <cuda/stream>
-
-#include <limits>
-#include <type_traits>
 
 namespace cudf {
 namespace {
@@ -106,9 +105,9 @@ struct make_signed_fn {
   constexpr cudf::type_id operator()() const
     requires(is_index_type<T>())
   {
-    using SignedType = std::make_signed_t<T>;
-    if constexpr (std::is_unsigned_v<T> && sizeof(T) < sizeof(size_type)) {
-      if (num_keys - 1 > std::numeric_limits<SignedType>::max()) {
+    using SignedType = cuda::std::make_signed_t<T>;
+    if constexpr (cuda::std::is_unsigned_v<T> && sizeof(T) < sizeof(size_type)) {
+      if (num_keys - 1 > cuda::std::numeric_limits<SignedType>::max()) {
         return sizeof(T) == 1 ? type_id::INT16 : type_id::INT32;
       }
     }

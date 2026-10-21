@@ -119,6 +119,7 @@ ConfigureTest(
   GROUPBY_TEST
   groupby/argmin_tests.cpp
   groupby/argmax_tests.cpp
+  groupby/batched_reductions_tests.cpp
   groupby/bitwise_tests.cpp
   groupby/collect_list_tests.cpp
   groupby/collect_set_tests.cpp
@@ -636,6 +637,7 @@ ConfigureTest(
   LARGE_STRINGS_TEST
   large_strings/concatenate_tests.cpp
   large_strings/case_tests.cpp
+  large_strings/csv_tests.cpp
   large_strings/json_tests.cpp
   large_strings/large_strings_fixture.cpp
   large_strings/bpe_tests.cpp

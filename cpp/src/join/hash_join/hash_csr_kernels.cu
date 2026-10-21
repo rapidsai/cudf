@@ -63,7 +63,7 @@ CUDF_KERNEL void hash_csr_retrieve_kernel(cuda::std::int64_t output_size,
           continue;
         }
       }
-      auto const local_match      = static_cast<size_type>(output_index - offsets[probe_row]);
+      auto const local_match      = output_index - offsets[probe_row];
       right_indices[output_index] = csr.values[csr.begin(group) + local_match];
     }
   }
@@ -182,6 +182,7 @@ template void launch_hash_csr_build_count_kernel<hash_csr_nested_equal, hash_csr
                                                                          bitmask_type const*,  \
                                                                          size_type*,           \
                                                                          size_type*,           \
+                                                                         cuda::std::uint64_t*, \
                                                                          cuda::std::uint32_t*, \
                                                                          cuda::std::uint64_t*, \
                                                                          hash_table_ref,       \
