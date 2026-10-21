@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import enum
 import importlib
 import importlib.util
 import json
@@ -105,6 +106,13 @@ def get_validation_options(args: Any) -> dict[str, Any]:
         **POLARS_VALIDATION_OPTIONS,
         "abs_tol": args.validation_abs_tol,
     }
+
+
+class QueryMode(enum.Enum):
+    """How benchmark queries are defined."""
+
+    DATAFRAME = "dataframe"
+    SQL = "sql"
 
 
 _STREAMING_FRONTENDS = frozenset({"dask", "ray", "spmd"})
@@ -535,7 +543,7 @@ class RunConfig:
     scale_factor: int | float
     suffix: str
     qualification: bool = False
-    query_mode: Literal["dataframe", "sql"] = "dataframe"
+    query_mode: QueryMode = QueryMode.DATAFRAME
     sql_directory: Path | None = None
 
     # Execution mode
@@ -740,7 +748,7 @@ class RunConfig:
             "scale_factor": self.scale_factor,
             "suffix": self.suffix,
             "qualification": self.qualification,
-            "query_mode": self.query_mode,
+            "query_mode": self.query_mode.value,
             "sql_directory": (
                 str(self.sql_directory.resolve())
                 if self.sql_directory is not None
@@ -999,25 +1007,6 @@ def validate_result(
         return ValidationResult(status="Passed", message=None)
 
 
-def validate_result_exact(
-    result: pl.DataFrame,
-    expected: pl.DataFrame,
-    **kwargs: Any,
-) -> ValidationResult:
-    """
-    Validate the computed result against the expected answer.
-
-    Rows and columns are compared in order with ``polars.testing.assert_frame_equal``.
-    Unlike ``validate_result``, ties at a ``LIMIT`` boundary are not handled.
-    """
-    try:
-        assert_frame_equal(result, expected, **kwargs)
-    except Exception as e:
-        return ValidationResult.from_error(e)
-    else:
-        return ValidationResult(status="Passed", message=None)
-
-
 @dataclasses.dataclass
 class QueryResult:
     """
@@ -1195,10 +1184,14 @@ def run_polars_query_iteration(
     io_summaries = _collect_io_summaries(engine)
     statistics = _collect_statistics(engine)
 
-    if expected is not None and run_config.query_mode == "sql":
-        validation_result = validate_result_exact(
-            result, expected, **get_validation_options(args)
-        )
+    validation_result: ValidationResult | None
+    if expected is not None and run_config.query_mode is QueryMode.SQL:
+        try:
+            assert_frame_equal(result, expected, **get_validation_options(args))
+        except Exception as e:
+            validation_result = ValidationResult.from_error(e)
+        else:
+            validation_result = ValidationResult(status="Passed", message=None)
     elif expected is not None:
         validation_result = validate_result(
             result,
@@ -2128,8 +2121,10 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--query-mode",
         dest="query_mode",
-        default="dataframe",
-        choices=["dataframe", "sql"],
+        default=QueryMode.DATAFRAME,
+        type=QueryMode,
+        choices=tuple(QueryMode),
+        metavar="{" + ",".join(mode.value for mode in QueryMode) + "}",
         help=textwrap.dedent("""\
             How queries are defined:
                 - dataframe : Polars LazyFrame queries built into the benchmark (default)
@@ -2382,11 +2377,14 @@ def parse_args(
             "--blocksize is not supported with --frontend; "
             "use --target-partition-size instead."
         )
-    if parsed_args.query_mode == "sql" and parsed_args.sql_directory is None:
+    if parsed_args.query_mode is QueryMode.SQL and parsed_args.sql_directory is None:
         parser.error("--query-mode sql requires --sql-directory.")
-    if parsed_args.query_mode == "dataframe" and parsed_args.sql_directory is not None:
+    if (
+        parsed_args.query_mode is QueryMode.DATAFRAME
+        and parsed_args.sql_directory is not None
+    ):
         parser.error("--sql-directory is only supported with --query-mode sql.")
-    if parsed_args.query_mode == "sql" and parsed_args.qualification:
+    if parsed_args.query_mode is QueryMode.SQL and parsed_args.qualification:
         parser.error("--qualification is not supported with --query-mode sql.")
     if parsed_args.sql_directory is not None and not parsed_args.sql_directory.is_dir():
         parser.error(
@@ -2405,12 +2403,12 @@ def parse_args(
 
 def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
     """Run the queries using the given benchmark and frontend."""
-    if args.query_mode == "sql":
+    if args.query_mode is QueryMode.SQL:
         benchmark = SQLQueries(benchmark.name, args.sql_directory)
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
 
-    if run_config.query_mode == "sql":
+    if run_config.query_mode is QueryMode.SQL:
         missing = benchmark.duckdb_queries.missing(run_config.queries)
         if missing:
             raise ValueError(
