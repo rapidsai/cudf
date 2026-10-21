@@ -12,6 +12,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/memory_resource_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
@@ -28,8 +29,13 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/error.hpp>
+#include <rmm/mr/callback_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+
 #include <cuda/iterator>
 
+#include <algorithm>
 #include <array>
 #include <numeric>
 #include <type_traits>
@@ -653,6 +659,246 @@ TEST_F(OrcWriterTest, negTimestampsNano)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+// Tests for the `writer_timezone` option. ORC timestamps are wall-clock values, stored relative to
+// the ORC epoch as it occurs in the writer's timezone, so reading a file written with timezone `W`
+// holding instant `I` gives `I + offset(W, I)`, or `I + offset(W, 2015-01-01)` when the timezone is
+// ignored. The tests pin both, which is what a footer-only change would fail.
+// The tests need a system TZif database in /usr/share/zoneinfo, which the writer reads directly.
+namespace {
+// Offsets from UT at the ORC epoch, 2015-01-01
+constexpr int64_t shanghai_offset     = cudf::duration_s{cudf::duration_h{8}}.count();
+constexpr int64_t new_york_offset     = cudf::duration_s{cudf::duration_h{-5}}.count();
+constexpr int64_t new_york_dst_offset = cudf::duration_s{cudf::duration_h{-4}}.count();
+constexpr int64_t phoenix_offset      = cudf::duration_s{cudf::duration_h{-7}}.count();
+constexpr int64_t kolkata_offset      = cudf::duration_s{cudf::duration_m{5 * 60 + 30}}.count();
+constexpr int64_t kathmandu_offset    = cudf::duration_s{cudf::duration_m{5 * 60 + 45}}.count();
+
+std::vector<char> write_orc_with_timezone(cudf::table_view const& table,
+                                          std::optional<std::string> const& timezone)
+{
+  std::vector<char> buffer;
+  auto builder = cudf::io::orc_writer_options::builder(cudf::io::sink_info(&buffer), table);
+  if (timezone.has_value()) { builder.writer_timezone(*timezone); }
+  cudf::io::write_orc(builder.build());
+  return buffer;
+}
+
+// File-level timestamp statistics of the table's first column. Entry zero of the schema is the
+// root struct that wraps the table, so that column is entry one.
+cudf::io::timestamp_statistics timestamp_stats(std::vector<char> const& buffer)
+{
+  auto const stats =
+    cudf::io::read_parsed_orc_statistics(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}});
+  return std::get<cudf::io::timestamp_statistics>(stats.file_stats[1].type_specific_stats);
+}
+
+cudf::io::table_with_metadata read_orc_buffer(std::vector<char> const& buffer,
+                                              bool ignore_timezone      = false,
+                                              cudf::data_type timestamp = cudf::data_type{
+                                                cudf::type_id::TIMESTAMP_SECONDS})
+{
+  auto builder =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}});
+  return cudf::io::read_orc(
+    builder.ignore_timezone_in_stripe_footer(ignore_timezone).timestamp_type(timestamp).build());
+}
+}  // namespace
+
+TEST_F(OrcWriterTest, WriterTimezoneDefaultsToUtc)
+{
+  auto const timestamps =
+    column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{-3000, -1, 0, 1, 1420070400};
+  table_view expected({timestamps});
+
+  auto const with_default = write_orc_with_timezone(expected, std::nullopt);
+  auto const with_utc     = write_orc_with_timezone(expected, "UTC");
+  EXPECT_EQ(with_default, with_utc);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_orc_buffer(with_default).tbl->view());
+}
+
+TEST_F(OrcWriterTest, WriterTimezoneNonUtc)
+{
+  auto const timestamps =
+    column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{-3000, 0, 1421323200};
+
+  auto const buffer = write_orc_with_timezone(table_view({timestamps}), "Asia/Shanghai");
+
+  // Asia/Shanghai has no daylight saving time, so the shift is the same either way
+  auto const expected = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+    -3000 + shanghai_offset, 0 + shanghai_offset, 1421323200 + shanghai_offset};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expected}), read_orc_buffer(buffer).tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expected}),
+                                read_orc_buffer(buffer, /*ignore_timezone=*/true).tbl->view());
+}
+
+TEST_F(OrcWriterTest, WriterTimezoneNearEpochBorrow)
+{
+  // Values straddling the window where UTC and the writer's local time disagree on the sign, and
+  // so on the borrow: `[-offset, 0)` for a positive offset, `[0, -offset)` for a negative one. All
+  // have a fractional part, since a whole second never borrows.
+  auto const near_epoch_ms = [](int64_t offset_s) {
+    auto const lo = std::min<cudf::timestamp_ms::rep>(-offset_s * 1000, 0);
+    auto const hi = std::max<cudf::timestamp_ms::rep>(-offset_s * 1000, 0);
+    return std::vector<cudf::timestamp_ms::rep>{
+      lo - 1'117, lo + 1, (lo + hi) / 2 + 117, hi - 1'117, hi + 1'117};
+  };
+
+  auto const agrees_whether_timezone_ignored = [&](std::string const& timezone, int64_t offset_s) {
+    auto const inputs = near_epoch_ms(offset_s);
+    auto const timestamps =
+      column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(inputs.begin(), inputs.end());
+    auto const buffer = write_orc_with_timezone(table_view({timestamps}), timezone);
+
+    auto shifted = inputs;
+    std::transform(shifted.begin(), shifted.end(), shifted.begin(), [offset_s](auto v) {
+      return v + offset_s * 1000;
+    });
+    auto const expected =
+      column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(shifted.begin(), shifted.end());
+
+    auto const ms = cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(
+      table_view({expected}), read_orc_buffer(buffer, /*ignore_timezone=*/false, ms).tbl->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(
+      table_view({expected}), read_orc_buffer(buffer, /*ignore_timezone=*/true, ms).tbl->view());
+  };
+
+  // Cover timezone offsets of both signs.
+  agrees_whether_timezone_ignored("Asia/Shanghai", shanghai_offset);
+  agrees_whether_timezone_ignored("America/Phoenix", phoenix_offset);
+}
+
+TEST_F(OrcWriterTest, WriterTimezoneFractionalOffset)
+{
+  // Neither zone observes daylight saving time, so every value shifts by the same amount
+  auto const round_trip_shifts_by = [](std::string const& timezone,
+                                       std::vector<cudf::timestamp_s::rep> const& values,
+                                       int64_t offset) {
+    auto const timestamps =
+      column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>(values.begin(), values.end());
+    auto const buffer = write_orc_with_timezone(table_view({timestamps}), timezone);
+
+    auto shifted = values;
+    std::transform(
+      shifted.begin(), shifted.end(), shifted.begin(), [offset](auto v) { return v + offset; });
+    auto const expected =
+      column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>(shifted.begin(), shifted.end());
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expected}), read_orc_buffer(buffer).tbl->view());
+  };
+
+  round_trip_shifts_by("Asia/Kolkata", {-3000, 0, 1421323200}, kolkata_offset);
+  // Kathmandu moved from +05:30 to +05:45 in 1986, so keep the values on one side of that
+  round_trip_shifts_by("Asia/Kathmandu", {631152000, 1421323200}, kathmandu_offset);
+}
+
+TEST_F(OrcWriterTest, WriterTimezoneUsesFixedEpochOffsetAcrossDst)
+{
+  // UTC instants falling in New York's standard and daylight saving periods, respectively
+  auto const during_est = cudf::timestamp_s::rep{1421323200};  // 2015-01-15T12:00:00Z
+  auto const during_edt = cudf::timestamp_s::rep{1435752000};  // 2015-07-01T12:00:00Z
+  auto const timestamps =
+    column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{during_est, during_edt};
+
+  auto const buffer = write_orc_with_timezone(table_view({timestamps}), "America/New_York");
+
+  // The whole file is re-based on the offset at the ORC epoch, which ignoring the timezone exposes
+  auto const stored = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+    during_est + new_york_offset, during_edt + new_york_offset};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({stored}),
+                                read_orc_buffer(buffer, /*ignore_timezone=*/true).tbl->view());
+
+  // Applying the timezone shifts each value by the offset in effect for that value
+  auto const converted = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+    during_est + new_york_offset, during_edt + new_york_dst_offset};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({converted}), read_orc_buffer(buffer).tbl->view());
+}
+
+TEST_F(OrcWriterTest, WriterTimezoneNegativeTimestampsNano)
+{
+  // Same values as `negTimestampsNano`, to cover the nanosecond borrow with a shifted epoch
+  auto const timestamps = column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{
+    -131968727238000000, -1530705634500000000, -1674638741932929000};
+
+  auto const buffer = write_orc_with_timezone(table_view({timestamps}), "Asia/Shanghai");
+
+  auto constexpr shift = shanghai_offset * 1000000000L;
+  auto const expected  = column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{
+    -131968727238000000 + shift, -1530705634500000000 + shift, -1674638741932929000 + shift};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(
+    table_view({expected}),
+    read_orc_buffer(
+      buffer, /*ignore_timezone=*/false, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS})
+      .tbl->view());
+}
+
+TEST_F(OrcWriterTest, WriterTimezoneStatistics)
+{
+  auto const timestamps = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{0, 1421323200};
+  table_view input({timestamps});
+
+  // Statistics stay on the input instants regardless of the timezone; only the stream is re-based
+  for (auto const& timezone : std::vector<std::optional<std::string>>{
+         std::nullopt, "UTC", "Asia/Shanghai", "America/New_York"}) {
+    SCOPED_TRACE(timezone.value_or("default"));
+
+    auto const stats = timestamp_stats(write_orc_with_timezone(input, timezone));
+    ASSERT_TRUE(stats.minimum.has_value());
+    ASSERT_TRUE(stats.maximum.has_value());
+    ASSERT_TRUE(stats.minimum_utc.has_value());
+    ASSERT_TRUE(stats.maximum_utc.has_value());
+    EXPECT_EQ(*stats.minimum, 0);
+    EXPECT_EQ(*stats.maximum, 1421323200L * 1000);
+    // Unlike Apache, which omits the legacy pair, both are written in the same frame
+    EXPECT_EQ(*stats.minimum_utc, *stats.minimum);
+    EXPECT_EQ(*stats.maximum_utc, *stats.maximum);
+  }
+}
+
+TEST_F(OrcWriterTest, WriterTimezoneInvalid)
+{
+  auto const timestamps = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{0, 1};
+  table_view input({timestamps});
+
+  EXPECT_THROW(write_orc_with_timezone(input, "Not/AZone"), cudf::logic_error);
+  // Empty would omit writerTimezone, which other readers resolve as their own local timezone
+  EXPECT_THROW(write_orc_with_timezone(input, ""), cudf::logic_error);
+}
+
+TEST_F(OrcChunkedWriterTest, WriterTimezone)
+{
+  auto const first  = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{0, 1421323200};
+  auto const second = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{-3000, 1};
+  auto const table1 = table_view({first});
+  auto const table2 = table_view({second});
+
+  std::vector<char> buffer;
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info(&buffer))
+      .writer_timezone("Asia/Shanghai");
+  cudf::io::orc_chunked_writer(opts).write(table1).write(table2);
+
+  auto const expected = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{
+    shanghai_offset, 1421323200 + shanghai_offset, -3000 + shanghai_offset, 1 + shanghai_offset};
+  // Equivalent rather than equal because the chunked writer makes the column nullable
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(table_view({expected}), read_orc_buffer(buffer).tbl->view());
+}
+
+TEST_F(OrcChunkedWriterTest, WriterTimezoneInvalid)
+{
+  std::vector<char> buffer;
+  cudf::io::chunked_orc_writer_options opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info(&buffer))
+      .writer_timezone("Not/AZone");
+
+  // The chunked writer resolves the timezone when it is constructed, before any write
+  EXPECT_THROW(cudf::io::orc_chunked_writer{opts}, cudf::logic_error);
+}
+
 template <typename T>
 void test_timestamp_roundtrip(std::vector<typename T::rep> const& values,
                               std::vector<typename T::rep> const& expected_values)
@@ -944,6 +1190,12 @@ TEST_F(OrcChunkedWriterTest, MismatchedTypes)
   cudf::io::orc_chunked_writer writer(opts);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
+  writer.close();
+
+  // The mismatched write is rejected without affecting earlier writes
+  auto const result =
+    cudf::io::read_orc(cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
 TEST_F(OrcChunkedWriterTest, ChunkedWritingAfterClosing)
@@ -972,6 +1224,12 @@ TEST_F(OrcChunkedWriterTest, MismatchedStructure)
   cudf::io::orc_chunked_writer writer(opts);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
+  writer.close();
+
+  // The mismatched write is rejected without affecting earlier writes
+  auto const result =
+    cudf::io::read_orc(cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
 TEST_F(OrcChunkedWriterTest, ReadStripes)
@@ -1455,6 +1713,23 @@ TEST_F(OrcStatisticsTest, Overflow)
   check_sum_exist(4, true);
 }
 
+TEST_F(OrcStatisticsTest, Decimal128Sum)
+{
+  // Valid sum that exceeds max() / non_nulls; must still be written
+  std::vector<__int128_t> const vals{__int128_t{1} << 126, 1};
+  dec128_col col{vals.begin(), vals.end(), numeric::scale_type{0}};
+  table_view tbl({col});
+
+  auto const filepath = temp_env->get_temp_filepath("OrcStatsDecimal128Sum.orc");
+  cudf::io::write_orc(
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tbl).build());
+
+  auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
+  auto const& ts = std::get<cudf::io::decimal_statistics>(stats.file_stats[1].type_specific_stats);
+  ASSERT_TRUE(ts.sum.has_value());
+  EXPECT_EQ(*ts.sum, "85070591730234615865843651857942052865");
+}
+
 TEST_F(OrcStatisticsTest, HasNull)
 {
   // This test can now be implemented with libcudf; keeping the pandas version to keep the test
@@ -1683,7 +1958,8 @@ TEST_F(OrcReaderTest, NestedEmptyStructColumnSelection)
     cudf::test::detail::make_null_mask(validity.begin(), validity.end());
 
   std::vector<std::unique_ptr<cudf::column>> struct_children;
-  struct_children.emplace_back(cudf::make_structs_column(num_rows, {}, 0, {}));
+  struct_children.emplace_back(cudf::make_structs_column(
+    num_rows, {}, 0, cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED)));
   auto input_column = cudf::make_structs_column(
     num_rows, std::move(struct_children), null_count, std::move(null_mask));
   ASSERT_TRUE(input_column->nullable());
@@ -1706,7 +1982,11 @@ TEST_F(OrcReaderTest, NullableEmptyStructChildColumnSelection)
   std::vector<std::unique_ptr<cudf::column>> struct_children;
   struct_children.emplace_back(
     cudf::make_structs_column(num_rows, {}, null_count, std::move(null_mask)));
-  auto input_column = cudf::make_structs_column(num_rows, std::move(struct_children), 0, {});
+  auto input_column =
+    cudf::make_structs_column(num_rows,
+                              std::move(struct_children),
+                              0,
+                              cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
   ASSERT_FALSE(input_column->nullable());
   ASSERT_TRUE(input_column->child(0).nullable());
   ASSERT_EQ(null_count, input_column->child(0).null_count());
@@ -1757,8 +2037,12 @@ TEST_F(OrcWriterTest, DecimalOptionsNested)
   std::iota(row_offsets.begin(), row_offsets.end(), 0);
   int32_col offsets(row_offsets.begin(), row_offsets.end());
 
-  auto map_list_col = cudf::make_lists_column(
-    num_rows, offsets.release(), std::move(map_struct_col), 0, rmm::device_buffer{});
+  auto map_list_col =
+    cudf::make_lists_column(num_rows,
+                            offsets.release(),
+                            std::move(map_struct_col),
+                            0,
+                            cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 
   table_view expected({*map_list_col});
 
@@ -1857,8 +2141,11 @@ TEST_F(OrcMetadataReaderTest, TestNested)
   }
   int32_col offsets(row_offsets.begin(), row_offsets.end());
 
-  auto list_col =
-    cudf::make_lists_column(num_rows, offsets.release(), std::move(s_col), 0, rmm::device_buffer{});
+  auto list_col = cudf::make_lists_column(num_rows,
+                                          offsets.release(),
+                                          std::move(s_col),
+                                          0,
+                                          cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 
   table_view expected({*list_col, *list_col});
 
@@ -2038,6 +2325,45 @@ TEST_F(OrcWriterTest, EmptyRowGroup)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+TEST_F(OrcReaderTest, NullDecodeSpanningRowGroups)
+{
+  // The reader only decodes nulls one row group per block when the row index is in use, which needs
+  // more rows than the 10000-row index stride. Reading the same file with the index disabled forces
+  // the whole-stripe decode instead, giving a direct comparison between the two paths.
+  constexpr cudf::size_type num_rows = 75'000;
+
+  // Mix long runs with scattered nulls so both RLE run kinds appear in the PRESENT stream and row
+  // group boundaries land inside runs rather than neatly on them.
+  auto const valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    if (i < 12'345) { return true; }
+    if (i < 12'400) { return false; }
+    return (i % 7) != 0;
+  });
+
+  auto const ints = cuda::counting_iterator<int32_t>{0};
+  int32_col int_column{ints, ints + num_rows, valids};
+
+  std::vector<std::string> strings(num_rows);
+  std::generate(strings.begin(), strings.end(), [i = 0]() mutable {
+    return "value_" + std::to_string(i++ % 1000);
+  });
+  str_col string_column{strings.begin(), strings.end(), valids};
+
+  table_view expected({int_column, string_column});
+
+  auto filepath = temp_env->get_temp_filepath("OrcNullDecodeRowGroups.orc");
+  cudf::io::write_orc(
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected).build());
+
+  auto const indexed =
+    cudf::io::read_orc(cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}));
+  auto const unindexed = cudf::io::read_orc(
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false));
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, indexed.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(indexed.tbl->view(), unindexed.tbl->view());
+}
+
 TEST_F(OrcWriterTest, NoNullsAsNonNullable)
 {
   auto valids = cudf::test::iterators::no_nulls();
@@ -2158,6 +2484,34 @@ TEST_F(OrcWriterTest, UnorderedDictionary)
   auto const from_unsorted = cudf::io::read_orc(in_opts_unsorted).tbl;
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*from_sorted, *from_unsorted);
+}
+
+TEST_F(OrcWriterTest, DictionaryMultipleBlocksPerStripe)
+{
+  constexpr cudf::size_type num_rows = 5000;
+
+  // Few distinct values, so dictionary encoding is cheaper than direct encoding and gets enabled
+  std::vector<std::string> const values{
+    "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta"};
+  auto const keys = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return values[i % values.size()]; });
+  auto const validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 11 != 0; });
+  str_col col(keys, keys + num_rows, validity);
+
+  table_view expected({col});
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected);
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
+  auto const result = cudf::io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TEST_F(OrcStatisticsTest, Empty)
@@ -2408,13 +2762,72 @@ TEST_F(OrcChunkedWriterTest, FailedWriteCloseNotThrow)
     cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{&sink});
   auto writer = cudf::io::orc_chunked_writer(write_opts);
 
-  try {
-    writer.write(table);
-  } catch (...) {
-    // ignore the exception; we're testing that close() doesn't throw when the only write() fails
+  EXPECT_THROW(writer.write(table), std::runtime_error);
+  EXPECT_THROW(writer.write(table), cudf::logic_error);
+  EXPECT_NO_THROW(writer.close());
+}
+
+TEST_F(OrcChunkedWriterTest, OutOfMemoryRetry)
+{
+  int32_col ints{1, 2, 3};
+  str_col strings{"a", "bb", "ccc"};  // persisting string statistics allocates
+  table_view input{{ints, strings}};
+
+  std::vector<char> out_buffer;
+  std::size_t output_start = 0;
+  bool fail_allocation     = false;
+  // Not the current resource, which is replaced below
+  rmm::mr::cuda_memory_resource upstream;
+  rmm::mr::callback_memory_resource mr{
+    [&](cuda::stream_ref stream, std::size_t bytes, std::size_t alignment, void*) -> void* {
+      // An allocation after output starts could fail when the write can no longer be retried
+      EXPECT_EQ(out_buffer.size(), output_start);
+      if (fail_allocation) { throw rmm::bad_alloc{"Injected ORC OOM"}; }
+      return upstream.allocate(stream, bytes, alignment);
+    },
+    [&](cuda::stream_ref stream, void* ptr, std::size_t bytes, std::size_t alignment, void*) {
+      upstream.deallocate(stream, ptr, bytes, alignment);
+    }};
+  {
+    cudf::test::scoped_current_device_resource resource_scope{mr};
+    cudf::io::orc_chunked_writer writer{
+      cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{&out_buffer})
+        .enable_statistics(cudf::io::statistics_freq::STATISTICS_ROWGROUP)};
+    writer.write(input);
+    output_start = out_buffer.size();
+
+    fail_allocation = true;
+    EXPECT_THROW(writer.write(input), rmm::bad_alloc);
+    EXPECT_THROW(writer.close(), rmm::bad_alloc);
+    fail_allocation = false;
+    EXPECT_EQ(out_buffer.size(), output_start);
+
+    writer.write(input);
+    output_start = out_buffer.size();
+    writer.close();
   }
 
-  EXPECT_NO_THROW(writer.close());
+  auto const source =
+    cudf::io::source_info{cudf::host_span<char const>{out_buffer.data(), out_buffer.size()}};
+  auto const result   = cudf::io::read_orc(cudf::io::orc_reader_options::builder(source));
+  auto const expected = cudf::concatenate(std::vector<table_view>{input, input});
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), result.tbl->view());
+
+  // The failed write and close must not leave their chunk in the statistics
+  auto const stats = cudf::io::read_parsed_orc_statistics(source);
+  EXPECT_EQ(stats.stripes_stats.size(), 2ul);
+  ASSERT_EQ(stats.file_stats.size(), 3ul);
+  EXPECT_EQ(*stats.file_stats[0].number_of_values, 6ul);
+
+  auto const& int_stats =
+    std::get<cudf::io::integer_statistics>(stats.file_stats[1].type_specific_stats);
+  EXPECT_EQ(*int_stats.sum, 12);
+
+  auto const& str_stats =
+    std::get<cudf::io::string_statistics>(stats.file_stats[2].type_specific_stats);
+  EXPECT_EQ(*str_stats.minimum, "a");
+  EXPECT_EQ(*str_stats.maximum, "ccc");
+  EXPECT_EQ(*str_stats.sum, 12);
 }
 
 TEST_F(OrcChunkedWriterTest, NoDataInSinkWhenNoWrite)

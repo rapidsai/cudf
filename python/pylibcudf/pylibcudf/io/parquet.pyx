@@ -297,6 +297,7 @@ cdef class ParquetReaderOptions:
         None
         """
         self.c_obj.set_filter(<expression &>dereference(filter.c_obj))
+        self._filter = filter
 
     cpdef void set_source(self, SourceInfo src):
         """
@@ -342,6 +343,36 @@ cdef class ParquetReaderOptions:
             Whether column names are matched case-sensitively
         """
         return self.c_obj.is_enabled_case_sensitive_names()
+
+    cpdef void enable_prepend_source_index_column(self, bool val):
+        """
+        Sets whether to prepend a source file index column to the output.
+
+        The prepended ``source_index`` column contains, for each output row, the
+        index of the source the row was read from. It is synthesized before any
+        filter is applied, so it remains valid for filtered reads.
+
+        Parameters
+        ----------
+        val : bool
+            Enables prepending the source index column
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.enable_prepend_source_index_column(val)
+
+    cpdef bool is_enabled_prepend_source_index_column(self):
+        """
+        Returns whether a source file index column is prepended to the output.
+
+        Returns
+        -------
+        bool
+            Whether the source index column is prepended
+        """
+        return self.c_obj.is_enabled_prepend_source_index_column()
 
 cdef class ParquetReaderOptionsBuilder:
     """Builder to build options for ``read_parquet``."""
@@ -443,6 +474,7 @@ cdef class ParquetReaderOptionsBuilder:
         ParquetReaderOptionsBuilder
         """
         self.c_obj.filter(<expression &>dereference(filter.c_obj))
+        self._filter = filter
         return self
 
     cpdef ParquetReaderOptionsBuilder columns(self, list col_names: list[str]):
@@ -552,6 +584,27 @@ cdef class ParquetReaderOptionsBuilder:
         self.c_obj.case_sensitive_names(val)
         return self
 
+    cpdef ParquetReaderOptionsBuilder prepend_source_index_column(self, bool val):
+        """
+        Sets whether to prepend a source file index column to the output.
+
+        The prepended ``source_index`` column contains, for each output row, the
+        index of the source the row was read from. It is synthesized before any
+        filter is applied, so it remains valid for filtered reads.
+
+        Parameters
+        ----------
+        val : bool
+            ``True`` to prepend a source index column, ``False`` otherwise
+            (default).
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.prepend_source_index_column(val)
+        return self
+
     cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width):
         """
         Sets the decimal width used to cast all decimal columns.
@@ -576,6 +629,7 @@ cdef class ParquetReaderOptionsBuilder:
         )
         parquet_options.c_obj = move(self.c_obj.build())
         parquet_options.source = self.source
+        parquet_options._filter = self._filter
         return parquet_options
 
 
@@ -614,10 +668,11 @@ cdef class ChunkedParquetReader:
     ):
         self._stream = _get_stream(stream)
         self.mr = _get_memory_resource(mr)
+        self._filter = options._filter
         cdef vector[unique_ptr[datasource]] sources
         cdef vector[cpp_FileMetaData] c_metadatas
         cdef vector[cpp_FileMetaData*] metadata_ptrs
-        cdef cudaStream_t stream_view = self._stream.view().value()
+        cdef cudaStream_t stream_view = self._stream.view().get()
         cdef size_t i
         if parquet_metadatas is None:
             with nogil:
@@ -720,7 +775,7 @@ cpdef TableWithMetadata read_parquet(
         provided, footers are read from the sources internally.
     """
     cdef Stream s = _get_stream(stream)
-    cdef cudaStream_t _cs = s.view().value()
+    cdef cudaStream_t _cs = s.view().get()
     cdef vector[unique_ptr[datasource]] sources
     cdef vector[cpp_FileMetaData] c_metadatas
     cdef vector[cpp_FileMetaData*] metadata_ptrs
@@ -828,7 +883,7 @@ cdef class ChunkedParquetWriter:
             ChunkedParquetWriter
         )
         cdef Stream s = _get_stream(stream)
-        cdef cudaStream_t _cs = s.view().value()
+        cdef cudaStream_t _cs = s.view().get()
         parquet_writer.c_obj.reset(
             new cpp_chunked_parquet_writer(options.c_obj, _cs)
         )
@@ -1435,7 +1490,7 @@ cpdef memoryview write_parquet(ParquetWriterOptions options, object stream: Cuda
     """
     cdef unique_ptr[vector[uint8_t]] c_result
     cdef Stream s = _get_stream(stream)
-    cdef cudaStream_t _cs = s.view().value()
+    cdef cudaStream_t _cs = s.view().get()
     with nogil:
         c_result = cpp_write_parquet(move(options.c_obj), _cs)
 

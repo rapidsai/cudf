@@ -23,6 +23,11 @@ class UseDataPageMask(IntEnum):
     YES = 1
     NO = 0
 
+class ReadColumnsMode(IntEnum):
+    FILTER_COLUMNS = 0
+    PAYLOAD_COLUMNS = 1
+    ALL_COLUMNS = 2
+
 class HybridScanMetadata:
     @staticmethod
     def from_footer_bytes(
@@ -57,9 +62,12 @@ class HybridScanReader:
         options: ParquetReaderOptions,
         stream: CudaStreamLike | None = None,
     ) -> list[int]: ...
-    def secondary_filters_byte_ranges(
+    def bloom_filters_byte_ranges(
         self, row_group_indices: list[int], options: ParquetReaderOptions
-    ) -> tuple[list[ByteRangeInfo], list[ByteRangeInfo]]: ...
+    ) -> list[ByteRangeInfo]: ...
+    def dictionary_pages_byte_ranges(
+        self, row_group_indices: list[int], options: ParquetReaderOptions
+    ) -> list[ByteRangeInfo]: ...
     def filter_row_groups_with_dictionary_pages(
         self,
         dictionary_page_data: Sequence[Span],
@@ -158,7 +166,9 @@ class HybridScanReader:
     ) -> TableWithMetadata: ...
     def construct_row_group_passes(
         self,
+        columns_mode: ReadColumnsMode,
         row_group_indices: list[int],
         pass_read_limit: int,
+        options: ParquetReaderOptions,
     ) -> list[list[int]]: ...
     def has_next_table_chunk(self) -> bool: ...

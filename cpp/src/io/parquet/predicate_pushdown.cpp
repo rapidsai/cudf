@@ -17,8 +17,6 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cuda/iterator>
-
 #include <algorithm>
 #include <functional>
 #include <numeric>
@@ -68,9 +66,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto mr = cudf::get_current_device_resource_ref();
 
   // Get a boolean mask indicating which columns can participate in stats based filtering
-  auto const [stats_columns_mask, has_is_null_operator] =
-    stats_columns_collector{filter.get(), static_cast<size_type>(output_dtypes.size())}
-      .get_stats_columns_mask();
+  auto const stats_columns_mask =
+    stats_columns_collector{filter.get(), output_dtypes}.get_stats_columns_mask();
 
   // Return early if no columns will participate in stats based filtering
   if (stats_columns_mask.empty()) { return std::nullopt; }
@@ -91,14 +88,14 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   }
 
   // Converts Column chunk statistics to a table
-  // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
-  // For each column, it contains #sources * #column_chunks_per_src rows
+  // where min(col[i]) = columns[i*3], max(col[i]) = columns[i*3+1], is_null(col[i]) =
+  // columns[i*3+2] For each column, it contains #sources * #column_chunks_per_src rows
   std::vector<std::unique_ptr<column>> columns;
   row_group_stats_caster const stats_col{
     .total_row_groups     = static_cast<size_type>(total_row_groups),
     .per_file_metadata    = per_file_metadata,
     .row_group_indices    = input_row_group_indices,
-    .has_is_null_operator = has_is_null_operator};
+    .has_is_null_operator = true};
 
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const schema_idx = output_column_schemas[col_idx];
@@ -107,54 +104,50 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     if (not stats_columns_mask[col_idx] or
         (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING)) {
       // Placeholder for unsupported types and non-participating columns
-      columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                                  total_row_groups,
-                                                  rmm::device_buffer{0, stream, mr},
-                                                  0,
-                                                  stream,
-                                                  mr));
-      columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                                  total_row_groups,
-                                                  rmm::device_buffer{0, stream, mr},
-                                                  0,
-                                                  stream,
-                                                  mr));
-      if (has_is_null_operator) {
-        columns.push_back(cudf::make_numeric_column(data_type{cudf::type_id::BOOL8},
-                                                    total_row_groups,
-                                                    rmm::device_buffer{0, stream, mr},
-                                                    0,
-                                                    stream,
-                                                    mr));
-      }
+      columns.push_back(cudf::make_numeric_column(
+        data_type{cudf::type_id::BOOL8},
+        total_row_groups,
+        cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr),
+        0,
+        stream,
+        mr));
+      columns.push_back(cudf::make_numeric_column(
+        data_type{cudf::type_id::BOOL8},
+        total_row_groups,
+        cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr),
+        0,
+        stream,
+        mr));
+      columns.push_back(cudf::make_numeric_column(
+        data_type{cudf::type_id::BOOL8},
+        total_row_groups,
+        cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr),
+        0,
+        stream,
+        mr));
       continue;
     }
     // Map each filter column's zeroth-source schema index into every source's schema tree.
-    auto const num_sources         = input_row_group_indices.size();
-    auto per_source_schema_indices = std::vector<int>(num_sources);
-    auto const src_iter            = cuda::counting_iterator<size_t>{0};
-    std::transform(
-      src_iter, src_iter + num_sources, per_source_schema_indices.begin(), [&](size_t src_idx) {
-        return map_schema_index(schema_idx, static_cast<int>(src_idx));
-      });
+    auto const schema_indices_per_source = map_schema_index_to_sources(schema_idx);
     auto [min_col, max_col, is_null_col] = cudf::type_dispatcher<dispatch_storage_type>(
-      dtype, stats_col, per_source_schema_indices, dtype, stream, mr);
+      dtype, stats_col, schema_indices_per_source, dtype, stream, mr);
     columns.push_back(std::move(min_col));
     columns.push_back(std::move(max_col));
-    if (has_is_null_operator) {
-      CUDF_EXPECTS(is_null_col.has_value(), "is_null column must be present");
-      columns.push_back(std::move(is_null_col.value()));
-    }
+    CUDF_EXPECTS(is_null_col.has_value(), "is_null column must be present");
+    columns.push_back(std::move(is_null_col.value()));
   }
   auto stats_table = cudf::table(std::move(columns));
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
-  stats_expression_converter const stats_expr{
-    filter.get(), static_cast<size_type>(output_dtypes.size()), has_is_null_operator, stream};
+  stats_expression_converter const stats_expr{filter.get(), output_dtypes};
+
+  // Return early if statistics cannot prune any row groups using the filter
+  auto const converted_expr = stats_expr.get_stats_expr();
+  if (not converted_expr.has_value()) { return std::nullopt; }
 
   // Filter stats table with StatsAST expression and collect filtered row group indices
   return collect_filtered_row_group_indices(
-    stats_table, stats_expr.get_stats_expr(), input_row_group_indices, stream);
+    stats_table, converted_expr.value(), input_row_group_indices, stream);
 }
 
 std::pair<std::optional<std::vector<std::vector<size_type>>>, surviving_row_group_metrics>
@@ -191,11 +184,25 @@ aggregate_reader_metadata::filter_row_groups(
                                                ? stats_filtered_row_groups.value()
                                                : input_row_group_indices;
 
+  // Timestamp columns stored with another precision in any source cannot use bloom filters
+  auto const mismatched_timestamp_mask = calc_mismatched_timestamp_mask(
+    std::span{output_dtypes.data(), output_dtypes.size()},
+    std::span{output_column_schemas.data(), output_column_schemas.size()});
+
   // Collect equality literals for each input table column for bloom filtering
-  auto const equality_literals =
-    equality_literals_collector{
-      filter.get(), output_dtypes, output_column_schemas, per_file_metadata[0].schema}
-      .get_literals();
+  auto literals_collector = equality_literals_collector{
+    filter.get(),
+    output_dtypes,
+    std::span{mismatched_timestamp_mask.data(), mismatched_timestamp_mask.size()}};
+
+  // Return early if bloom filters cannot prune any row groups with this filter.
+  if (not literals_collector.can_filter()) {
+    return {stats_filtered_row_groups,
+            {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
+  }
+
+  auto const [equality_literals, equality_operators] =
+    std::move(literals_collector).get_literals_and_operators();
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> equality_col_schemas;
@@ -205,12 +212,6 @@ aggregate_reader_metadata::filter_row_groups(
                   equality_literals.begin(),
                   std::back_inserter(equality_col_schemas),
                   [](auto& eq_literals) { return not eq_literals.empty(); });
-
-  // Return early if no column with equality predicate(s)
-  if (equality_col_schemas.empty()) {
-    return {stats_filtered_row_groups,
-            {std::make_optional(num_stats_filtered_row_groups), std::nullopt}};
-  }
 
   // Read a vector of bloom filter bitset device buffers for all columns with equality
   // predicate(s) across all row groups
@@ -232,6 +233,7 @@ aggregate_reader_metadata::filter_row_groups(
   auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_data,
                                                              bloom_filter_input_row_groups,
                                                              equality_literals,
+                                                             equality_operators,
                                                              num_stats_filtered_row_groups,
                                                              output_dtypes,
                                                              equality_col_schemas,
