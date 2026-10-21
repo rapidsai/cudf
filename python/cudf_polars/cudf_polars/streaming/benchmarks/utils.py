@@ -30,7 +30,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 import nvtx
 
 import polars as pl
-from polars.testing import assert_frame_equal
 
 __all__: list[str] = [
     "COUNT_DTYPE",
@@ -977,7 +976,7 @@ def execute_query(
 def validate_result(
     result: pl.DataFrame,
     expected: pl.DataFrame,
-    sort_by: list[tuple[str, bool]],
+    sort_by: list[tuple[str, bool]] | None,
     limit: int | None = None,
     sort_keys: list[tuple[pl.Expr, bool]] | None = None,
     **kwargs: Any,
@@ -1016,9 +1015,10 @@ class QueryResult:
     ----------
     frame: pl.LazyFrame
         The result of the query.
-    sort_by: list[tuple[str, bool]]
+    sort_by: list[tuple[str, bool]] | None
         The columns that the query sorts by. Each tuple contains (column_name, descending_flag).
-        Used for the ties/limit boundary logic in validation.
+        Used for the ties/limit boundary logic in validation. ``None`` means the sort
+        order is unknown, and validation compares rows in the order they were returned.
     sort_keys: list[tuple[pl.Expr, bool]] | None
         Optional Polars expressions for the sortedness check. Use this when the query
         sorts by a conditional expression (e.g. ``CASE WHEN lochierarchy = 0 THEN i_category END``)
@@ -1031,7 +1031,7 @@ class QueryResult:
     """
 
     frame: pl.LazyFrame
-    sort_by: list[tuple[str, bool]]
+    sort_by: list[tuple[str, bool]] | None
     limit: int | None = None
     nulls_last: bool = True
     sort_keys: list[tuple[pl.Expr, bool]] | None = None
@@ -1115,7 +1115,7 @@ class SQLQueries:
                     for table in table_names
                 }
             )
-            return QueryResult(frame=context.execute(get_sql(run_config)), sort_by=[])
+            return QueryResult(frame=context.execute(get_sql(run_config)), sort_by=None)
 
         return query
 
@@ -1184,15 +1184,7 @@ def run_polars_query_iteration(
     io_summaries = _collect_io_summaries(engine)
     statistics = _collect_statistics(engine)
 
-    validation_result: ValidationResult | None
-    if expected is not None and run_config.query_mode is QueryMode.SQL:
-        try:
-            assert_frame_equal(result, expected, **get_validation_options(args))
-        except Exception as e:
-            validation_result = ValidationResult.from_error(e)
-        else:
-            validation_result = ValidationResult(status="Passed", message=None)
-    elif expected is not None:
+    if expected is not None:
         validation_result = validate_result(
             result,
             expected,
