@@ -106,6 +106,9 @@ struct calculate_group_statistics_functor {
       if (r < s.group.num_rows) {
         if (s.col.leaf_column->is_valid(row)) {
           auto converted_value = type_convert::convert(get_element<T>(s, row));
+          if constexpr (std::is_same_v<CT, detail::timestamp_ns128>) {
+            converted_value = detail::to_wall_clock(converted_value, s.col.ut_offsets);
+          }
           chunk.reduce(converted_value);
         } else {
           chunk.null_count++;
@@ -193,7 +196,14 @@ struct merge_group_statistics_functor {
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
 
-    typed_statistics_chunk<T, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
+    // The chunks hold values of the type the gathering kernel converted to, which decides the union
+    // member the extrema live in. Only that type matters here, so the int96 choice is irrelevant:
+    // it changes the unit of a Parquet timestamp, not how it is stored.
+    using type_convert =
+      detail::type_conversion<detail::conversion_map<IO, detail::is_int96_timestamp::NO>>;
+    using CT = typename type_convert::template type<T>;
+
+    typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
 
     for (uint32_t i = t; i < num_chunks; i += block_size) {
       chunk.reduce(chunks[i]);

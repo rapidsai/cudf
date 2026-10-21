@@ -880,8 +880,9 @@ TEST_F(OrcWriterTest, WriterTimezoneStatistics)
 TEST_F(OrcWriterTest, WriterTimezoneStatisticsSlicedSubsecond)
 {
   // Sub-second resolution and a value before the epoch, whose fractional part makes the second it
-  // falls in one lower. Sliced, so the rows the statistics read start past row zero, and the null
-  // is the last row, which falls outside the slice if the null mask is read at the wrong offset.
+  // falls in one lower, so the offset is looked up for the right second only when the division
+  // rounds towards negative infinity. Sliced, and the last row of the slice is null, pinning the
+  // rows the statistics cover to the ones the slice holds.
   auto constexpr negative_ms = cudf::timestamp_ms::rep{-1'500};  // 1969-12-31T23:59:58.500Z
   auto const timestamps      = column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>{
     {0L, negative_ms, during_est * 1000, during_edt * 1000, 0L}, {true, true, true, true, false}};
@@ -897,6 +898,43 @@ TEST_F(OrcWriterTest, WriterTimezoneStatisticsSlicedSubsecond)
   EXPECT_EQ(ts_stats.maximum_utc, (during_edt + new_york_dst_offset) * 1000);
   EXPECT_FALSE(ts_stats.minimum.has_value());
   EXPECT_FALSE(ts_stats.maximum.has_value());
+}
+
+TEST_F(OrcWriterTest, WriterTimezoneStatisticsOutsideNanosecondRange)
+{
+  // The outermost whole seconds an int64 nanosecond count holds
+  auto constexpr highest_s = cudf::timestamp_s::rep{9'223'372'036};   // 2262-04-11T23:47:16Z
+  auto constexpr lowest_s  = cudf::timestamp_s::rep{-9'223'372'036};  // 1677-09-21T00:12:44Z
+
+  // Shifting these onto the wall clock leaves the range an int64 nanosecond count covers, in one
+  // direction or the other, so bounds reduced as absolute nanoseconds wrap and change sign
+  auto const bounds_survive_the_shift = [](auto const& input, auto timezone, int64_t expected_ms) {
+    SCOPED_TRACE(timezone);
+    auto const stats = timestamp_stats(write_orc_with_timezone(table_view({input}), timezone));
+    EXPECT_EQ(stats.minimum_utc, expected_ms);
+    EXPECT_EQ(stats.maximum_utc, expected_ms);
+  };
+
+  for (auto const value : {highest_s, lowest_s}) {
+    SCOPED_TRACE(value);
+    // Every resolution holds the value, and all three are encoded as the same millisecond bound
+    auto const seconds = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{value};
+    auto const micros =
+      column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep>{value * 1'000'000};
+    auto const nanos =
+      column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{value * 1'000'000'000};
+
+    // Shanghai leaves the range at the top, New York at the bottom. April 2262 falls in New York's
+    // daylight saving, while 1677 predates its transitions and takes the earliest standard offset.
+    auto const new_york = (value == highest_s) ? new_york_dst_offset : new_york_offset;
+    for (auto const [timezone, offset] :
+         {std::pair{"Asia/Shanghai", shanghai_offset}, std::pair{"America/New_York", new_york}}) {
+      auto const expected_ms = (value + offset) * 1000;
+      bounds_survive_the_shift(seconds, timezone, expected_ms);
+      bounds_survive_the_shift(micros, timezone, expected_ms);
+      bounds_survive_the_shift(nanos, timezone, expected_ms);
+    }
+  }
 }
 
 TEST_F(OrcWriterTest, WriterTimezoneInvalid)

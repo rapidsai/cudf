@@ -11,13 +11,11 @@
 #include "io/comp/compression.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
-#include "utilities/time_utils.cuh"
 #include "writer_impl.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/timezone.cuh>
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/buffer_factories.hpp>
@@ -1314,122 +1312,14 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
   return stripes;
 }
 
-/**
- * @brief Copies of the timestamp columns, shifted onto the writer's wall clock for the statistics.
- *
- * Each value is shifted on its own, like Apache's `TimestampTreeWriter` does, because daylight
- * saving makes the offset vary within a column.
- */
-struct wall_clock_columns {
-  std::vector<cuda::device_buffer<int64_t>> data;                // shifted values
-  std::vector<cuda::device_buffer<bitmask_type>> null_masks;     // one per sliced nullable column
-  std::unique_ptr<cuda::device_buffer<std::byte>> view_storage;  // backs `columns`
-  column_device_view const* columns{nullptr};
-  // Index into `columns` per ORC column; null for the columns whose statistics read the table.
-  // Empty when no column was shifted, where the statistics read the table throughout.
-  cuda::device_buffer<cuda::std::optional<size_type>> indices;
-};
-
-/**
- * @brief Shifts the timestamp columns of a table onto the writer's wall clock.
- *
- * @param orc_table Table being written
- * @param timezone Timezone the file is written in
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resources used to allocate the returned and intermediate buffers
- * @return The shifted columns; holds no column when writing UTC, or without timestamps
- */
-wall_clock_columns make_wall_clock_columns(orc_table_view const& orc_table,
-                                           writer_timezone const& timezone,
-                                           cuda::stream_ref stream,
-                                           cudf::memory_resources mr)
-{
-  auto host_indices = std::vector<cuda::std::optional<size_type>>(orc_table.num_columns());
-  auto data         = std::vector<cuda::device_buffer<int64_t>>{};
-  auto null_masks   = std::vector<cuda::device_buffer<bitmask_type>>{};
-  auto views        = std::vector<column_view>{};
-
-  // Empty when writing UTC, which leaves the input instants on the wall clock already
-  if (auto const transitions = timezone.ut_offsets(stream); transitions.num_rows() != 0) {
-    auto const d_transitions = table_device_view::create(transitions, stream);
-
-    for (auto const& column : orc_table.columns) {
-      if (column.orc_kind() != TypeKind::TIMESTAMP) { continue; }
-
-      auto const& input = column.cudf_view();
-      auto shifted =
-        cuda::device_buffer<int64_t>(stream, mr.get_output_mr(), input.size(), cuda::no_init);
-      auto const d_input = column_device_view::create(input, stream);
-      // `scale()` counts the decimal digits between the column's resolution and nanoseconds
-      auto const scale = column.scale();
-
-      thrust::transform(rmm::exec_policy_nosync(stream, mr.get_temporary_mr()),
-                        cuda::counting_iterator<size_type>{0},
-                        cuda::counting_iterator{input.size()},
-                        shifted.data(),
-                        [input = *d_input, transitions = *d_transitions, scale] __device__(
-                          size_type idx) -> int64_t {
-                          if (not input.is_valid(idx)) { return 0; }
-
-                          auto const ticks_per_s = cudf::detail::powers_of_ten[9 - scale];
-                          auto const value       = input.element<int64_t>(idx);
-                          // Floor, to take the offset in effect in the second the value falls in
-                          auto const seconds =
-                            value / ticks_per_s - ((value % ticks_per_s < 0) ? 1 : 0);
-                          auto const offset = cudf::detail::get_ut_offset(
-                            transitions, timestamp_s{duration_s{seconds}});
-                          return value + offset.count() * ticks_per_s;
-                        });
-
-      // The shifted values start at row zero, so a slice needs its mask rebased to match
-      auto const* null_mask = (input.null_count() == 0) ? nullptr : input.null_mask();
-      if (null_mask != nullptr and input.offset() != 0) {
-        null_masks.push_back(cudf::detail::copy_bitmask(input, stream, mr.get_output_mr()));
-        null_mask = null_masks.back().data();
-      }
-
-      host_indices[column.index()] = views.size();
-      views.emplace_back(
-        input.type(), input.size(), shifted.data(), null_mask, input.null_count(), 0);
-      data.emplace_back(std::move(shifted));
-    }
-  }
-
-  // Nothing was shifted, so skip the host-to-device copies below, each of which blocks the stream
-  if (views.empty()) {
-    return {{},
-            {},
-            nullptr,
-            nullptr,
-            cuda::device_buffer<cuda::std::optional<size_type>>{
-              stream, mr.get_output_mr(), 0, cuda::no_init}};
-  }
-
-  auto [view_storage, columns] = cudf::create_column_device_views<column_device_view>(
-    host_span<column_view const>{views}, stream, mr.get_output_mr());
-  auto indices = cudf::detail::make_device_buffer(host_indices, stream, mr);
-
-  return {
-    std::move(data), std::move(null_masks), std::move(view_storage), columns, std::move(indices)};
-}
-
 void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                              device_span<stats_column_desc> stat_desc,
-                             wall_clock_columns const& wall_clock,
                              cuda::stream_ref stream)
 {
-  auto const indices = device_span<cuda::std::optional<size_type> const>{wall_clock.indices};
-  auto const* wall_clock_cols = wall_clock.columns;
-  thrust::for_each(
-    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    cuda::counting_iterator<size_t>{0},
-    cuda::counting_iterator{stat_desc.size()},
-    [=] __device__(auto idx) {
-      auto const wall_clock_idx = indices.empty() ? cuda::std::optional<size_type>{} : indices[idx];
-      stat_desc[idx].leaf_column = wall_clock_idx.has_value()
-                                     ? wall_clock_cols + *wall_clock_idx
-                                     : static_cast<column_device_view const*>(&columns[idx]);
-    });
+  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   cuda::counting_iterator<size_t>{0},
+                   cuda::counting_iterator{stat_desc.size()},
+                   [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx]; });
 }
 
 cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
@@ -1486,7 +1376,7 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
 /**
  * @brief Returns column statistics in an intermediate format.
  *
- * Timestamp statistics come from `make_wall_clock_columns` rather than from the table.
+ * Timestamp statistics are gathered from the writer's wall clock rather than the input instants.
  *
  * @param stats_freq Frequency of statistics to be included in the output file
  * @param orc_table Table information to be written
@@ -1517,11 +1407,21 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
   auto rowgroup_stat_merge = rowgroup_merge.host_ptr();
   auto stripe_stat_merge   = stripe_merge.host_ptr();
 
+  // Empty when writing UTC, which leaves the input instants on the wall clock already
+  auto const transitions  = timezone.ut_offsets(stream);
+  auto const d_ut_offsets = (transitions.num_rows() == 0)
+                              ? ut_offset_table{}
+                              : ut_offset_table{transitions.column(0).data<timestamp_s>(),
+                                                transitions.column(1).data<duration_s>(),
+                                                transitions.num_rows()};
+
   for (auto const& column : orc_table.columns) {
     stats_column_desc* desc = &stat_desc[column.index()];
     desc->stats_dtype       = kind_to_stats_type(column.orc_kind());
     desc->num_rows          = column.size();
     desc->num_values        = column.size();
+    // Only timestamp statistics read the offsets, but every descriptor is set, to leave none unset
+    desc->ut_offsets = d_ut_offsets;
     if (desc->stats_dtype == dtype_timestamp64) {
       // Timestamp statistics are in milliseconds
       switch (column.scale()) {
@@ -1556,9 +1456,7 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
   stat_desc.host_to_device_async(stream);
   rowgroup_merge.host_to_device_async(stream);
   stripe_merge.host_to_device_async(stream);
-  auto const wall_clock =
-    make_wall_clock_columns(orc_table, timezone, stream, cudf::get_current_device_resource_ref());
-  set_stat_desc_leaf_cols(orc_table.d_columns, stat_desc, wall_clock, stream);
+  set_stat_desc_leaf_cols(orc_table.d_columns, stat_desc, stream);
 
   // The rowgroup stat chunks are written out in each stripe. The stripe and file-level chunks are
   // written in the footer. To prevent persisting the rowgroup stat chunks across multiple write
@@ -1597,12 +1495,8 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
   auto rowgroup_blobs = [&]() -> std::vector<col_stats_blob> {
     if (not is_granularity_rowgroup) { return {}; }
 
-    cudf::detail::hostdevice_vector<uint8_t> blobs =
-      allocate_and_encode_blobs(rowgroup_merge,
-                                rowgroup_chunks,
-                                num_rowgroup_blobs,
-                                timezone.ut_offsets(stream).num_rows() == 0,
-                                stream);
+    cudf::detail::hostdevice_vector<uint8_t> blobs = allocate_and_encode_blobs(
+      rowgroup_merge, rowgroup_chunks, num_rowgroup_blobs, transitions.num_rows() == 0, stream);
 
     std::vector<col_stats_blob> rowgroup_blobs(num_rowgroup_blobs);
     for (size_t i = 0; i < num_rowgroup_blobs; i++) {
