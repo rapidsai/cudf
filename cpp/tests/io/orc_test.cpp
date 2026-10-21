@@ -2091,6 +2091,114 @@ TEST_F(OrcReaderTest, EmptyColumnsParam)
   EXPECT_EQ(result.tbl->num_rows(), 0);
 }
 
+TEST_F(OrcWriterTest, ProlepticCalendar)
+{
+  using calendar = cudf::io::orc::CalendarKind;
+  // 1001-01-01, 1200-01-01, both sides of the cutover, a date inside the hybrid
+  // calendar's gap, the Unix epoch, and a modern date. The last row is null.
+  column_wrapper<cudf::timestamp_D, int32_t> dates(
+    {-353920, -281237, -141438, -141432, -141427, 0, 19849, 0},
+    {true, true, true, true, true, true, true, false});
+  struct_col nested{dates};
+  cudf::test::lists_column_wrapper<cudf::timestamp_D, int32_t> lists{
+    {-353920}, {-281237}, {-141438}, {-141432}, {-141427}, {}, {19849}, {0}};
+  table_view expected({dates, nested, lists});
+
+  for (auto compression : {cudf::io::compression_type::NONE, cudf::io::compression_type::SNAPPY}) {
+    for (bool chunked : {false, true}) {
+      SCOPED_TRACE(static_cast<int>(compression));
+      SCOPED_TRACE(chunked);
+      std::vector<char> buffer;
+      if (chunked) {
+        auto opts = cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{&buffer})
+                      .compression(compression)
+                      .calendar_kind(calendar::PROLEPTIC_GREGORIAN)
+                      .build();
+        cudf::io::orc_chunked_writer writer(opts);
+        auto const chunks = cudf::slice(expected, {0, 3, 3, 8});
+        writer.write(chunks[0]).write(chunks[1]);
+        writer.close();
+      } else {
+        // Exercise the default, which must describe the values the writer actually encodes.
+        auto opts = cudf::io::orc_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
+                      .compression(compression)
+                      .build();
+        EXPECT_EQ(opts.get_calendar_kind(), calendar::PROLEPTIC_GREGORIAN);
+        cudf::io::write_orc(opts);
+      }
+      cudf::io::source_info source{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}};
+      EXPECT_EQ(cudf::io::read_orc_metadata(source).calendar_kind(), calendar::PROLEPTIC_GREGORIAN);
+      auto const result = cudf::io::read_orc(
+        cudf::io::orc_reader_options::builder(source).use_np_dtypes(false).build());
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+      auto const stats = cudf::io::read_parsed_orc_statistics(source);
+      auto const date_stats =
+        std::get<cudf::io::date_statistics>(stats.file_stats[1].type_specific_stats);
+      EXPECT_EQ(date_stats.minimum, -353920);
+      EXPECT_EQ(date_stats.maximum, 19849);
+    }
+  }
+}
+
+TEST_F(OrcWriterTest, CalendarRejectsUnsupportedModes)
+{
+  using calendar = cudf::io::orc::CalendarKind;
+  cudf::io::orc_writer_options opts;
+  cudf::io::chunked_orc_writer_options chunked_opts;
+  for (auto kind :
+       {calendar::UNKNOWN_CALENDAR, calendar::JULIAN_GREGORIAN, static_cast<calendar>(3)}) {
+    EXPECT_THROW(opts.set_calendar_kind(kind), cudf::logic_error);
+    EXPECT_THROW(chunked_opts.set_calendar_kind(kind), cudf::logic_error);
+  }
+}
+
+TEST_F(OrcMetadataReaderTest, CalendarPresenceAndKinds)
+{
+  // A minimal uncompressed ORC file, expressed as wire bytes independently of libcudf's
+  // serializer. The footer contains header/content lengths, an empty root STRUCT, and no rows.
+  using calendar = cudf::io::orc::CalendarKind;
+  for (auto kind : std::vector<std::optional<calendar>>{std::nullopt,
+                                                        calendar::UNKNOWN_CALENDAR,
+                                                        calendar::JULIAN_GREGORIAN,
+                                                        calendar::PROLEPTIC_GREGORIAN}) {
+    std::vector<char> buffer{
+      'O', 'R', 'C', 0x08, 0x03, 0x10, 0x03, 0x22, 0x02, 0x08, 0x0c, 0x30, 0x00};
+    if (kind) {
+      buffer.push_back(0x58);  // Footer.calendar, protobuf field 11, varint
+      buffer.push_back(static_cast<char>(*kind));
+    }
+    auto const footer_size = static_cast<char>(buffer.size() - 3);
+    buffer.insert(buffer.end(), {0x08, footer_size, 0x10, 0x00, 0x04});
+    cudf::io::source_info source{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}};
+    EXPECT_EQ(cudf::io::read_orc_metadata(source).calendar_kind(), kind);
+  }
+}
+
+TEST_F(OrcWriterTest, CalendarOnEmptyInput)
+{
+  column_wrapper<cudf::timestamp_D, int32_t> dates{};
+  for (bool chunked : {false, true}) {
+    std::vector<char> buffer;
+    table_view empty({dates});
+    if (chunked) {
+      cudf::io::orc_chunked_writer writer(
+        cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{&buffer}));
+      writer.write(empty);
+      writer.close();
+    } else {
+      cudf::io::write_orc(
+        cudf::io::orc_writer_options::builder(cudf::io::sink_info{&buffer}, empty));
+    }
+    cudf::io::source_info source{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}};
+    auto const meta = cudf::io::read_orc_metadata(source);
+    EXPECT_EQ(meta.num_rows(), 0);
+    EXPECT_EQ(meta.calendar_kind(), cudf::io::orc::CalendarKind::PROLEPTIC_GREGORIAN);
+  }
+}
+
 TEST_F(OrcMetadataReaderTest, TestBasic)
 {
   auto const num_rows = 1'200'000;

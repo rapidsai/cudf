@@ -363,6 +363,7 @@ public final class Table implements AutoCloseable {
    *                        the columns
    * @param isMapValues     true if a column is a map
    * @param writerTimezone  timezone that the written timestamps are relative to
+   * @param calendarKind    native calendar kind recorded in the ORC footer
    * @param filename        local output path
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
@@ -377,6 +378,7 @@ public final class Table implements AutoCloseable {
                                                boolean[] isMapValues,
                                                int stripeSizeRows,
                                                String writerTimezone,
+                                               int calendarKind,
                                                String filename) throws CudfException;
 
   /**
@@ -392,6 +394,7 @@ public final class Table implements AutoCloseable {
    *                        the columns
    * @param isMapValues     true if a column is a map
    * @param writerTimezone  timezone that the written timestamps are relative to
+   * @param calendarKind    native calendar kind recorded in the ORC footer
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
@@ -406,6 +409,7 @@ public final class Table implements AutoCloseable {
                                                  boolean[] isMapValues,
                                                  int stripeSizeRows,
                                                  String writerTimezone,
+                                                 int calendarKind,
                                                  HostBufferConsumer consumer,
                                                  HostMemoryAllocator hostMemoryAllocator
                                                  ) throws CudfException;
@@ -1698,6 +1702,7 @@ public final class Table implements AutoCloseable {
           options.getFlatIsMap(),
           options.getStripeSizeRows(),
           options.getWriterTimezone(),
+          options.getCalendarKind().nativeId,
           outputFile.getAbsolutePath()));
       this.consumer = null;
     }
@@ -1715,6 +1720,7 @@ public final class Table implements AutoCloseable {
           options.getFlatIsMap(),
           options.getStripeSizeRows(),
           options.getWriterTimezone(),
+          options.getCalendarKind().nativeId,
           consumer, hostMemoryAllocator));
       this.consumer = consumer;
     }

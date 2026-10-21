@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cudf/io/detail/orc.hpp>
+#include <cudf/io/orc_types.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -664,6 +665,8 @@ class orc_writer_options {
   bool _enable_dictionary_sort = true;
   // Timezone that the written timestamps are relative to, recorded in the stripe footers
   std::string _writer_timezone = "UTC";
+  // Calendar recorded in the file footer; libcudf values use the proleptic Gregorian calendar
+  orc::CalendarKind _calendar_kind = orc::CalendarKind::PROLEPTIC_GREGORIAN;
 
   friend orc_writer_options_builder;
 
@@ -800,6 +803,12 @@ class orc_writer_options {
    */
   [[nodiscard]] std::string const& get_writer_timezone() const { return _writer_timezone; }
 
+  /**
+   * @brief Returns the calendar recorded in the file footer.
+   * @return Calendar kind
+   */
+  [[nodiscard]] orc::CalendarKind get_calendar_kind() const { return _calendar_kind; }
+
   // Setters
 
   /**
@@ -931,6 +940,22 @@ class orc_writer_options {
    * @param timezone Timezone name, for example "America/Los_Angeles"
    */
   void set_writer_timezone(std::string timezone) { _writer_timezone = std::move(timezone); }
+
+  /**
+   * @brief Sets the calendar recorded in the ORC file footer.
+   *
+   * Only `PROLEPTIC_GREGORIAN` is supported, matching libcudf's DATE and TIMESTAMP values.
+   * This option does not rebase values. Legacy Julian/Gregorian output is not supported.
+   *
+   * @param calendar_kind Calendar kind
+   * @throw cudf::logic_error if the calendar is not `PROLEPTIC_GREGORIAN`
+   */
+  void set_calendar_kind(orc::CalendarKind calendar_kind)
+  {
+    CUDF_EXPECTS(calendar_kind == orc::CalendarKind::PROLEPTIC_GREGORIAN,
+                 "Only the proleptic Gregorian calendar is supported for ORC writes");
+    _calendar_kind = calendar_kind;
+  }
 };
 
 /**
@@ -1094,6 +1119,16 @@ class orc_writer_options_builder {
   }
 
   /**
+   * @copydoc orc_writer_options::set_calendar_kind
+   * @return this for chaining
+   */
+  orc_writer_options_builder& calendar_kind(orc::CalendarKind calendar_kind)
+  {
+    options.set_calendar_kind(calendar_kind);
+    return *this;
+  }
+
+  /**
    * @brief move orc_writer_options member once it's built.
    */
   operator orc_writer_options&&() { return std::move(options); }
@@ -1162,6 +1197,8 @@ class chunked_orc_writer_options {
   bool _enable_dictionary_sort = true;
   // Timezone that the written timestamps are relative to, recorded in the stripe footers
   std::string _writer_timezone = "UTC";
+  // Calendar recorded in the file footer
+  orc::CalendarKind _calendar_kind = orc::CalendarKind::PROLEPTIC_GREGORIAN;
 
   friend chunked_orc_writer_options_builder;
 
@@ -1276,6 +1313,11 @@ class chunked_orc_writer_options {
    */
   [[nodiscard]] std::string const& get_writer_timezone() const { return _writer_timezone; }
 
+  /**
+   * @copydoc orc_writer_options::get_calendar_kind
+   */
+  [[nodiscard]] orc::CalendarKind get_calendar_kind() const { return _calendar_kind; }
+
   // Setters
 
   /**
@@ -1383,6 +1425,16 @@ class chunked_orc_writer_options {
    * @copydoc orc_writer_options::set_writer_timezone
    */
   void set_writer_timezone(std::string timezone) { _writer_timezone = std::move(timezone); }
+
+  /**
+   * @copydoc orc_writer_options::set_calendar_kind
+   */
+  void set_calendar_kind(orc::CalendarKind calendar_kind)
+  {
+    CUDF_EXPECTS(calendar_kind == orc::CalendarKind::PROLEPTIC_GREGORIAN,
+                 "Only the proleptic Gregorian calendar is supported for ORC writes");
+    _calendar_kind = calendar_kind;
+  }
 };
 
 /**
@@ -1528,6 +1580,16 @@ class chunked_orc_writer_options_builder {
   chunked_orc_writer_options_builder& writer_timezone(std::string timezone)
   {
     options.set_writer_timezone(std::move(timezone));
+    return *this;
+  }
+
+  /**
+   * @copydoc chunked_orc_writer_options::set_calendar_kind
+   * @return this for chaining
+   */
+  chunked_orc_writer_options_builder& calendar_kind(orc::CalendarKind calendar_kind)
+  {
+    options.set_calendar_kind(calendar_kind);
     return *this;
   }
 

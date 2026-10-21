@@ -1363,7 +1363,7 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
     case TypeKind::FLOAT: return dtype_float32;
     case TypeKind::DOUBLE: return dtype_float64;
     case TypeKind::STRING: return dtype_string;
-    case TypeKind::DATE: return dtype_int32;
+    case TypeKind::DATE: return dtype_date32;
     case TypeKind::TIMESTAMP: return dtype_timestamp64;
     case TypeKind::DECIMAL: return dtype_decimal64;
     default: return dtype_none;
@@ -2738,6 +2738,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _timezone(options.get_writer_timezone()),
     _out_sink(std::move(sink))
 {
+  _footer.calendar = options.get_calendar_kind();
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
@@ -2762,6 +2763,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     _timezone(options.get_writer_timezone()),
     _out_sink(std::move(sink))
 {
+  _footer.calendar = options.get_calendar_kind();
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }

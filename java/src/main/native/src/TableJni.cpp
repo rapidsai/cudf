@@ -2599,6 +2599,7 @@ Java_ai_rapids_cudf_Table_writeORCBufferBegin(JNIEnv* env,
                                               jbooleanArray j_is_map,
                                               jint j_stripe_size_rows,
                                               jstring j_writer_timezone,
+                                              jint j_calendar_kind,
                                               jobject consumer,
                                               jobject host_memory_allocator)
 {
@@ -2650,16 +2651,18 @@ Java_ai_rapids_cudf_Table_writeORCBufferBegin(JNIEnv* env,
       new cudf::jni::jni_writer_data_sink(env, consumer, host_memory_allocator));
     sink_info sink{data_sink.get()};
 
-    auto stats                      = std::make_shared<cudf::io::writer_compression_statistics>();
-    chunked_orc_writer_options opts = chunked_orc_writer_options::builder(sink)
-                                        .metadata(std::move(metadata))
-                                        .compression(static_cast<compression_type>(j_compression))
-                                        .enable_statistics(ORC_STATISTICS_ROW_GROUP)
-                                        .key_value_metadata(kv_metadata)
-                                        .compression_statistics(stats)
-                                        .stripe_size_rows(j_stripe_size_rows)
-                                        .writer_timezone(writer_timezone.get())
-                                        .build();
+    auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
+    chunked_orc_writer_options opts =
+      chunked_orc_writer_options::builder(sink)
+        .metadata(std::move(metadata))
+        .compression(static_cast<compression_type>(j_compression))
+        .enable_statistics(ORC_STATISTICS_ROW_GROUP)
+        .key_value_metadata(kv_metadata)
+        .compression_statistics(stats)
+        .stripe_size_rows(j_stripe_size_rows)
+        .writer_timezone(writer_timezone.get())
+        .calendar_kind(static_cast<orc::CalendarKind>(j_calendar_kind))
+        .build();
     auto writer_ptr                          = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle* ret = new cudf::jni::native_orc_writer_handle(
       std::move(writer_ptr), std::move(data_sink), std::move(stats));
@@ -2681,6 +2684,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(JNIEnv* env,
                                                                    jbooleanArray j_is_map,
                                                                    jint j_stripe_size_rows,
                                                                    jstring j_writer_timezone,
+                                                                   jint j_calendar_kind,
                                                                    jstring j_output_path)
 {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
@@ -2728,16 +2732,18 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(JNIEnv* env,
                    [](std::string const& k, std::string const& v) { return std::make_pair(k, v); });
 
     sink_info sink{output_path};
-    auto stats                      = std::make_shared<cudf::io::writer_compression_statistics>();
-    chunked_orc_writer_options opts = chunked_orc_writer_options::builder(sink)
-                                        .metadata(std::move(metadata))
-                                        .compression(static_cast<compression_type>(j_compression))
-                                        .enable_statistics(ORC_STATISTICS_ROW_GROUP)
-                                        .key_value_metadata(kv_metadata)
-                                        .compression_statistics(stats)
-                                        .stripe_size_rows(j_stripe_size_rows)
-                                        .writer_timezone(writer_timezone.get())
-                                        .build();
+    auto stats = std::make_shared<cudf::io::writer_compression_statistics>();
+    chunked_orc_writer_options opts =
+      chunked_orc_writer_options::builder(sink)
+        .metadata(std::move(metadata))
+        .compression(static_cast<compression_type>(j_compression))
+        .enable_statistics(ORC_STATISTICS_ROW_GROUP)
+        .key_value_metadata(kv_metadata)
+        .compression_statistics(stats)
+        .stripe_size_rows(j_stripe_size_rows)
+        .writer_timezone(writer_timezone.get())
+        .calendar_kind(static_cast<orc::CalendarKind>(j_calendar_kind))
+        .build();
     auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle* ret =
       new cudf::jni::native_orc_writer_handle(std::move(writer_ptr), nullptr, std::move(stats));
