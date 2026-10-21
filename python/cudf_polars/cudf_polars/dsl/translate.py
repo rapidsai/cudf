@@ -924,6 +924,22 @@ def _(node: plrs._ir_nodes.Sort, translator: Translator, schema: Schema) -> ir.I
     order, null_order = sorting.sort_order(
         descending, nulls_last=nulls_last, num_keys=len(by)
     )
+    # CPU Polars allows duplicate keys, but they may break streaming
+    # GPU code (see https://github.com/pola-rs/polars/issues/30116).
+    # Repeated columns cannot break ties left by their first occurrence.
+    # Keep the first occurrence's direction and null placement.
+    seen: set[str] = set()
+    keep = []
+    for i, key in enumerate(by):
+        if isinstance(key.value, expr.Col):
+            if key.value.name in seen:
+                continue
+            seen.add(key.value.name)
+        keep.append(i)
+    if len(keep) != len(by):
+        by = [by[i] for i in keep]
+        order = [order[i] for i in keep]
+        null_order = [null_order[i] for i in keep]
     # TODO: use the DynamicPred hint from node.slice (offset, length,
     # dynamic_pred_id). dynamic_pred_id is an int (u128 UUID) matching a
     # DynamicPred Function node in an upstream scan. The sort actor could
