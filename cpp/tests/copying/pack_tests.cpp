@@ -791,6 +791,17 @@ TEST_F(ExperimentalPackUnpackTest, CompressedInputValidation)
   truncated.payload = truncated.payload.first(truncated.payload.size() - 1);
   EXPECT_THROW(cx::materialize(truncated), cudf::logic_error);
 
+  // Shrink the only region to its first 64 KiB block, half of what the column needs. The 32-byte
+  // header is followed by the region entry, whose data size and block count are its third and
+  // sixth fields.
+  auto short_metadata = packed.result.metadata;
+  auto const shrink   = [&](std::size_t field_offset, uint64_t value) {
+    std::memcpy(short_metadata.data() + 32 + field_offset, &value, sizeof(value));
+  };
+  shrink(2 * sizeof(uint64_t), 64 * 1024);
+  shrink(5 * sizeof(uint64_t), 1);
+  EXPECT_THROW(cx::materialize({short_metadata, packed.view().payload}), cudf::logic_error);
+
   // The same payload behind a 4-byte header, as a transport layer might frame it.
   auto const stream = cudf::get_default_stream();
   rmm::device_buffer framed(packed.result.payload_bytes + 4, stream);

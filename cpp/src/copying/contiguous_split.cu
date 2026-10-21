@@ -2913,7 +2913,7 @@ struct compression_metadata {
 
 /// Supplies the packed column buffers that materialization allocates.
 struct buffer_source {
-  /// Returns the allocation size of the buffer at `offset`, which must hold `required_bytes`.
+  /// Returns the size of the buffer at `offset`, which must hold `required_bytes` of column data.
   std::function<std::size_t(int64_t offset, std::size_t required_bytes, bool is_validity)> size;
   /// Schedules filling `destination` with the buffer at `offset`.
   std::function<void(int64_t offset, device_span<uint8_t> destination)> fill;
@@ -2930,11 +2930,12 @@ std::unique_ptr<column> allocate_materialized_column(
   auto null_mask = cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream, mr);
   if (auto const offset = packed_metadata_access::null_mask_offset(metadata); offset != -1) {
     auto const bytes =
-      source.size(offset, bitmask_allocation_size_bytes(metadata.num_rows()), true);
+      source.size(offset, num_bitmask_words(metadata.num_rows()) * sizeof(bitmask_type), true);
     null_mask = cuda::device_buffer<bitmask_type>(
       stream,
       mr.get_output_mr(),
-      cudf::util::div_rounding_up_safe(bytes, sizeof(bitmask_type)),
+      cudf::util::div_rounding_up_safe(
+        std::max(bytes, bitmask_allocation_size_bytes(metadata.num_rows())), sizeof(bitmask_type)),
       cuda::no_init);
     source.fill(offset, {reinterpret_cast<uint8_t*>(null_mask.data()), bytes});
   } else {
@@ -3992,8 +3993,8 @@ std::unique_ptr<table> materialize_selection(packed_data_view input,
                      (entry->is_validity != 0) == is_validity,
                    "Compressed regions do not match the packed column schema at offset " +
                      std::to_string(offset));
-      CUDF_EXPECTS(entry->uncompressed_bytes >= required_bytes,
-                   "Compressed region is smaller than its column buffer");
+      CUDF_EXPECTS(entry->data_bytes >= required_bytes,
+                   "Compressed region holds less data than its column buffer");
       return static_cast<std::size_t>(entry->uncompressed_bytes);
     },
     [&](int64_t offset, device_span<uint8_t> destination) {
