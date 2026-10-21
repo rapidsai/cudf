@@ -663,7 +663,10 @@ async def _shuffle_and_reassemble(
     )
 
     forward_shuffle = ShuffleManager(
-        context, comm, forward_modulus, forward_shuffle_collective_id
+        context,
+        comm,
+        forward_modulus,
+        forward_shuffle_collective_id,
     )
     return_shuffle = ShuffleManager(
         context,
@@ -764,7 +767,9 @@ async def over_actor(
         chs_out=(ch_out,),
         trace_ir=ir,
         ir_context=ir_context,
-    ) as tracer:
+    ) as actor_scope:
+        tracer = actor_scope.tracer
+        ir_context = actor_scope.require_ir_context()
         metadata_in = await recv_metadata(ch_in, context)
 
         partitioning = NormalizedPartitioning.from_keys(
