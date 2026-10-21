@@ -30,7 +30,6 @@ from cudf_polars.engine import persisted_result, rank_local_store
 from cudf_polars.engine.core import (
     ClusterInfo,
     StreamingEngine,
-    _run_cleanup_steps,
     check_reserved_keys,
     drop_if_replicated,
     evaluate_on_rank,
@@ -53,6 +52,7 @@ from cudf_polars.quent._runtime import (
     QuentWorkerRuntime,
 )
 from cudf_polars.unstable import unstable
+from cudf_polars.utils.cleanup import run_cleanup_steps
 from cudf_polars.utils.config import (
     MemoryResourceConfig,
     RayContext,
@@ -764,7 +764,7 @@ def _shutdown_ray(
 
         def shutdown_actors() -> None:
             refs = [actor.shutdown.remote() for actor in rank_actors]
-            _run_cleanup_steps(
+            run_cleanup_steps(
                 "Ray actor shutdown failed",
                 *(lambda ref=ref: _wait_for_actor_shutdown(ref) for ref in refs),
             )
@@ -772,7 +772,7 @@ def _shutdown_ray(
         steps.append(shutdown_actors)
     if shutdown_ray:
         steps.append(ray.shutdown)
-    _run_cleanup_steps("Ray engine shutdown failed", *steps)
+    run_cleanup_steps("Ray engine shutdown failed", *steps)
 
 
 class RayEngine(StreamingEngine):
@@ -1257,9 +1257,8 @@ class RayEngine(StreamingEngine):
             ).values()
         )
 
-    # TODO: adopt polars' Engine.execute(lf, *, optimizations) contract
-    # (added in polars>=1.43) so we can return our own result type from
-    # LazyFrame.execute(engine=...) too (See https://github.com/NVIDIA/cudf/issues/22917).
+    # TODO: adopt polars' Engine.execute(lf, *, optimizations) contract so we can
+    # return our own result type from LazyFrame.execute(engine=...) too (See https://github.com/NVIDIA/cudf/issues/22917).
     @unstable()
     def execute(self, lf: pl.LazyFrame) -> PersistedQueryResult:  # type: ignore[override]
         """

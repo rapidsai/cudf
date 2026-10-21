@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import datetime
+import json
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -13,7 +15,9 @@ from cudf_polars.testing.asserts import (
     assert_sink_result_equal,
 )
 from cudf_polars.testing.engine_utils import get_blocksize_mode
-from cudf_polars.utils.versions import POLARS_VERSION_LT_138
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture(scope="module")
@@ -218,10 +222,6 @@ def test_sink_in_memory_executor(df, tmp_path, file_type):
 
 @pytest.mark.parametrize("compression", ["gzip", "zstd"])
 @pytest.mark.parametrize("file_type", ["csv", "ndjson"])
-@pytest.mark.skipif(
-    POLARS_VERSION_LT_138,
-    reason="compression parameter added in Polars 1.38",
-)
 def test_sink_compression_raises(
     in_memory_engine, df, tmp_path, compression, file_type
 ):
@@ -247,3 +247,37 @@ def test_sink_parquet_time_falls_back(in_memory_engine, tmp_path):
         {},
         NotImplementedError,
     )
+
+
+@pytest.mark.parametrize(
+    "chunk_size_return_early", [(None, False), (3, False), (3, True)]
+)
+def test_sink_batches(
+    in_memory_engine: pl.GPUEngine,
+    df: pl.LazyFrame,
+    tmp_path: Path,
+    chunk_size_return_early: tuple[int | None, bool],
+) -> None:
+    chunk_size, return_early = chunk_size_return_early
+    output = tmp_path / "batches.jsonl"
+
+    def write_batch(batch: pl.DataFrame) -> bool | None:
+        with output.open("a") as file:
+            file.write(json.dumps(batch.to_dict(as_series=False)) + "\n")
+        if return_early:
+            return True
+        return None
+
+    sink = df.sink_batches(write_batch, chunk_size=chunk_size, lazy=True)
+    assert not output.exists()
+    assert sink.collect(engine=in_memory_engine).shape == (0, 0)
+    batches = [json.loads(line) for line in output.read_text().splitlines()]
+
+    if chunk_size is None:
+        expected_sizes = [df.collect().height]
+    elif return_early:
+        expected_sizes = [chunk_size]
+    else:
+        expected_sizes = [chunk_size, chunk_size]
+
+    assert [len(batch["a"]) for batch in batches] == expected_sizes

@@ -14,6 +14,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
@@ -27,6 +28,7 @@
 #include <rmm/cuda_device.hpp>
 #include <rmm/device_buffer.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/stream>
 
@@ -70,8 +72,7 @@ struct dispatch_from_arrow_device {
     size_type const offset     = input->offset;
     size_type const null_count = input->null_count;
     bitmask_type const* null_mask =
-      skip_mask ? nullptr
-                : reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]);
+      skip_mask ? nullptr : static_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]);
     auto data_buffer = input->buffers[fixed_width_data_buffer_idx];
     return std::make_tuple<column_view, owned_columns_t>(
       {type, num_rows, data_buffer, null_mask, null_count, offset}, {});
@@ -101,22 +102,21 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<bool>(ArrowSchemaView* s
       {type,
        0,
        nullptr,
-       skip_mask ? nullptr
-                 : reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
+       skip_mask ? nullptr : static_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
        0},
       {});
   }
 
-  auto out_col = mask_to_bools(
-    reinterpret_cast<bitmask_type const*>(input->buffers[fixed_width_data_buffer_idx]),
-    input->offset,
-    input->offset + input->length,
-    stream,
-    mr);
+  auto out_col =
+    mask_to_bools(static_cast<bitmask_type const*>(input->buffers[fixed_width_data_buffer_idx]),
+                  input->offset,
+                  input->offset + input->length,
+                  stream,
+                  mr);
   auto const has_nulls = skip_mask ? false : input->buffers[validity_buffer_idx] != nullptr;
   if (has_nulls) {
     auto out_mask = cudf::detail::copy_bitmask(
-      reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
+      static_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
       input->offset,
       input->offset + input->length,
       stream,
@@ -159,9 +159,8 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
 {
-  auto null_mask = skip_mask
-                     ? nullptr
-                     : reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]);
+  auto null_mask =
+    skip_mask ? nullptr : static_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]);
   if (input->length == 0) {
     return std::make_tuple<column_view, owned_columns_t>({type, 0, nullptr, null_mask, 0}, {});
   }
@@ -183,13 +182,13 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
     for (auto i = 0L; i < view.n_variadic_buffers; ++i) {
       variadic_ptrs.push_back(reinterpret_cast<char const*>(view.variadic_buffers[i]));
     }
-    auto d_variadic_ptrs = cudf::detail::make_device_uvector_async(
+    auto d_variadic_ptrs = cudf::detail::make_device_buffer_async(
       variadic_ptrs, stream, cudf::get_current_device_resource_ref());
     auto d_ptrs       = d_variadic_ptrs.data();
-    auto const d_mask = reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]);
+    auto const d_mask = static_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]);
     // build strings into gather input form
-    auto d_indices =
-      rmm::device_uvector<cudf::strings::detail::string_index_pair>(size, stream, mr);
+    auto d_indices = cuda::device_buffer<cudf::strings::detail::string_index_pair>(
+      stream, cudf::get_current_device_resource_ref(), size, cuda::no_init);
     thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<cudf::size_type>{offset},
                       cuda::counting_iterator<cudf::size_type>{offset + size},
@@ -259,7 +258,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::dictionary32>(
     {type,
      num_rows,
      nullptr,
-     reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
+     static_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
      null_count,
      offset,
      {indices_view, keys_view}},
@@ -304,7 +303,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::struct_view>(
     {type,
      num_rows,
      nullptr,
-     reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
+     static_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
      null_count,
      offset,
      std::move(children)},
@@ -384,7 +383,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::list_view>(
     {type,
      num_rows,
      nullptr,
-     reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
+     static_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]),
      null_count,
      offset,
      {offsets_view, child_view}},

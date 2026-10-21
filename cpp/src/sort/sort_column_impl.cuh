@@ -18,12 +18,13 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_merge_sort.cuh>
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/execution>
+#include <cuda/std/type_traits>
 #include <cuda/stream>
 #include <thrust/gather.h>
 #include <thrust/sequence.h>
@@ -44,7 +45,7 @@ namespace detail {
  */
 template <typename PrefixKey, bool has_nulls>
 struct string_prefix_extractor {
-  static_assert(std::is_unsigned_v<PrefixKey>);
+  static_assert(cuda::std::is_unsigned_v<PrefixKey>);
   static constexpr auto prefix_bytes  = static_cast<size_type>(sizeof(PrefixKey));
   static constexpr auto bits_per_byte = std::numeric_limits<uint8_t>::digits;
 
@@ -83,7 +84,7 @@ struct string_prefix_extractor {
  */
 template <typename PrefixKey, bool has_nulls>
 struct string_prefix_comparator {
-  static_assert(std::is_unsigned_v<PrefixKey>);
+  static_assert(cuda::std::is_unsigned_v<PrefixKey>);
   static constexpr auto prefix_bytes = static_cast<size_type>(sizeof(PrefixKey));
 
   __device__ bool operator()(size_type lhs, size_type rhs)
@@ -187,8 +188,8 @@ struct column_sorted_order_fn {
                                 null_order null_precedence,
                                 cuda::stream_ref stream)
   {
-    auto prefixes =
-      rmm::device_uvector<PrefixKey>(input.size(), stream, cudf::get_current_device_resource_ref());
+    auto prefixes = cuda::device_buffer<PrefixKey>(
+      stream, cudf::get_current_device_resource_ref(), input.size(), cuda::no_init);
     auto rows = cuda::counting_iterator<cudf::size_type>{0};
     thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       rows,
@@ -298,7 +299,8 @@ struct column_sorted_order_fn {
     auto map = ordered_indices->view().template data<size_type>();
     auto itr = cudf::detail::indexalator_factory::make_input_iterator(
       dictionary_column_view(input).indices());
-    auto mapped_indices = rmm::device_uvector<size_type>(input.size(), stream);
+    auto mapped_indices = cuda::device_buffer<size_type>(
+      stream, cudf::get_current_device_resource_ref(), input.size(), cuda::no_init);
     thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    itr,
                    itr + input.size(),
