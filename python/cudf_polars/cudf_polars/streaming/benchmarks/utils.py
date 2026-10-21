@@ -532,6 +532,8 @@ class RunConfig:
     scale_factor: int | float
     suffix: str
     qualification: bool = False
+    query_mode: Literal["dataframe", "sql"] = "dataframe"
+    sql_directory: Path | None = None
 
     # Execution mode
     frontend: Literal["dask", "duckdb", "in-memory", "polars-cpu", "ray", "spmd"]
@@ -684,6 +686,8 @@ class RunConfig:
             scale_factor=scale_factor,
             suffix=args.suffix,
             qualification=args.qualification,
+            query_mode=args.query_mode,
+            sql_directory=args.sql_directory,
             frontend=args.frontend,
             iterations=args.iterations,
             io_mode=args.io_mode,
@@ -733,6 +737,10 @@ class RunConfig:
             "scale_factor": self.scale_factor,
             "suffix": self.suffix,
             "qualification": self.qualification,
+            "query_mode": self.query_mode,
+            "sql_directory": (
+                str(self.sql_directory) if self.sql_directory is not None else None
+            ),
             "frontend": self.frontend,
             "iterations": self.iterations,
             "io_mode": self.io_mode,
@@ -2000,6 +2008,25 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
             Default: .parquet"""),
     )
     parser.add_argument(
+        "--query-mode",
+        dest="query_mode",
+        default="dataframe",
+        choices=["dataframe", "sql"],
+        help=textwrap.dedent("""\
+            How queries are defined:
+                - dataframe : Polars LazyFrame queries defined in this module (default)
+                - sql       : SQL files from --sql-directory, run with polars.SQLContext"""),
+    )
+    parser.add_argument(
+        "--sql-directory",
+        dest="sql_directory",
+        type=Path,
+        default=None,
+        help=textwrap.dedent("""\
+            Directory with one SQL file per query, named qNN.sql (e.g. q01.sql)
+            or qN.sql (e.g. q1.sql). Required with --query-mode sql."""),
+    )
+    parser.add_argument(
         "--frontend",
         required=True,
         type=str,
@@ -2237,6 +2264,10 @@ def parse_args(
             "--blocksize is not supported with --frontend; "
             "use --target-partition-size instead."
         )
+    if parsed_args.query_mode == "sql" and parsed_args.sql_directory is None:
+        parser.error("--query-mode sql requires --sql-directory.")
+    if parsed_args.query_mode == "dataframe" and parsed_args.sql_directory is not None:
+        parser.error("--sql-directory is only supported with --query-mode sql.")
 
     if (
         parsed_args.suffix
