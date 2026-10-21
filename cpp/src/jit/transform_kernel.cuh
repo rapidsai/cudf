@@ -15,7 +15,6 @@
 
 #include <cuda/atomic>
 #include <cuda/std/algorithm>
-#include <cuda/std/tuple>
 #include <cuda/std/utility>
 
 #include <jit/column_accessor.cuh>
