@@ -14,6 +14,9 @@
 
 #include <cuda/stream>
 
+#include <limits>
+#include <type_traits>
+
 namespace cudf {
 namespace {
 struct dispatch_create_indices {
@@ -93,17 +96,26 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
 namespace {
 
 /**
- * @brief This functor maps unsigned type_ids to signed counterparts
+ * @brief This functor maps unsigned type_ids to the narrowest signed type_id
+ * that can address all the keys
  */
 struct make_signed_fn {
+  size_type num_keys;
+
   template <typename T>
-  constexpr cudf::type_id operator()()
+  constexpr cudf::type_id operator()() const
     requires(is_index_type<T>())
   {
-    return cudf::type_to_id<std::make_signed_t<T>>();
+    using SignedType = std::make_signed_t<T>;
+    if constexpr (std::is_unsigned_v<T> && sizeof(T) < sizeof(size_type)) {
+      if (num_keys - 1 > std::numeric_limits<SignedType>::max()) {
+        return sizeof(T) == 1 ? type_id::INT16 : type_id::INT32;
+      }
+    }
+    return cudf::type_to_id<SignedType>();
   }
   template <typename T>
-  constexpr cudf::type_id operator()()
+  constexpr cudf::type_id operator()() const
     requires(not is_index_type<T>())
   {
     return cudf::type_to_id<T>();
@@ -124,7 +136,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
   auto const null_count   = indices->null_count();  // before calling release()
   auto contents           = indices->release();
 
-  auto const new_type_id = cudf::type_dispatcher(indices_type, make_signed_fn{});
+  auto const new_type_id = cudf::type_dispatcher(indices_type, make_signed_fn{keys->size()});
 
   // create the dictionary indices: convert to signed and remove nulls if necessary
   auto indices_column = [&] {

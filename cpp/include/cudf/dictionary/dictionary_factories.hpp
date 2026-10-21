@@ -89,6 +89,8 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
  * The `indices_column` can be any integer type and should contain the null-mask
  * to be used for the output column.
  * The indices values must be in the range [0,keys_column.size()).
+ * Unsigned indices are converted to the signed type of the same width, or to the
+ * next wider signed type if the same width cannot hold `keys_column.size() - 1`.
  *
  * @throw cudf::logic_error if keys_column contains nulls
  *
