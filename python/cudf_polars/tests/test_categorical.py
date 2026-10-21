@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import io
+import uuid
 import weakref
 from typing import TYPE_CHECKING
 
@@ -14,7 +15,7 @@ from polars.testing import assert_frame_equal
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DataFrame
+from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.testing.asserts import (
@@ -23,6 +24,7 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.utils.config import Cluster
 from cudf_polars.utils.cuda_stream import get_cuda_stream
+from cudf_polars.utils.dtypes import make_all_null_column, make_empty_column
 
 if TYPE_CHECKING:
     from typing import Any
@@ -404,3 +406,102 @@ def test_categorical_rejected_on_ray_engine(categorical_frame, ray_engine):
 
 def test_categorical_rejected_on_dask_engine(categorical_frame, dask_engine):
     assert_passthrough(categorical_frame, dask_engine)
+
+
+def _in_global_categories(value: str) -> bool:
+    try:
+        pl.Categories()[value]
+    except KeyError:
+        return False
+    return True
+
+
+def test_to_polars_does_not_grow_global_mapping():
+    values = [f"named_only_{uuid.uuid4().hex}" for _ in range(2)]
+    dtype = pl.Categorical(pl.Categories("to_polars_named_only"))
+    df = pl.DataFrame({"a": pl.Series([values[0], None, values[1]], dtype=dtype)})
+    gpu_df = DataFrame.from_polars(df, stream=get_cuda_stream())
+
+    result = gpu_df.to_polars()
+
+    assert not any(_in_global_categories(v) for v in values)
+    assert_frame_equal(result, df, check_dtypes=True)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [pl.Categorical(), pl.Enum(["c", "b", "a"])],
+    ids=["categorical", "enum"],
+)
+def test_concat_columns_with_different_keys(dtype):
+    stream = get_cuda_stream()
+    first = pl.DataFrame({"a": pl.Series(["b", None, "a"], dtype=dtype)})
+    second = pl.DataFrame({"a": pl.Series(["c", "a"], dtype=dtype)})
+    columns = [
+        DataFrame.from_polars(df, stream=stream).columns[0] for df in (first, second)
+    ]
+
+    concatenated = plc.concatenate.concatenate([c.obj for c in columns], stream=stream)
+    result = DataFrame(
+        [Column(concatenated, name="a", dtype=columns[0].dtype)], stream=stream
+    ).to_polars()
+
+    assert_frame_equal(result, pl.concat([first, second]), check_dtypes=True)
+
+
+def test_from_polars_multiple_chunks():
+    dtype = pl.Categorical(pl.Categories("multiple_chunks"))
+    first = pl.DataFrame({"a": pl.Series(["x", None], dtype=dtype)})
+    second = pl.DataFrame({"a": pl.Series(["y", "x"], dtype=dtype)})
+    df = pl.concat([first, second], rechunk=False)
+    assert df.n_chunks() == 2
+
+    result = DataFrame.from_polars(df, stream=get_cuda_stream()).to_polars()
+
+    assert_frame_equal(result, df, check_dtypes=True)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [pl.Categorical(), pl.Enum(["a", "b"])],
+    ids=["categorical", "enum"],
+)
+@pytest.mark.parametrize(
+    "libcudf_empty", [False, True], ids=["children", "no_children"]
+)
+def test_to_polars_empty_dictionary(dtype, libcudf_empty):
+    stream = get_cuda_stream()
+    dt = DataType(dtype)
+    obj = (
+        plc.column_factories.make_empty_column(dt.plc_type, stream=stream)
+        if libcudf_empty
+        else make_empty_column(dt, stream)
+    )
+
+    result = DataFrame([Column(obj, name="a", dtype=dt)], stream=stream).to_polars()
+
+    assert_frame_equal(
+        result, pl.DataFrame({"a": pl.Series([], dtype=dtype)}), check_dtypes=True
+    )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [pl.Categorical(), pl.Enum(["a", "b"])],
+    ids=["categorical", "enum"],
+)
+def test_to_polars_all_null_dictionary(dtype):
+    stream = get_cuda_stream()
+    dt = DataType(dtype)
+    like = make_empty_column(dt, stream)
+
+    result = DataFrame(
+        [Column(make_all_null_column(like, 3, stream), name="a", dtype=dt)],
+        stream=stream,
+    ).to_polars()
+
+    assert_frame_equal(
+        result,
+        pl.DataFrame({"a": pl.Series([None, None, None], dtype=dtype)}),
+        check_dtypes=True,
+    )
