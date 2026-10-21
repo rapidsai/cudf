@@ -33,6 +33,7 @@
 
 ### Device Code Errors
 - Use of relaxed constexpr in device code — `--expt-relaxed-constexpr` is **not** enabled; every `constexpr` function callable from device code must be explicitly annotated `__device__` or `CUDF_HOST_DEVICE`
+- Host code reaching `__device__`-only functions through templates: nvcc does **not** diagnose a call to a `__device__` function from inside a host function template. Any function or member function reachable from host code, `constexpr` or not, must be annotated `CUDF_HOST_DEVICE`
 - Using `std::` type traits, algorithms, or constexpr functions instead of `cuda::std::` in `__device__` / `CUDF_HOST_DEVICE` code and in templates instantiated in device code (e.g., must use `cuda::std::is_void_v<T>`, `cuda::std::min`, `cuda::std::numeric_limits<T>`)
 - Extended `__device__` lambdas passed to device algorithms should declare their return type, preferably with a trailing `-> T` (fall back to `cuda::proclaim_return_type<T>(...)`). Some host-side APIs (e.g. CUB `DeviceSelect`, transform iterators) query the return type in host code and fail to compile without it; declaring it uniformly avoids surprises as APIs change
 
