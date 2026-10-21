@@ -10,12 +10,14 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/contiguous_split.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/mr/statistics_resource_adaptor.hpp>
@@ -587,7 +589,7 @@ TEST_F(ExperimentalPackUnpackTest, CompressMisalignedSlices)
   }
 }
 
-TEST_F(ExperimentalPackUnpackTest, PlanStagingIsBoundedByStagingBudget)
+TEST_F(ExperimentalPackUnpackTest, StagingIsBoundedByStagingBudget)
 {
   constexpr cudf::size_type rows = 1024 * 1024;
   auto const values =
@@ -612,6 +614,23 @@ TEST_F(ExperimentalPackUnpackTest, PlanStagingIsBoundedByStagingBudget)
       expect_materializes_to(input, pack_to(plan, kind).view());
     }
   }
+
+  // Raw blocks are compacted straight from their source, so 64 MiB of uncompressed characters
+  // take no staging space with a device destination.
+  auto const words = cudf::make_column_from_scalar(
+    cudf::string_scalar(std::string(64 * 1024, 'a')), 1024, cudf::get_default_stream());
+  auto const strings           = cudf::table_view{{*words}};
+  auto options                 = make_options(cx::pack_compression::automatic);
+  options.staging_buffer_bytes = 8 * 1024 * 1024;
+  auto const plan              = cx::prepare_pack(strings, options);
+  rmm::device_buffer destination(plan.sizes().payload_bytes, cudf::get_default_stream());
+  rmm::mr::statistics_resource_adaptor temp_mr(cudf::get_current_device_resource_ref());
+  auto const result =
+    cx::pack_into(plan, as_span(destination), {cudf::get_current_device_resource_ref(), temp_mr});
+  EXPECT_LT(temp_mr.get_bytes_counter().peak, 1024 * 1024);
+  expect_materializes_to(
+    strings,
+    {result.metadata, {static_cast<uint8_t const*>(destination.data()), result.payload_bytes}});
 }
 
 TEST_F(ExperimentalPackUnpackTest, AutomaticPerRegionCompression)

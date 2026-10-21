@@ -3401,8 +3401,9 @@ class pack_plan::impl {
   std::vector<block_descriptor> blocks;
   std::optional<rmm::device_uvector<block_descriptor>> d_blocks;
   std::vector<pack_window> windows;  ///< Block windows, or copy batch windows when uncompressed
-  std::size_t max_window_bytes  = 0;
-  std::size_t max_window_blocks = 0;
+  std::size_t max_window_bytes        = 0;
+  std::size_t max_window_output_bytes = 0;  ///< Bound on a block window's compacted output
+  std::size_t max_window_blocks       = 0;
   /// Copies of the staged blocks into their windows, and the first copy of each window
   std::unique_ptr<rmm::device_uvector<dst_buf_info>> staging_copies;
   std::vector<std::size_t> window_staging_copies;
@@ -3437,9 +3438,10 @@ class pack_plan::impl {
     auto const stream  = state.get_stream();
     auto const temp_mr = mr.get_temporary_mr();
 
-    auto const num_blocks      = blocks.size();
-    auto const table_bytes     = num_blocks * sizeof(uint64_t);
-    auto const compacted_bytes = to_host ? max_window_bytes + max_window_blocks * split_align : 0;
+    auto const num_blocks  = blocks.size();
+    auto const table_bytes = num_blocks * sizeof(uint64_t);
+    auto const compacted_bytes =
+      to_host ? max_window_output_bytes + max_window_blocks * split_align : 0;
     rmm::device_buffer staging(max_window_bytes + compacted_bytes, stream, temp_mr);
     auto* const slots     = static_cast<uint8_t*>(staging.data());
     auto* const compacted = slots + max_window_bytes;
@@ -3675,19 +3677,25 @@ class pack_plan::impl {
     // A slot also fits the raw block, which bounds output with uncompressed fallback.
     auto destination_bytes = payload_offset;
     std::vector<dst_buf_info> copies;
+    std::size_t window_output_bytes = 0;
     for (std::size_t block_idx = 0; block_idx < blocks.size(); ++block_idx) {
       auto& block = blocks[block_idx];
       auto const slot_bytes =
         cudf::util::round_up_safe(std::max(block.output_bytes, block.input_bytes), split_align);
-      // A raw block is staged into its slot, which no codec writes.
-      auto const is_staged = block.input == nullptr;
+      // A raw block is staged into its slot, which no codec writes, and otherwise compacted
+      // straight from its source, so it needs no slot.
+      auto const is_staged     = block.input == nullptr;
+      auto const working_bytes = !block.is_raw || is_staged ? slot_bytes : std::size_t{0};
       auto const staged_bytes =
         is_staged && !block.is_raw ? cudf::util::round_up_safe(block.input_bytes, split_align) : 0;
       CUDF_EXPECTS(slot_bytes + staged_bytes <= window_budget,
                    "The staging buffer is too small for the compression block size");
-      if (windows.empty() || windows.back().bytes + slot_bytes + staged_bytes > window_budget) {
+      // Host destinations also compact each window's output, raw blocks included, into staging.
+      if (windows.empty() || windows.back().bytes + working_bytes + staged_bytes > window_budget ||
+          window_output_bytes + slot_bytes > window_budget) {
         windows.emplace_back(block_idx, block_idx, destination_bytes, 0);
         window_staging_copies.push_back(copies.size());
+        window_output_bytes = 0;
       }
       auto& window        = windows.back();
       block.window_offset = window.bytes;
@@ -3701,9 +3709,11 @@ class pack_plan::impl {
       }
       destination_bytes += slot_bytes;
       window.end_item = block_idx + 1;
-      window.bytes += slot_bytes + staged_bytes;
-      max_window_bytes  = std::max(max_window_bytes, window.bytes);
-      max_window_blocks = std::max(max_window_blocks, window.end_item - window.first_item);
+      window.bytes += working_bytes + staged_bytes;
+      window_output_bytes += slot_bytes;
+      max_window_bytes        = std::max(max_window_bytes, window.bytes);
+      max_window_output_bytes = std::max(max_window_output_bytes, window_output_bytes);
+      max_window_blocks       = std::max(max_window_blocks, window.end_item - window.first_item);
     }
     window_staging_copies.push_back(copies.size());
     if (!copies.empty()) {
