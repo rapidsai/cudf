@@ -113,11 +113,9 @@ struct dictionary_indices_types {
  *
  * @throw cudf::data_type_error if `storage_type` is not an 8, 16, or 32-bit unsigned or
  * an 8, 16, 32, or 64-bit signed integer type
- * @throw std::overflow_error if `storage_type` is UINT32 and `num_keys` exceeds the range of
- * INT32 indices
  *
  * @param storage_type Arrow storage type of the dictionary indices
- * @param num_keys Number of keys in the dictionary
+ * @param num_keys Number of keys in the dictionary, at most `size_type` max
  * @return Types to read the Arrow buffer with and to output
  */
 dictionary_indices_types get_dictionary_indices_types(ArrowType storage_type, int64_t num_keys);

@@ -182,11 +182,7 @@ dictionary_indices_types get_dictionary_indices_types(ArrowType storage_type, in
       return max_index <= std::numeric_limits<int16_t>::max()
                ? same(type_id::INT16)
                : dictionary_indices_types{data_type{type_id::UINT16}, data_type{type_id::INT32}};
-    case NANOARROW_TYPE_UINT32:
-      CUDF_EXPECTS(max_index <= std::numeric_limits<int32_t>::max(),
-                   "Dictionary has more keys than INT32 indices can address",
-                   std::overflow_error);
-      return same(type_id::INT32);
+    case NANOARROW_TYPE_UINT32: return same(type_id::INT32);
     default: CUDF_FAIL("Unsupported type_id for dictionary indices", cudf::data_type_error);
   }
 }
