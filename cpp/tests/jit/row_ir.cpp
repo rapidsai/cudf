@@ -507,7 +507,7 @@ TEST_F(RowIRCudaCodeGenTest, UdfCallCSE)
 __device__ cudf::errc compute_operation(int32_t* out_0, int32_t in_0)
 {
 int32_t tmp_0 = in_0;
-auto expected__tmp_1 = cudf::detail::row_ir::evaluate_udf<&f, int32_t>(tmp_0);
+auto expected__tmp_1 = cudf::detail::row_ir::evaluate_udf<&::f, int32_t>(tmp_0);
 if(!expected__tmp_1.has_value()) {
  return expected__tmp_1.error();
 }
@@ -522,12 +522,12 @@ return cudf::errc::SUCCESS;
 __device__ cudf::errc compute_operation(int32_t* out_0, int32_t in_0)
 {
 int32_t tmp_0 = in_0;
-auto expected__tmp_1 = cudf::detail::row_ir::evaluate_udf<&f, int32_t>(tmp_0);
+auto expected__tmp_1 = cudf::detail::row_ir::evaluate_udf<&::f, int32_t>(tmp_0);
 if(!expected__tmp_1.has_value()) {
  return expected__tmp_1.error();
 }
 int32_t tmp_1 = expected__tmp_1.value();
-auto expected__tmp_2 = cudf::detail::row_ir::evaluate_udf<&f, int32_t>(tmp_0);
+auto expected__tmp_2 = cudf::detail::row_ir::evaluate_udf<&::f, int32_t>(tmp_0);
 if(!expected__tmp_2.has_value()) {
  return expected__tmp_2.error();
 }

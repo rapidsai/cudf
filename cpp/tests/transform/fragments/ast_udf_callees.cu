@@ -46,6 +46,19 @@ extern "C" __device__ cudf::errc lto_fail_with(int32_t* out, int32_t code)
   return static_cast<cudf::errc>(code);
 }
 
+// Named like a parameter and a local of the generated function, which must not hide them.
+extern "C" __device__ cudf::errc in_0(int32_t* out, int32_t a)
+{
+  *out = a + 1;
+  return cudf::errc::SUCCESS;
+}
+
+extern "C" __device__ cudf::errc tmp_0(int32_t* out, int32_t a)
+{
+  *out = a * 2;
+  return cudf::errc::SUCCESS;
+}
+
 extern "C" __device__ cudf::errc lto_xor_popcount(int32_t* out, int32_t a, int32_t b)
 {
   *out = __popc(a ^ b);

@@ -812,7 +812,9 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
             args_.end(),
             std::string{args_[0]->get_id()},
             [](auto const& a, auto& node) { return std::format("{}, {}", a, node->get_id()); });
-          auto call = std::format("cudf::detail::row_ir::evaluate_udf<&{}, {}>({})",
+          // The callee is named from global scope, where it is declared, so that a parameter or
+          // local of the generated function with the same name cannot hide it.
+          auto call = std::format("cudf::detail::row_ir::evaluate_udf<&::{}, {}>({})",
                                   udf_->symbol,
                                   type_to_name(udf_->output_type),
                                   args_str);

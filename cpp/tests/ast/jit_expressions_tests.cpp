@@ -132,6 +132,21 @@ TEST_F(JITExpressionTest, UdfCallNestsCallees)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 }
 
+TEST_F(JITExpressionTest, UdfCallIsNotHiddenByGeneratedNames)
+{
+  // The generated function has a parameter `in_0` and a local `tmp_0`: 2(a + 1).
+  auto a        = column_wrapper<int32_t>{{1, 2, 3}};
+  auto expected = column_wrapper<int32_t>{{4, 6, 8}};
+  auto table    = cudf::table_view{{a}};
+  auto tree     = cudf::ast::tree{};
+  auto a_ref    = cudf::ast::column_reference(0);
+  auto& plus_1  = cudf::ast::jit::call(tree, callee("in_0"), int32_type, {a_ref});
+  auto& doubled = cudf::ast::jit::call(tree, callee("tmp_0"), int32_type, {plus_1});
+  auto result   = cudf::compute_column_jit(table, doubled);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
+}
+
 TEST_F(JITExpressionTest, UdfCallCommonSubexpressions)
 {
   // Equal pure calls across outputs share one evaluation, calls of different functions over the

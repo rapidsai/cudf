@@ -130,8 +130,8 @@ kernel get_udf_kernel(std::string const& source_file,
   CUDF_FUNC_RANGE();
   auto kernel_fragment = get_udf_source_kernel_fragment(source_file, kernel_name, cuda_source);
 
-  // Unnamed fragments are cached by their bytes, so a linked kernel is reused only for the exact
-  // fragments it was linked from.
+  // Unnamed fragments are cached by their bytes and binary type, so a linked kernel is reused only
+  // for the exact fragments it was linked from.
   std::vector<rtcx::memory_fragment> fragments{
     {.data = kernel_fragment->view(), .type = rtcx::binary_type::LTO_IR, .name = nullptr}};
   for (auto const& fragment : callee_fragments) {
