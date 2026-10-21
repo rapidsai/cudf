@@ -1758,6 +1758,18 @@ TEST_F(DictionaryConcatTest, AllEmptyViews)
   EXPECT_EQ(result->type().id(), cudf::type_id::DICTIONARY32);
 }
 
+TEST_F(DictionaryConcatTest, EmptyGatherResult)
+{
+  cudf::test::strings_column_wrapper strings({"aaa", "ddd", "bbb"});
+  auto dictionary = cudf::dictionary::encode(strings);
+  cudf::test::fixed_width_column_wrapper<int32_t> empty_map{};
+  auto empty = cudf::gather(cudf::table_view{{dictionary->view()}}, empty_map)->release();
+  auto result =
+    cudf::concatenate(std::vector<cudf::column_view>{empty.front()->view(), dictionary->view()});
+  auto decoded = cudf::dictionary::decode(result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, strings);
+}
+
 TEST_F(DictionaryConcatTest, ErrorsTest)
 {
   cudf::test::strings_column_wrapper strings({"aaa", "ddd", "bbb"});
