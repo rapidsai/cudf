@@ -13,6 +13,7 @@
 #include <cudf/null_mask.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/type_traits>
 
 #include <limits>
 #include <type_traits>
@@ -148,7 +149,7 @@ TYPED_TEST(DictionaryFactoriesUnsignedIndicesTest, WidenAboveSignedLimit)
   using IndexType = TypeParam;
   using WiderType = std::conditional_t<std::is_same_v<IndexType, uint8_t>, int16_t, int32_t>;
   auto constexpr max_index =
-    static_cast<WiderType>(std::numeric_limits<std::make_signed_t<IndexType>>::max() + 1);
+    static_cast<WiderType>(std::numeric_limits<cuda::std::make_signed_t<IndexType>>::max() + 1);
   auto key_values = cuda::counting_iterator<int32_t>(0);
   auto keys =
     cudf::test::fixed_width_column_wrapper<int32_t>(key_values, key_values + max_index + 1);

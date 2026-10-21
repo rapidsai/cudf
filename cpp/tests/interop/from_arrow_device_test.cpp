@@ -26,6 +26,7 @@
 #include <cudf/types.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/type_traits>
 #include <cuda/stream>
 
 #include <limits>
@@ -1286,7 +1287,7 @@ TYPED_TEST_SUITE(FromArrowDeviceDictionaryUnsignedIndicesTest, DeviceUnsignedInd
 TYPED_TEST(FromArrowDeviceDictionaryUnsignedIndicesTest, SameWidthWhenKeysFit)
 {
   using IndexType  = TypeParam;
-  using SignedType = std::make_signed_t<IndexType>;
+  using SignedType = cuda::std::make_signed_t<IndexType>;
   auto keys        = cudf::test::fixed_width_column_wrapper<int64_t>({10, 20, 30, 40});
   auto indices =
     cudf::test::fixed_width_column_wrapper<IndexType>({3, 0, 1, 2, 3}, {1, 0, 1, 1, 1});
@@ -1308,7 +1309,7 @@ TYPED_TEST(FromArrowDeviceDictionaryNarrowIndicesTest, WidenAboveSignedLimit)
   using IndexType = TypeParam;
   using WiderType = std::conditional_t<std::is_same_v<IndexType, uint8_t>, int16_t, int32_t>;
   auto constexpr max_index =
-    static_cast<WiderType>(std::numeric_limits<std::make_signed_t<IndexType>>::max() + 1);
+    static_cast<WiderType>(std::numeric_limits<cuda::std::make_signed_t<IndexType>>::max() + 1);
   auto key_values = cuda::counting_iterator<int64_t>(0);
   auto keys       = cudf::test::fixed_width_column_wrapper<int64_t>(key_values,
                                                               key_values + int64_t{max_index} + 1);
