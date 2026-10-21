@@ -83,7 +83,8 @@ class orc_reader_options {
   bool _use_index = true;
 
   // Whether to use numpy-compatible dtypes
-  bool _use_np_dtypes = true;
+  bool _use_np_dtypes              = true;
+  bool _convert_dates_to_proleptic = false;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
@@ -167,6 +168,12 @@ class orc_reader_options {
    * @return `true` if numpy-compatible dtypes are used
    */
   [[nodiscard]] bool is_enabled_use_np_dtypes() const { return _use_np_dtypes; }
+
+  /**
+   * @brief Whether explicitly marked hybrid DATE values are converted to proleptic Gregorian.
+   * @return Whether DATE conversion is enabled
+   */
+  [[nodiscard]] bool get_convert_dates_to_proleptic() const { return _convert_dates_to_proleptic; }
 
   /**
    * @brief Returns timestamp type to which timestamp column will be cast.
@@ -274,6 +281,19 @@ class orc_reader_options {
    * @param use Boolean value to enable/disable
    */
   void enable_use_np_dtypes(bool use) { _use_np_dtypes = use; }
+
+  /**
+   * @brief Convert DATE values from explicitly marked JULIAN_GREGORIAN files to proleptic
+   * Gregorian.
+   *
+   * Disabled by default to preserve raw epoch-day reads used by callers that rebase themselves.
+   * Missing and UNKNOWN calendar fields are left unchanged. TIMESTAMP columns are unchanged.
+   * Conversion precedes numpy dtype promotion and applies recursively to nested DATE columns.
+   * Julian-only leap days and dates outside the int32 proleptic domain cause a read error.
+   *
+   * @param convert Whether to convert explicitly marked hybrid DATE values
+   */
+  void set_convert_dates_to_proleptic(bool convert) { _convert_dates_to_proleptic = convert; }
 
   /**
    * @brief Sets timestamp type to which timestamp column will be cast.
@@ -398,6 +418,16 @@ class orc_reader_options_builder {
   orc_reader_options_builder& use_np_dtypes(bool use)
   {
     options.enable_use_np_dtypes(use);
+    return *this;
+  }
+
+  /**
+   * @copydoc orc_reader_options::set_convert_dates_to_proleptic
+   * @return this for chaining
+   */
+  orc_reader_options_builder& convert_dates_to_proleptic(bool convert)
+  {
+    options.set_convert_dates_to_proleptic(convert);
     return *this;
   }
 
@@ -665,7 +695,7 @@ class orc_writer_options {
   bool _enable_dictionary_sort = true;
   // Timezone that the written timestamps are relative to, recorded in the stripe footers
   std::string _writer_timezone = "UTC";
-  // Calendar recorded in the file footer; libcudf values use the proleptic Gregorian calendar
+  // Calendar used to encode DATE values and recorded in the file footer
   orc::CalendarKind _calendar_kind = orc::CalendarKind::PROLEPTIC_GREGORIAN;
 
   friend orc_writer_options_builder;
@@ -944,16 +974,20 @@ class orc_writer_options {
   /**
    * @brief Sets the calendar recorded in the ORC file footer.
    *
-   * Only `PROLEPTIC_GREGORIAN` is supported, matching libcudf's DATE and TIMESTAMP values.
-   * This option does not rebase values. Legacy Julian/Gregorian output is not supported.
+   * `PROLEPTIC_GREGORIAN` is the default and retains libcudf's DATE and TIMESTAMP values.
+   * Legacy mode rebases DATE values, including nested values, before encoding and computing
+   * statistics. TIMESTAMP columns, dates in 1582-10-05 through 1582-10-14, and dates outside
+   * the int32 hybrid domain are rejected. Use convert_dates_to_proleptic when reading legacy
+   * output back into libcudf.
    *
    * @param calendar_kind Calendar kind
-   * @throw cudf::logic_error if the calendar is not `PROLEPTIC_GREGORIAN`
+   * @throw cudf::logic_error if the calendar kind is unknown or invalid
    */
   void set_calendar_kind(orc::CalendarKind calendar_kind)
   {
-    CUDF_EXPECTS(calendar_kind == orc::CalendarKind::PROLEPTIC_GREGORIAN,
-                 "Only the proleptic Gregorian calendar is supported for ORC writes");
+    CUDF_EXPECTS(calendar_kind == orc::CalendarKind::PROLEPTIC_GREGORIAN or
+                   calendar_kind == orc::CalendarKind::JULIAN_GREGORIAN,
+                 "Unsupported ORC calendar kind");
     _calendar_kind = calendar_kind;
   }
 };
@@ -1431,8 +1465,9 @@ class chunked_orc_writer_options {
    */
   void set_calendar_kind(orc::CalendarKind calendar_kind)
   {
-    CUDF_EXPECTS(calendar_kind == orc::CalendarKind::PROLEPTIC_GREGORIAN,
-                 "Only the proleptic Gregorian calendar is supported for ORC writes");
+    CUDF_EXPECTS(calendar_kind == orc::CalendarKind::PROLEPTIC_GREGORIAN or
+                   calendar_kind == orc::CalendarKind::JULIAN_GREGORIAN,
+                 "Unsupported ORC calendar kind");
     _calendar_kind = calendar_kind;
   }
 };

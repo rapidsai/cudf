@@ -8,6 +8,7 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "calendar.cuh"
 #include "io/comp/compression.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
@@ -56,6 +57,7 @@
 #include <thrust/sort.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
+#include <thrust/transform_reduce.h>
 
 #include <algorithm>
 #include <cstring>
@@ -218,6 +220,7 @@ class orc_column_view {
 
   void add_child(uint32_t child_idx) { children.emplace_back(child_idx); }
 
+  auto const& view() const noexcept { return cudf_column; }
   auto type() const noexcept { return cudf_column.type(); }
   auto is_string() const noexcept { return cudf_column.type().id() == type_id::STRING; }
 
@@ -325,6 +328,8 @@ struct orc_table_view {
   cuda::device_buffer<orc_column_device_view> d_columns;
   std::vector<uint32_t> string_column_indices;
   cuda::device_buffer<uint32_t> d_string_column_indices;
+  std::vector<rmm::device_uvector<int32_t>> rebased_dates;
+  std::vector<cuda::device_buffer<bitmask_type>> rebased_date_masks;
 
   [[nodiscard]] auto num_columns() const noexcept { return columns.size(); }
   [[nodiscard]] size_type num_rows() const noexcept
@@ -2144,6 +2149,76 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
   return rowgroup_bounds;
 }
 
+/**
+ * @brief Rebase DATE leaves before encoding and statistics, using the same device column views.
+ *
+ * Rowgroup bounds restrict validation to rows actually written from sliced nested columns.
+ * Pushdown masks also exclude values hidden by null ancestors. Owned buffers live in orc_table.
+ */
+void rebase_date_columns(orc_table_view& orc_table,
+                         pushdown_null_masks const& pd_masks,
+                         host_2dspan<rowgroup_rows const> bounds,
+                         cuda::stream_ref stream)
+{
+  for (auto const& col : orc_table.columns) {
+    CUDF_EXPECTS(col.orc_kind() != TIMESTAMP,
+                 "Legacy ORC calendar does not support TIMESTAMP columns");
+  }
+  if (orc_table.num_rows() == 0) { return; }
+  for (auto const& col : orc_table.columns) {
+    if (col.orc_kind() != DATE) { continue; }
+    auto const& view = col.view();
+    auto const begin = bounds[0][col.index()].begin;
+    auto const end   = bounds[bounds.size().first - 1][col.index()].end;
+    auto& data       = orc_table.rebased_dates.emplace_back(
+      static_cast<size_t>(view.offset()) + view.size(), stream);
+    auto const columns     = device_span<orc_column_device_view>{orc_table.d_columns};
+    auto const parent_mask = col.is_child() ? pd_masks.masks[col.parent_index()] : nullptr;
+    auto mask              = view.null_mask();
+    auto null_count        = view.null_count();
+    if (parent_mask != nullptr) {
+      // Statistics use the base column view, so they need the ancestor validity as well.
+      std::vector<bitmask_type const*> masks{parent_mask};
+      if (mask != nullptr) { masks.push_back(mask); }
+      std::vector<size_type> offsets(masks.size(), 0);
+      auto [combined, count] = cudf::detail::bitmask_and(masks,
+                                                         offsets,
+                                                         view.offset() + view.size(),
+                                                         stream,
+                                                         cudf::get_current_device_resource_ref());
+      mask       = orc_table.rebased_date_masks.emplace_back(std::move(combined)).data();
+      null_count = view.offset() == 0 ? count
+                                      : cudf::detail::null_count(
+                                          mask, view.offset(), view.offset() + view.size(), stream);
+    }
+    auto const invalid = thrust::transform_reduce(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<size_type>{begin},
+      cuda::counting_iterator<size_type>{end},
+      [columns, idx = col.index(), mask, out = data.data()] __device__(auto row) -> bool {
+        auto const& column = columns[idx];
+        if (not bit_value_or(mask, row + column.offset(), true)) {
+          out[row + column.offset()] = 0;
+          return false;
+        }
+        auto const original        = column.element<int32_t>(row);
+        auto const rebased         = rebase_days<true>(original);
+        out[row + column.offset()] = static_cast<int32_t>(rebased);
+        return not is_representable_date<true>(original, rebased);
+      },
+      false,
+      cuda::std::logical_or<bool>{});
+    CUDF_EXPECTS(not invalid, "DATE cannot be represented losslessly in the legacy ORC calendar");
+    auto const rebased_view = column_device_view::create(
+      column_view{view.type(), view.size(), data.data(), mask, null_count, view.offset()}, stream);
+    cudf::detail::device_single_thread(
+      [columns, idx = col.index(), rebased = *rebased_view] __device__() {
+        static_cast<column_device_view&>(columns[idx]) = rebased;
+      },
+      stream);
+  }
+}
+
 // returns host vector of per-rowgroup sizes
 encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                                          file_segmentation const& segmentation,
@@ -2537,6 +2612,7 @@ auto convert_table_to_orc_data(table_view const& input,
                                stripe_size_limits max_stripe_size,
                                size_type row_index_stride,
                                writer_timezone const& timezone,
+                               CalendarKind calendar,
                                bool enable_dictionary,
                                bool sort_dictionaries,
                                compression_type compression,
@@ -2555,6 +2631,9 @@ auto convert_table_to_orc_data(table_view const& input,
   [[maybe_unused]] auto const pd_masks = init_pushdown_null_masks(orc_table, stream);
 
   auto rowgroup_bounds = calculate_rowgroup_bounds(orc_table, row_index_stride, stream);
+  if (calendar == CalendarKind::JULIAN_GREGORIAN) {
+    rebase_date_columns(orc_table, pd_masks, rowgroup_bounds.host_view(), stream);
+  }
 
   [[maybe_unused]] auto const rg_char_counts_data =
     set_rowgroup_char_counts(orc_table, rowgroup_bounds, stream);
@@ -2812,6 +2891,7 @@ void writer::impl::write(table_view const& input)
                               _max_stripe_size,
                               _row_index_stride,
                               _timezone,
+                              *_footer.calendar,
                               _enable_dictionary,
                               _sort_dictionaries,
                               _compression,

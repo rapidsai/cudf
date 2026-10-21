@@ -89,16 +89,19 @@ public class ORCWriterOptions extends CompressionMetadataWriterOptions {
     }
 
     /**
-     * Sets the calendar recorded in the file footer. Only {@code PROLEPTIC_GREGORIAN} is
-     * supported, matching cuDF's date and timestamp values. This does not rebase values.
+     * Sets the calendar used for DATE encoding and recorded in the file footer.
+     * Legacy mode rebases nested and top-level DATE values. It rejects TIMESTAMP columns,
+     * dates in October 5-14, 1582, and dates outside the int32 hybrid domain.
+     * Use {@link ORCOptions.Builder#convertDatesToProleptic(boolean)} to read legacy output
+     * back as cuDF proleptic Gregorian dates.
      *
      * @param calendarKind calendar kind
-     * @throws IllegalArgumentException if the calendar is null or is not proleptic Gregorian
+     * @throws IllegalArgumentException if the calendar is null
      */
     public Builder withCalendarKind(CalendarKind calendarKind) {
-      if (calendarKind != CalendarKind.PROLEPTIC_GREGORIAN) {
+      if (calendarKind == null) {
         throw new IllegalArgumentException(
-            "Only the proleptic Gregorian calendar is supported for ORC writes");
+            "ORC calendar must not be null");
       }
       this.calendarKind = calendarKind;
       return this;

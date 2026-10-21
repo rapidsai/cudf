@@ -342,12 +342,14 @@ public final class Table implements AutoCloseable {
                                        String filePath, long address, long length,
                                        boolean usingNumPyTypes, int timeUnit,
                                        String[] decimal128Columns,
-                                       boolean ignoreTimezoneInStripeFooter) throws CudfException;
+                                       boolean ignoreTimezoneInStripeFooter,
+                                       boolean convertDatesToProleptic) throws CudfException;
 
   private static native long[] readORCFromDataSource(String[] filterColumnNames,
                                                      boolean usingNumPyTypes, int timeUnit,
                                                      String[] decimal128Columns,
                                                      boolean ignoreTimezoneInStripeFooter,
+                                                     boolean convertDatesToProleptic,
                                                      long dataSourceHandle) throws CudfException;
 
   /**
@@ -1523,7 +1525,8 @@ public final class Table implements AutoCloseable {
     return new Table(readORC(opts.getIncludeColumnNames(),
         path.getAbsolutePath(), 0, 0,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-        opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter()));
+        opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter(),
+        opts.convertDatesToProleptic()));
   }
 
   /**
@@ -1592,7 +1595,8 @@ public final class Table implements AutoCloseable {
     return new Table(readORC(opts.getIncludeColumnNames(),
         null, buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-        opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter()));
+        opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter(),
+        opts.convertDatesToProleptic()));
   }
 
   public static Table readORC(ORCOptions opts, DataSource ds) {
@@ -1601,7 +1605,7 @@ public final class Table implements AutoCloseable {
       return new Table(readORCFromDataSource(opts.getIncludeColumnNames(),
               opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
               opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter(),
-              dataSourceHandle));
+              opts.convertDatesToProleptic(), dataSourceHandle));
     } finally {
       DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
     }

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "calendar.cuh"
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/column_buffer.hpp"
 #include "orc_gpu.hpp"
@@ -1999,16 +2000,24 @@ CUDF_KERNEL void __launch_bounds__(block_size)
               static_cast<uint8_t*>(data_out)[row] =
                 (s->vals.u8[(t + vals_skipped) >> 3] >> ((~(t + vals_skipped)) & 7)) & 1;
               break;
-            case DATE:
+            case DATE: {
+              auto const original = s->vals.i32[t + vals_skipped];
+              auto const rebased =
+                s->chunk.convert_dates_to_proleptic ? rebase_days<false>(original) : original;
+              if (s->chunk.convert_dates_to_proleptic and
+                  not is_representable_date<false>(original, rebased)) {
+                atomicAdd(error_count, 1);
+              }
               if (s->chunk.dtype_len == 8) {
-                cudf::duration_D days{s->vals.i32[t + vals_skipped]};
+                cudf::duration_D days{static_cast<int32_t>(rebased)};
                 // Convert from days to milliseconds
                 static_cast<int64_t*>(data_out)[row] =
                   cuda::std::chrono::duration_cast<cudf::duration_ms>(days).count();
               } else {
-                static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped];
+                static_cast<int32_t*>(data_out)[row] = static_cast<int32_t>(rebased);
               }
               break;
+            }
             case STRING:
             case BINARY:
             case VARCHAR:
