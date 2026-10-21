@@ -234,15 +234,17 @@ public class HostMemoryBufferTest extends CudfTestBase {
   public void deviceCopyHandlerCanDeclineAllCopyMethods() {
     byte[] expected = new byte[] {1, 2, 3, 4};
     AtomicInteger attempts = new AtomicInteger();
-    HostMemoryBuffer.setDeviceToHostCopyHandler((dst, dstOffset, src, srcOffset,
-        length, stream) -> {
-      attempts.incrementAndGet();
-      return false;
-    });
     try (Cuda.Stream stream = new Cuda.Stream(true);
          HostMemoryBuffer input = HostMemoryBuffer.allocateRaw(expected.length);
          DeviceMemoryBuffer device = DeviceMemoryBuffer.allocate(expected.length);
          HostMemoryBuffer output = HostMemoryBuffer.allocateRaw(expected.length)) {
+      HostMemoryBuffer.setDeviceToHostCopyHandler((dst, dstOffset, src, srcOffset,
+          length, copyStream) -> {
+        if (dst == output) {
+          attempts.incrementAndGet();
+        }
+        return false;
+      });
       input.setBytes(0, expected, 0, expected.length);
       device.copyFromHostBuffer(input);
       byte[] actual = new byte[expected.length];
