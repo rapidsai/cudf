@@ -328,7 +328,6 @@ EXPECTED_FAILURES: dict[str, str] = {
     "tests/unit/sql/test_cast.py::test_cast_errors[values1-values::uint4-InvalidOperationError-conversion from `i64` to `u32` failed]": "Strict cast of out-of-range integers does not raise",
     "tests/unit/sql/test_cast.py::test_cast_errors[values2-values::int1-InvalidOperationError-conversion from `i64` to `i8` failed]": "Strict cast of out-of-range integers does not raise",
     "tests/unit/sql/test_cast.py::test_cast_errors[values4-values::int4-InvalidOperationError-conversion from `str` to `i32` failed]": "Strict cast failure message differs from polars",
-    "tests/unit/sql/test_correlated_subqueries.py::test_correlated_aggregate_unknown_outer_size_not_restricted": "Early termination of an IO source on LIMIT is not supported",
     "tests/unit/sql/test_joins.py::test_constant_key_join_keeps_validation": "Join validation is not supported",
     "tests/unit/sql/test_joins.py::test_non_equi_left_join_null_keys": "SQL LEFT/RIGHT JOIN with an inequality condition is translated through the equi-join path, ignoring the inequality condition",
     "tests/unit/sql/test_joins.py::test_non_equi_right_join_pure": "SQL LEFT/RIGHT JOIN with an inequality condition is translated through the equi-join path, ignoring the inequality condition",
@@ -471,9 +470,6 @@ if packaging.version.parse(sqlite3.sqlite_version) <= packaging.version.parse("3
 
 STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "float difference in std/var in the unit of least precision",
-    # Expected to fail on the in-memory engine only, so xfailing it would be a
-    # strict XPASS under the streaming engine.
-    "tests/unit/sql/test_correlated_subqueries.py::test_correlated_aggregate_unknown_outer_size_not_restricted": "Passes under the streaming engine",
     # Crashes the worker instead of raising cleanly; skip rather than xfail
     # since a crashed worker never reports a result. See
     # https://github.com/NVIDIA/cudf/issues/24112
@@ -483,7 +479,11 @@ STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     # passes on some streaming runs and fails on others, so skip rather than
     # xfail to avoid a flaky XPASS/FAIL.
     "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "non-deterministic key sort under the streaming engine",
-    "tests/unit/sql/test_correlated_subqueries.py::test_correlated_aggregate_not_over_outer_join_tree": "Intermittently segfaults when the process-global memory resource is swapped concurrently",
+    "tests/unit/sql/test_correlated_subqueries.py::test_correlated_aggregate_not_over_outer_join_tree[\\n    SELECT SUM(ps_supplycost) FROM partsupp, supplier, nation\\n    WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey\\n      AND s_nationkey = n_nationkey AND n_name = 'FRANCE'\\n-]": "Intermittently segfaults when the process-global memory resource is swapped concurrently",
+    "tests/unit/sql/test_correlated_subqueries.py::test_correlated_aggregate_not_over_outer_join_tree[\\n    SELECT MIN(ps_supplycost) FROM partsupp, supplier, nation\\n    WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey\\n      AND s_nationkey = n_nationkey AND n_name = 'FRANCE'\\n AND ps_supplycost > 4-]": "Intermittently segfaults when the process-global memory resource is swapped concurrently",
+    "tests/unit/sql/test_correlated_subqueries.py::test_correlated_aggregate_not_over_outer_join_tree[\\n            SELECT MIN(ps_supplycost) FROM partsupp, supplier, nation\\n            WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey\\n              AND s_nationkey = n_nationkey\\n            -]": "Intermittently segfaults when the process-global memory resource is swapped concurrently",
+    "tests/unit/sql/test_correlated_subqueries.py::test_correlated_aggregate_not_over_outer_join_tree[\\n    SELECT MIN(ps_supplycost) FROM partsupp, supplier, nation\\n    WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey\\n      AND s_nationkey = n_nationkey AND n_name = 'FRANCE'\\n-AND p_partkey * 10 < s_suppkey]": "Intermittently segfaults when the process-global memory resource is swapped concurrently",
+    "tests/unit/sql/test_correlated_subqueries.py::test_correlated_aggregate_not_over_outer_join_tree[\\n            SELECT MIN(ps2.ps_supplycost) FROM partsupp AS ps2\\n            WHERE ps2.ps_partkey = partsupp.ps_partkey\\n            -]": "Intermittently segfaults when the process-global memory resource is swapped concurrently",
     "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow for CI",
     "tests/unit/io/test_partition.py::test_partition_approximate_size": "Too slow for CI",
     "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-async]": "Takes >60 seconds to run locally",
