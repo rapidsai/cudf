@@ -231,8 +231,8 @@ __device__ cuda::std::span<hash_value_type const> get_row(
   cuda::std::span<int64_t const> offsets,
   cudf::size_type row_idx)
 {
-  return cuda::std::span<hash_value_type const>(values.begin() + offsets[row_idx],
-                                                values.begin() + offsets[row_idx + 1]);
+  auto const offset = offsets[row_idx];
+  return values.subspan(offset, offsets[row_idx + 1] - offset);
 }
 
 /**
