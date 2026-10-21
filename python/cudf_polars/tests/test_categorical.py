@@ -6,7 +6,6 @@ from __future__ import annotations
 import io
 import uuid
 import weakref
-from typing import TYPE_CHECKING
 
 import pytest
 
@@ -22,12 +21,8 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.config import Cluster
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 from cudf_polars.utils.dtypes import make_all_null_column, make_empty_column
-
-if TYPE_CHECKING:
-    from typing import Any
 
 
 @pytest.fixture
@@ -74,18 +69,6 @@ def categorical_frame(request: pytest.FixtureRequest, nulls: str) -> pl.LazyFram
     )
 
 
-def assert_passthrough(q: pl.LazyFrame, engine: pl.GPUEngine, **kwargs: Any) -> None:
-    if any(
-        isinstance(dtype, pl.Categorical) for dtype in q.collect_schema().values()
-    ) and engine.config.get("executor_options", {}).get("cluster") in {
-        Cluster.RAY,
-        Cluster.DASK,
-    }:
-        assert_ir_translation_raises(q, engine, NotImplementedError)
-    else:
-        assert_gpu_result_equal(q, engine=engine, **kwargs)
-
-
 @pytest.mark.parametrize("nulls", ["none", "some", "all", "empty"])
 def test_dataframe_roundtrip(categorical_frame):
     df = categorical_frame.collect()
@@ -124,7 +107,7 @@ def test_to_polars_sortedness(dtype, expected):
 
 @pytest.mark.parametrize("nulls", ["none", "some", "all", "empty"])
 def test_roundtrip(categorical_frame, engine):
-    assert_passthrough(categorical_frame, engine)
+    assert_gpu_result_equal(categorical_frame, engine=engine)
 
 
 def test_roundtrip_empty_enum(engine):
@@ -136,17 +119,17 @@ def test_select(categorical_frame, engine):
     q = categorical_frame.select(
         pl.col("other"), pl.col("cat").alias("renamed"), pl.col("int")
     )
-    assert_passthrough(q, engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_with_columns(categorical_frame, engine):
     q = categorical_frame.with_columns(pl.col("cat").alias("cat2"))
-    assert_passthrough(q, engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_filter(categorical_frame, engine):
     q = categorical_frame.filter(pl.col("int") > 4)
-    assert_passthrough(q, engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -159,12 +142,12 @@ def test_filter(categorical_frame, engine):
     ids=["head", "tail", "slice"],
 )
 def test_slice(categorical_frame, engine, op):
-    assert_passthrough(op(categorical_frame), engine)
+    assert_gpu_result_equal(op(categorical_frame), engine=engine)
 
 
 def test_sort_by_non_categorical(categorical_frame, engine):
     q = categorical_frame.sort("int", descending=True)
-    assert_passthrough(q, engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "full"])
@@ -174,7 +157,7 @@ def test_join_payload(categorical_frame, engine, how, both_sides):
     if not both_sides:
         right = right.select("int", pl.col("int").alias("right_value"))
     q = categorical_frame.join(right, on="int", how=how)
-    assert_passthrough(q, engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 def test_group_by_ignores_categorical(categorical_frame, engine):
@@ -189,35 +172,35 @@ def test_group_by_with_categorical_payload_raises(categorical_frame, in_memory_e
 
 def test_concat_vertical(categorical_frame, engine):
     q = pl.concat([categorical_frame, categorical_frame.head(3)])
-    assert_passthrough(q, engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 def test_concat_horizontal(categorical_frame, engine):
     right = categorical_frame.select(pl.col("cat").alias("cat_right"))
     q = pl.concat([categorical_frame, right], how="horizontal")
-    assert_passthrough(q, engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_concat_horizontal_different_heights(categorical_frame, engine):
     right = categorical_frame.head(3).select(pl.col("cat").alias("cat_right"))
     q = pl.concat([categorical_frame, right], how="horizontal_extend")
-    assert_passthrough(q, engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_cache(categorical_frame, engine):
     lf = categorical_frame.filter(pl.col("int") > 5)
     q = pl.concat([lf, lf.select(pl.col("int"), pl.col("cat"), pl.col("other"))])
-    assert_passthrough(q, engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 def test_row_index(categorical_frame, engine):
     q = categorical_frame.head(3).with_row_index()
-    assert_passthrough(q, engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_rename(categorical_frame, engine):
     q = categorical_frame.rename({"cat": "renamed"})
-    assert_passthrough(q, engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_explode(categorical_frame, engine):
@@ -227,15 +210,20 @@ def test_explode(categorical_frame, engine):
         .lazy()
         .explode("lst")
     )
-    assert_passthrough(q, engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
     "dtype",
-    [pl.Enum(["a", "b", "c"]), pl.Enum([str(i) for i in range(300)])],
-    ids=["enum", "enum_uint16"],
+    [
+        pl.Enum(["a", "b", "c"]),
+        pl.Enum([str(i) for i in range(300)]),
+        pl.Categorical(),
+        pl.Categorical("shuffle_join"),
+    ],
+    ids=["enum", "enum_uint16", "categorical_global", "categorical_named"],
 )
-def test_enum_multi_partition_shuffle_join(dtype, streaming_engine_factory):
+def test_multi_partition_shuffle_join(dtype, streaming_engine_factory):
     engine = streaming_engine_factory(
         StreamingOptions(
             target_partition_size=1,
@@ -244,7 +232,9 @@ def test_enum_multi_partition_shuffle_join(dtype, streaming_engine_factory):
             raise_on_fail=True,
         )
     )
-    categories = dtype.categories.to_list()
+    categories = (
+        dtype.categories.to_list() if isinstance(dtype, pl.Enum) else ["c", "a", "b"]
+    )
     left = pl.LazyFrame(
         {
             "int": range(20),
@@ -400,12 +390,12 @@ def test_categorical_translates_on_default_singleton_engine(categorical_frame):
     assert translator.errors == []
 
 
-def test_categorical_rejected_on_ray_engine(categorical_frame, ray_engine):
-    assert_passthrough(categorical_frame, ray_engine)
+def test_categorical_passthrough_on_ray_engine(categorical_frame, ray_engine):
+    assert_gpu_result_equal(categorical_frame, engine=ray_engine)
 
 
-def test_categorical_rejected_on_dask_engine(categorical_frame, dask_engine):
-    assert_passthrough(categorical_frame, dask_engine)
+def test_categorical_passthrough_on_dask_engine(categorical_frame, dask_engine):
+    assert_gpu_result_equal(categorical_frame, engine=dask_engine)
 
 
 def _in_global_categories(value: str) -> bool:
