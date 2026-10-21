@@ -90,6 +90,16 @@ struct hash_set_ref {
   }
 };
 
+// On Ampere and Hopper, this kernel compiles to over 120 registers and fits only two blocks per
+// SM. Bounding it trades a few spills for 2.5x the occupancy. Blackwell compiles it to at most 56
+// registers, and any bound there, even one block per SM, raises its register count. Turing cannot
+// fit five 256-thread blocks per SM, so the bound would be ignored there.
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800 && __CUDA_ARCH__ < 1000
+#define HASH_CSR_BUILD_LAUNCH_BOUNDS __launch_bounds__(hash_csr_block_size, 5)
+#else
+#define HASH_CSR_BUILD_LAUNCH_BOUNDS
+#endif
+
 /**
  * @brief Inserts every valid row into the set and, when `positions` is given, records the slot
  * of each row and its rank within that slot. Counts can also be computed without row positions.
@@ -102,15 +112,15 @@ struct hash_set_ref {
  * the rows still to come are skipped: the caller then rebuilds with a larger set.
  */
 template <typename Equal, typename Hasher>
-CUDF_KERNEL void hash_csr_build_kernel(size_type num_rows,
-                                       bitmask_type const* valid_rows,
-                                       build_position_type* positions,
-                                       size_type* slot_counts,
-                                       bool count_by_representative,
-                                       hash_set_ref set,
-                                       Equal equal,
-                                       Hasher hasher,
-                                       cuda::std::int32_t* overflow)
+CUDF_KERNEL void HASH_CSR_BUILD_LAUNCH_BOUNDS hash_csr_build_kernel(size_type num_rows,
+                                                                    bitmask_type const* valid_rows,
+                                                                    build_position_type* positions,
+                                                                    size_type* slot_counts,
+                                                                    bool count_by_representative,
+                                                                    hash_set_ref set,
+                                                                    Equal equal,
+                                                                    Hasher hasher,
+                                                                    cuda::std::int32_t* overflow)
 {
   auto const block  = cooperative_groups::this_thread_block();
   auto const warp   = cooperative_groups::tiled_partition<cudf::detail::warp_size>(block);
@@ -168,6 +178,8 @@ CUDF_KERNEL void hash_csr_build_kernel(size_type num_rows,
     }
   }
 }
+
+#undef HASH_CSR_BUILD_LAUNCH_BOUNDS
 
 /**
  * @brief Inserts every `stride`-th valid row into the set and counts the sampled rows and the
