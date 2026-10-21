@@ -742,7 +742,9 @@ class RunConfig:
             "qualification": self.qualification,
             "query_mode": self.query_mode,
             "sql_directory": (
-                str(self.sql_directory) if self.sql_directory is not None else None
+                str(self.sql_directory.resolve())
+                if self.sql_directory is not None
+                else None
             ),
             "frontend": self.frontend,
             "iterations": self.iterations,
@@ -2130,7 +2132,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         choices=["dataframe", "sql"],
         help=textwrap.dedent("""\
             How queries are defined:
-                - dataframe : Polars LazyFrame queries defined in this module (default)
+                - dataframe : Polars LazyFrame queries built into the benchmark (default)
                 - sql       : SQL files from --sql-directory, run with polars.SQLContext"""),
     )
     parser.add_argument(
@@ -2139,7 +2141,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help=textwrap.dedent("""\
-            Directory with one SQL file per query, named qNN.sql (e.g. q01.sql)
+            Local directory with one SQL file per query, named qNN.sql (e.g. q01.sql)
             or qN.sql (e.g. q1.sql). Required with --query-mode sql."""),
     )
     parser.add_argument(
@@ -2384,6 +2386,12 @@ def parse_args(
         parser.error("--query-mode sql requires --sql-directory.")
     if parsed_args.query_mode == "dataframe" and parsed_args.sql_directory is not None:
         parser.error("--sql-directory is only supported with --query-mode sql.")
+    if parsed_args.query_mode == "sql" and parsed_args.qualification:
+        parser.error("--qualification is not supported with --query-mode sql.")
+    if parsed_args.sql_directory is not None and not parsed_args.sql_directory.is_dir():
+        parser.error(
+            f"--sql-directory {parsed_args.sql_directory} is not a local directory."
+        )
 
     if (
         parsed_args.suffix
