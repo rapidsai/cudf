@@ -841,17 +841,11 @@ cluster_info generate_group_cluster_info(int delta,
   // input columns themselves, so we are not doing huge memory transfers.
   if (use_cpu) {
     auto p_cluster_wl = std::move(cinfo.cluster_wl);
-    cinfo.cluster_wl  = cuda::device_buffer<double>(
-      stream, cudf::get_current_device_resource_ref(), p_cluster_wl.size(), cuda::no_init);
-    CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-      cinfo.cluster_wl.data(), p_cluster_wl.data(), p_cluster_wl.size() * sizeof(double), stream));
+    cinfo.cluster_wl =
+      cuda::device_buffer<double>(stream, cudf::get_current_device_resource_ref(), p_cluster_wl);
     auto p_num_clusters = std::move(cinfo.num_clusters);
     cinfo.num_clusters  = cuda::device_buffer<size_type>(
-      stream, cudf::get_current_device_resource_ref(), p_num_clusters.size(), cuda::no_init);
-    CUDF_CUDA_TRY(cudf::detail::memcpy_async(cinfo.num_clusters.data(),
-                                             p_num_clusters.data(),
-                                             p_num_clusters.size() * sizeof(size_type),
-                                             stream));
+      stream, cudf::get_current_device_resource_ref(), p_num_clusters);
     auto p_cluster_start = std::move(cinfo.cluster_start);
     // cluster_start is returned as part of the output, so make sure to use the user supplied mr
     // instead of the current resource.
@@ -1174,17 +1168,10 @@ struct typed_group_tdigest {
       // if we will be at least partially using the CPU here, move the important values into pinned
       // and reference those instead
       if (use_cpu_for_cluster_computation(num_groups)) {
-        auto temp_mr = cudf::get_pinned_memory_resource();
-        auto p_group_offsets =
-          cuda::device_buffer<size_type>(stream, temp_mr, group_offsets.size(), cuda::no_init);
-        CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-          p_group_offsets.data(), group_offsets.data(), group_offsets.size_bytes(), stream));
+        auto temp_mr         = cudf::get_pinned_memory_resource();
+        auto p_group_offsets = cuda::device_buffer<size_type>(stream, temp_mr, group_offsets);
         auto p_group_valid_counts =
-          cuda::device_buffer<size_type>(stream, temp_mr, group_valid_counts.size(), cuda::no_init);
-        CUDF_CUDA_TRY(cudf::detail::memcpy_async(p_group_valid_counts.data(),
-                                                 group_valid_counts.data(),
-                                                 group_valid_counts.size_bytes(),
-                                                 stream));
+          cuda::device_buffer<size_type>(stream, temp_mr, group_valid_counts);
         auto ret = generate_group_cluster_info(
           delta,
           num_groups,
@@ -1592,12 +1579,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                    _p_group_offsets.begin());
       cudf::device_span<size_type const> p_group_offsets(_p_group_offsets);
 
-      cuda::device_buffer<double> p_cumulative_weights(
-        stream, pinned_mr, cumulative_weights.size(), cuda::no_init);
-      CUDF_CUDA_TRY(cudf::detail::memcpy_async(p_cumulative_weights.data(),
-                                               cumulative_weights.data(),
-                                               cumulative_weights.size() * sizeof(double),
-                                               stream));
+      cuda::device_buffer<double> p_cumulative_weights(stream, pinned_mr, cumulative_weights);
 
       cuda::device_buffer<int32_t> p_tdigest_offsets(
         stream, pinned_mr, tdigest_offsets.size(), cuda::no_init);
