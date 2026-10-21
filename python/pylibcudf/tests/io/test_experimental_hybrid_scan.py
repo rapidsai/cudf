@@ -1393,28 +1393,35 @@ def test_hybrid_scan_page_index_stats_all_null_page(
     assert row_mask.to_pylist() == [expected_keep] * num_rows
 
 
+# Row group 0 holds [1.0, NaN, 2.5] and row group 1 holds [10.0, 20.0, 30.0].
+# `nan_stat` is the row group 0 min (1.0) or max (2.5) to replace with a `NaN`.
 @pytest.mark.parametrize(
-    "op, value, expected_row_groups",
+    "nan_stat, op, value, expected_row_groups",
     [
-        pytest.param(ASTOperator.EQUAL, 2.5, [0], id="equal_nan_max_rg"),
-        pytest.param(ASTOperator.GREATER, 2.0, [0, 1], id="greater"),
-        pytest.param(ASTOperator.LESS, 5.0, [0], id="less"),
-        pytest.param(ASTOperator.EQUAL, 20.0, [0, 1], id="equal_other_rg"),
+        pytest.param(2.5, ASTOperator.EQUAL, 2.5, [0], id="nan_max_equal"),
+        pytest.param(
+            2.5, ASTOperator.GREATER, 2.0, [0, 1], id="nan_max_greater"
+        ),
+        pytest.param(2.5, ASTOperator.LESS, 0.5, [], id="nan_max_min_prunes"),
+        pytest.param(1.0, ASTOperator.EQUAL, 1.0, [0], id="nan_min_equal"),
+        pytest.param(1.0, ASTOperator.LESS, 2.0, [0], id="nan_min_less"),
+        pytest.param(
+            1.0, ASTOperator.GREATER, 5.0, [1], id="nan_min_max_prunes"
+        ),
     ],
 )
-def test_hybrid_scan_filter_row_groups_with_nan_max_stats(
+def test_hybrid_scan_filter_row_groups_with_nan_stats(
+    nan_stat: float,
     op: ASTOperator,
     value: float,
     expected_row_groups: list[int],
     simple_parquet_options: plc.io.parquet.ParquetReaderOptions,
 ) -> None:
     """Row groups whose stats carry a NaN stat must not be pruned by it."""
-    max_with_nan = 2.5
     table = pa.table(
         {
             "a": pa.array(
-                [1.0, float("nan"), max_with_nan, 10.0, 20.0, 30.0],
-                pa.float64(),
+                [1.0, float("nan"), 2.5, 10.0, 20.0, 30.0], pa.float64()
             )
         }
     )
@@ -1422,10 +1429,10 @@ def test_hybrid_scan_filter_row_groups_with_nan_max_stats(
     footer = bytes(
         extract_parquet_footer(write_hybrid_scan_parquet_bytes(table, 3))
     )
-    old_max = struct.pack("<d", max_with_nan)
-    # Both the deprecated `max` and the `max_value` fields of row group 0
-    assert footer.count(old_max) == 2
-    footer = footer.replace(old_max, struct.pack("<d", float("nan")))
+    old_stat = struct.pack("<d", nan_stat)
+    # Both the deprecated and the new min (or max) fields of row group 0
+    assert footer.count(old_stat) == 2
+    footer = footer.replace(old_stat, struct.pack("<d", float("nan")))
 
     simple_parquet_options.set_filter(
         Operation(
