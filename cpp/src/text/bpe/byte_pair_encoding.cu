@@ -225,12 +225,12 @@ struct window_bits {
  * @param d_spaces_data Output the location where separator will be inserted
  */
 template <typename FinderType, typename IndexType>
-CUDF_KERNEL void bpe_short_fn(char const* d_input_chars,
-                              IndexType const* d_segments,
-                              IndexType const* d_ids,
-                              IndexType num_ids,
-                              FinderType const d_finder,
-                              int8_t* d_spaces_data)
+CUDF_KERNEL void bpe_short_kernel(char const* d_input_chars,
+                                  IndexType const* d_segments,
+                                  IndexType const* d_ids,
+                                  IndexType num_ids,
+                                  FinderType const d_finder,
+                                  int8_t* d_spaces_data)
 {
   auto constexpr warp_size   = cudf::detail::warp_size;
   auto constexpr window_size = max_short_size;
@@ -770,7 +770,7 @@ void encode_segments(char const* d_input_chars,
       cudf::util::div_rounding_up_safe(num_encode, static_cast<IndexType>(cudf::detail::warp_size));
     auto const grid = cudf::detail::grid_1d(
       static_cast<int64_t>(num_warps) * cudf::detail::warp_size, short_block_size);
-    bpe_short_fn<decltype(finder), IndexType>
+    bpe_short_kernel<decltype(finder), IndexType>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
         d_input_chars, d_segments.data(), d_encode_ids.data(), num_encode, finder, d_spaces);
     CUDF_CUDA_TRY(cudaGetLastError());
