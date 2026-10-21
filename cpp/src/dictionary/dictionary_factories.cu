@@ -12,6 +12,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/type_traits>
 #include <cuda/stream>
 
 namespace cudf {
@@ -68,7 +69,7 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
 
 std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_column,
                                                std::unique_ptr<column> indices_column,
-                                               cuda::device_buffer<std::byte>&& null_mask,
+                                               cuda::device_buffer<cudf::bitmask_type>&& null_mask,
                                                size_type null_count)
 {
   CUDF_EXPECTS(!keys_column->has_nulls(), "keys column must not have nulls", std::invalid_argument);
@@ -100,7 +101,7 @@ struct make_signed_fn {
   constexpr cudf::type_id operator()()
     requires(is_index_type<T>())
   {
-    return cudf::type_to_id<std::make_signed_t<T>>();
+    return cudf::type_to_id<cuda::std::make_signed_t<T>>();
   }
   template <typename T>
   constexpr cudf::type_id operator()()

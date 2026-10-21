@@ -5,7 +5,9 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
@@ -15,6 +17,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/tuple>
@@ -83,16 +86,17 @@ dremel_data get_encoding(column_view h_col,
 
   auto get_empties = [&](column_view col, size_type start, size_type end) {
     auto lcv = lists_column_view(get_list_level(col));
-    rmm::device_uvector<size_type> empties_idx(lcv.size(), stream, temp_mr);
-    rmm::device_uvector<size_type> empties(lcv.size(), stream, temp_mr);
+    cuda::device_buffer<size_type> empties_idx(stream, temp_mr, lcv.size(), cuda::no_init);
+    cuda::device_buffer<size_type> empties(stream, temp_mr, lcv.size(), cuda::no_init);
     auto d_off = lcv.offsets().data<int32_t>();
 
-    auto empties_idx_end =
-      thrust::copy_if(rmm::exec_policy_nosync(stream, temp_mr),
-                      cuda::counting_iterator<size_type>{start},
-                      cuda::counting_iterator<size_type>{end},
-                      empties_idx.begin(),
-                      [d_off] __device__(auto i) -> bool { return d_off[i] == d_off[i + 1]; });
+    auto empties_idx_end = cudf::detail::copy_if(
+      cuda::counting_iterator<size_type>{start},
+      cuda::counting_iterator<size_type>{end},
+      empties_idx.begin(),
+      [d_off] __device__(auto i) -> bool { return d_off[i] == d_off[i + 1]; },
+      stream,
+      temp_mr);
     auto empties_end = thrust::gather(rmm::exec_policy_nosync(stream, temp_mr),
                                       empties_idx.begin(),
                                       empties_idx_end,
@@ -217,8 +221,10 @@ dremel_data get_encoding(column_view h_col,
   max_def_level += def_at_level.back();
 
   // Sliced list column views only have offsets applied to top level. Get offsets for each level.
-  rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size(), stream, temp_mr);
-  rmm::device_uvector<size_type> d_column_ends(nesting_levels.size(), stream, temp_mr);
+  cuda::device_buffer<size_type> d_column_offsets(
+    stream, temp_mr, nesting_levels.size(), cuda::no_init);
+  cuda::device_buffer<size_type> d_column_ends(
+    stream, temp_mr, nesting_levels.size(), cuda::no_init);
 
   auto d_col = column_device_view::create(h_col, stream, temp_mr);
   cudf::detail::device_single_thread(
@@ -261,7 +267,7 @@ dremel_data get_encoding(column_view h_col,
     max_vals_size += column_ends[l] - column_offsets[l];
   }
 
-  auto d_nullability = cudf::detail::make_device_uvector_async(nullability, stream, temp_mr);
+  auto d_nullability = cudf::detail::make_device_buffer_async(nullability, stream, temp_mr);
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream, temp_mr);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream, temp_mr);
@@ -337,7 +343,7 @@ dremel_data get_encoding(column_view h_col,
                                        size = lcv.offsets().size()] __device__(auto i) -> int {
         return (i + 1 < size) && (off[i] == off[i + 1]);
       }));
-    rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream, temp_mr);
+    cuda::device_buffer<size_type> scan_out(stream, temp_mr, offset_size_at_level, cuda::no_init);
     thrust::exclusive_scan(rmm::exec_policy_nosync(stream, temp_mr),
                            scan_it,
                            scan_it + offset_size_at_level,
@@ -426,7 +432,7 @@ dremel_data get_encoding(column_view h_col,
                                        size = lcv.offsets().size()] __device__(auto i) -> int {
         return (i + 1 < size) && (off[i] == off[i + 1]);
       }));
-    rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream, temp_mr);
+    cuda::device_buffer<size_type> scan_out(stream, temp_mr, offset_size_at_level, cuda::no_init);
     thrust::exclusive_scan(rmm::exec_policy_nosync(stream, temp_mr),
                            scan_it,
                            scan_it + offset_size_at_level,

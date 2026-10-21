@@ -249,6 +249,7 @@ ConfigureNVBench(
   groupby/group_struct_keys.cpp
   groupby/group_struct_values.cpp
   groupby/group_sum.cpp
+  groupby/streaming_groupby.cpp
 )
 
 # ##################################################################################################
@@ -457,6 +458,7 @@ ConfigureNVBench(
   text/tokenize.cpp
   text/unicode_normalize.cpp
   text/vocab.cpp
+  text/byte_pair_encoding.cpp
 )
 
 # ##################################################################################################

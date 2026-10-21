@@ -301,6 +301,45 @@ def test_groupby_agg(df, streaming_engine, op, keys):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
+def test_groupby_order_sensitive_aggs(streaming_engine_factory):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),
+    )
+    df = pl.LazyFrame(
+        {
+            "key": ["a", "b", "a", "b", "a", "b"],
+            "value": [None, 10, 20, None, 30, 40],
+        }
+    )
+    q = df.group_by("key").agg(
+        pl.col("value").first(),
+        pl.col("value").last().alias("last"),
+        pl.col("value").first(ignore_nulls=True).alias("first_non_null"),
+    )
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
+
+
+def test_groupby_order_sensitive_agg_with_preshuffle_fallback(
+    streaming_engine_factory,
+):
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),
+    )
+    df = pl.LazyFrame(
+        {
+            "key": ["a", "b", "a", "b"],
+            "value": [1, 2, 3, 4],
+        }
+    )
+    q = df.group_by("key").agg(
+        pl.col("value").n_unique(),
+        pl.col("value").first().alias("first"),
+        pl.col("value").last().alias("last"),
+    )
+    with pytest.raises(NotImplementedError, match="preserve input order"):
+        q.collect(engine=streaming_engine)
+
+
 def test_groupby_sort_by_first_last(streaming_engine_factory):
     streaming_engine = streaming_engine_factory(
         StreamingOptions(max_rows_per_partition=2, fallback_mode="raise"),
@@ -360,8 +399,38 @@ def test_groupby_sort_by_stable_ties_with_preshuffle_fallback(
         pl.col("val").sort_by("idx", maintain_order=True).first().alias("first_tie"),
         pl.col("val").sort_by("idx", maintain_order=True).last().alias("last_tie"),
     )
-    with pytest.raises(NotImplementedError, match="input-order ties"):
+    with pytest.raises(NotImplementedError, match="preserve input order"):
         q.collect(engine=streaming_engine)
+
+
+def test_groupby_first_non_null_sorted_keys(spmd_engine_factory):
+    streaming_engine = spmd_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=4,
+            target_partition_size=10,
+            fallback_mode="raise",
+        ),
+    )
+    n = 10
+    values = []
+    for group in range(1, 6):
+        values.extend([None] * (group - 1))
+        values.extend(range(group, n - group + 2))
+        values.extend([None] * (group - 1))
+    df = pl.LazyFrame(
+        {
+            "idx": pl.Series(
+                [1] * n + [2] * n + [3] * n + [4] * n + [5] * n,
+                dtype=pl.Int32,
+            ),
+            "a": pl.Series(values, dtype=pl.Int32),
+        }
+    ).set_sorted("idx")
+    q = df.group_by("idx", maintain_order=True).agg(
+        pl.col("a").first(ignore_nulls=True)
+    )
+
+    assert_gpu_result_equal(q, engine=streaming_engine)
 
 
 def test_groupby_sort_by_preserves_sorted_key_order(streaming_engine_factory):
