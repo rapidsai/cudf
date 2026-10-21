@@ -13,11 +13,13 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/hashing/detail/xxhash_64.cuh>
 #include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/reduction/bloom_filter.cuh>
+#include <cudf/utilities/concepts.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -30,6 +32,7 @@
 #include <cuda/iterator>
 #include <cuda/std/bit>
 #include <cuda/std/chrono>
+#include <cuda/std/concepts>
 #include <cuda/stream>
 #include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
@@ -227,8 +230,7 @@ struct bloom_filter_caster {
   }
 
   // BYTE_ARRAYS are probed as their bytes
-  template <typename T>
-    requires(cuda::std::is_same_v<T, cudf::string_view>)
+  template <cudf::concepts::string_view T>
   std::unique_ptr<cudf::column> operator()(cudf::size_type equality_col_idx,
                                            cudf::data_type,
                                            ast::literal const* const literal,
@@ -240,8 +242,7 @@ struct bloom_filter_caster {
   }
 
   // Floating point types are probed as their physical type
-  template <typename T>
-    requires(cudf::is_floating_point<T>())
+  template <cuda::std::floating_point T>
   std::unique_ptr<cudf::column> operator()(cudf::size_type equality_col_idx,
                                            cudf::data_type,
                                            ast::literal const* const literal,
@@ -254,7 +255,7 @@ struct bloom_filter_caster {
 
   // Integers, decimal storage types and chrono types are probed as their physical type
   template <typename T>
-    requires(cudf::is_integral_not_bool<T>() or cudf::is_chrono<T>())
+    requires(cudf::concepts::integral_not_bool<T> or cudf::concepts::chrono<T>)
   std::unique_ptr<cudf::column> operator()(cudf::size_type equality_col_idx,
                                            cudf::data_type dtype,
                                            ast::literal const* const literal,
@@ -591,7 +592,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto const mr = cudf::memory_resources{cudf::get_current_device_resource_ref()};
 
   // Copy bloom filter bitset spans to device
-  auto const device_bloom_filter_data = cudf::detail::make_device_uvector_async(
+  auto const device_bloom_filter_data = cudf::detail::make_device_buffer_async(
     cudf::host_span{bloom_filter_data.data(), bloom_filter_data.size()},
     stream,
     mr.get_temporary_mr());
