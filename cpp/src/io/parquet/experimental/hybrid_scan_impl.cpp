@@ -730,9 +730,6 @@ void hybrid_scan_reader_impl::prepare_materialization(
   _input_pass_read_limit   = pass_read_limit;
   _output_chunk_read_limit = chunk_read_limit;
 
-  // Mark that we are using page-level I/O for payload columns
-  _sparse_page_io = sparse_page_io;
-
   // Normalize the input expression (must be done after column selection)
   if (columns_mode != read_columns_mode::PAYLOAD_COLUMNS) {
     _expr_conv = build_normalized_expression(options);
@@ -747,6 +744,9 @@ void hybrid_scan_reader_impl::prepare_materialization(
     _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
     return;
   }
+
+  // Mark that we are using page-level I/O for payload columns
+  _sparse_page_io = sparse_page_io;
 
   // Check offset indexes are present for sparse payload page I/O mode
   if (_sparse_page_io) {

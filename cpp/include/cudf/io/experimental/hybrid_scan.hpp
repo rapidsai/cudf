@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <cudf/column/column_view.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
@@ -21,7 +20,6 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -70,19 +68,6 @@ enum class read_columns_mode : int8_t {
   PAYLOAD_COLUMNS = 1,  ///< Payload columns
   ALL_COLUMNS     = 2   ///< All selected columns
 };
-
-/**
- * @brief Row mask column view type for the columns selection `mode`
- *
- * Materializing filter columns updates the row mask in place so it requires a mutable view. Other
- * columns selections only read the row mask so they take an immutable view.
- *
- * @tparam mode Columns selection
- */
-template <read_columns_mode mode>
-using row_mask_view_t = std::conditional_t<mode == read_columns_mode::FILTER_COLUMNS,
-                                           cudf::mutable_column_view,
-                                           cudf::column_view>;
 
 /**
  * @brief Byte range of a column chunk's dictionary page, and whether it is exact

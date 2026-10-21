@@ -25,6 +25,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -33,6 +34,19 @@ namespace cudf::io::parquet::experimental::detail {
 using cudf::io::parquet::detail::ColumnChunkDesc;
 using cudf::io::parquet::detail::PageInfo;
 using text::byte_range_info;
+
+/**
+ * @brief Row mask column view type for the columns selection `mode`
+ *
+ * Materializing filter columns updates the row mask in place so it requires a mutable view. Other
+ * columns selections only read the row mask so they take an immutable view.
+ *
+ * @tparam mode Columns selection
+ */
+template <read_columns_mode mode>
+using row_mask_view_t = std::conditional_t<mode == read_columns_mode::FILTER_COLUMNS,
+                                           cudf::mutable_column_view,
+                                           cudf::column_view>;
 
 /**
  * @brief Implementation of the experimental Parquet reader optimized for Hybrid Scan operation
@@ -206,8 +220,9 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @tparam mode Columns to materialize
    * @param row_group_indices Input row groups indices
    * @param column_chunk_data Device spans of column chunk data
-   * @param row_mask Boolean column indicating surviving rows
-   * @param mask_data_pages Whether to build and use a data page mask using the row mask
+   * @param row_mask Boolean column indicating surviving rows. Ignored for `ALL_COLUMNS`
+   * @param mask_data_pages Whether to build and use a data page mask using the row mask.
+   *        Ignored for `ALL_COLUMNS`
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the device memory of the returned table
@@ -231,8 +246,9 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param pass_read_limit Limit on memory usage for decompressing and decoding data
    * @param row_group_indices Input row groups indices
    * @param column_chunk_data Device spans of column chunk data
-   * @param row_mask Boolean column indicating surviving rows
-   * @param mask_data_pages Whether to build and use a data page mask using the row mask
+   * @param row_mask Boolean column indicating surviving rows. Ignored for `ALL_COLUMNS`
+   * @param mask_data_pages Whether to build and use a data page mask using the row mask.
+   *        Ignored for `ALL_COLUMNS`
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the device memory of the returned tables
@@ -290,7 +306,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @brief Materializes the next table chunk
    *
    * @tparam mode Columns to materialize, as set up for chunking
-   * @param row_mask Boolean column indicating surviving rows
+   * @param row_mask Boolean column indicating surviving rows. Ignored for `ALL_COLUMNS`
    * @return Table chunk of materialized columns and metadata
    */
   template <read_columns_mode mode>
@@ -397,8 +413,9 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param pass_read_limit Limit on memory usage for decompressing and decoding data
    * @param row_group_indices Input row groups indices
    * @param column_chunk_data Device spans of column chunk or page data
-   * @param row_mask Boolean column indicating surviving rows
-   * @param mask_data_pages Whether to build and use a data page mask using the row mask
+   * @param row_mask Boolean column indicating surviving rows. Ignored for `ALL_COLUMNS`
+   * @param mask_data_pages Whether to build and use a data page mask using the row mask.
+   *        Ignored for `ALL_COLUMNS` and sparse page I/O
    * @param sparse_page_io Boolean indicating if page-level (sparse) I/O is enabled
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
