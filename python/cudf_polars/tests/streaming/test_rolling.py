@@ -822,6 +822,7 @@ def test_over_in_filter_unsupported(request, streaming_engine_factory) -> None:
         assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.spmd
 def test_over_in_filter_after_concat_preserves_order(streaming_engine_factory) -> None:
     # https://github.com/NVIDIA/cudf/issues/22405: row order from an ordered
     # concat must survive the over(...)-in-filter fallback on multi-rank engines.

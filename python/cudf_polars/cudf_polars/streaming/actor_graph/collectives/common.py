@@ -113,10 +113,6 @@ class ReserveOpIDs:
         The root IR node of the pipeline.
     config_options : ConfigOptions, optional
         Configuration options (needed for dynamic planning).
-    nranks : int, optional
-        Number of ranks the pipeline runs on. Order-preserving ``Union``
-        nodes only need collective IDs when ``nranks > 1``; if ``nranks``
-        is not given, IDs are reserved for them conservatively.
 
     Notes
     -----
@@ -132,11 +128,7 @@ class ReserveOpIDs:
     """
 
     def __init__(
-        self,
-        ir: IR,
-        config_options: ConfigOptions[StreamingExecutor] | None = None,
-        *,
-        nranks: int | None = None,
+        self, ir: IR, config_options: ConfigOptions[StreamingExecutor] | None = None
     ):
         self.config_options = config_options
 
@@ -158,6 +150,7 @@ class ReserveOpIDs:
             Sort,
             Rolling,
             FixedSizeRolling,
+            Union,
         )
         if self.dynamic_planning_enabled:
             collective_types = (
@@ -171,19 +164,15 @@ class ReserveOpIDs:
                 Sort,
                 Rolling,
                 FixedSizeRolling,
+                Union,
                 GroupBy,
                 Distinct,
                 Over,
                 PushdownFilterHint,
             )
 
-        # Order-preserving multi-rank unions exchange chunks between ranks.
-        multi_rank = nranks is None or nranks > 1
         self.collective_nodes: list[IR] = [
-            node
-            for node in traversal([ir])
-            if isinstance(node, collective_types)
-            or (multi_rank and _is_ordered_union(node))
+            node for node in traversal([ir]) if isinstance(node, collective_types)
         ]
         self.collective_id_map: dict[IR, list[int]] = {}
         self._pool: _CollectiveIDPool | None = None
@@ -234,13 +223,13 @@ class ReserveOpIDs:
                             pool.acquire_unsafe(),
                         ]
                 elif isinstance(node, Union):
-                    # Ordered Union: one ID for the chunk-count AllGather and
-                    # two that the per-child exchanges alternate between.
+                    # Union needs one ID per child. Only an order-preserving
+                    # multi-rank union uses them: ID 0 for the chunk-count
+                    # AllGather and then child 0's exchange (the AllGather
+                    # completes before the exchange starts, so they can
+                    # share), and ID i for child i's exchange.
                     self.collective_id_map[node] = [
-                        pool.acquire_unsafe()
-                        for _ in range(
-                            ordered_union_collective_id_count(len(node.children))
-                        )
+                        pool.acquire_unsafe() for _ in node.children
                     ]
                 elif isinstance(node, Over) and not node.is_scalar:
                     # Non-scalar Over needs 2 IDs: one for the size AllGather +
@@ -271,31 +260,6 @@ class ReserveOpIDs:
                 for collective_id in collective_ids:
                     pool.release_unsafe(collective_id)
         return False
-
-
-def ordered_union_collective_id_count(nchildren: int) -> int:
-    """
-    Number of collective IDs an ordered multi-rank ``Union`` needs.
-
-    One ID for the chunk-count AllGather, plus two IDs that the per-child
-    ``SparseAlltoall`` exchanges alternate between (see ``_ordered_union`` in
-    ``streaming/actor_graph/union.py``).
-
-    Parameters
-    ----------
-    nchildren
-        Number of children of the union.
-
-    Returns
-    -------
-    The number of collective IDs to reserve.
-    """
-    return 1 + min(nchildren, 2)
-
-
-def _is_ordered_union(node: IR) -> bool:
-    """Return whether ``node`` is a Union that must preserve row order."""
-    return isinstance(node, Union) and node.maintain_order and len(node.children) > 1
 
 
 @contextmanager

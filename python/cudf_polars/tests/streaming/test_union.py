@@ -42,11 +42,17 @@ def test_sort_slice_over_union_of_duplicated_streams(streaming_engine):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-def _emitted_order(plan: _OrderedUnionPlan, actual):
+def _emitted_order(
+    plan: _OrderedUnionPlan, actual: tuple[tuple[int, ...], ...]
+) -> dict[int, list[tuple[int, int, int]]]:
     """Simulate routing and return each rank's emitted ``(child, rank, index)``."""
-    out = {rank: [] for rank in range(plan.nranks)}
+    out: dict[int, list[tuple[int, int, int]]] = {
+        rank: [] for rank in range(plan.nranks)
+    }
     for child, child_counts in enumerate(actual):
-        inbox = {dst: {src: [] for src in range(plan.nranks)} for dst in out}
+        inbox: dict[int, dict[int, list[tuple[int, int, int]]]] = {
+            dst: {src: [] for src in range(plan.nranks)} for dst in out
+        }
         for src, count in enumerate(child_counts):
             for index in range(count):
                 dst = plan.destination(child, src, index)

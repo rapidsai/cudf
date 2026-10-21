@@ -18,9 +18,6 @@ from rapidsmpf.streaming.coll.sparse_alltoall import SparseAlltoall
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.dsl.ir import Union
-from cudf_polars.streaming.actor_graph.collectives.common import (
-    ordered_union_collective_id_count,
-)
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
@@ -263,33 +260,36 @@ async def _exchange_child(
     child that this rank must emit, each in source order.
     """
     rank = comm.rank
+    # Every rank exchanges with every other rank (possibly sending nothing),
+    # which keeps the set of peers independent of the routing plan.
     peers = [r for r in range(comm.nranks) if r != rank]
-    # Every rank takes part in every exchange, even with nothing to send,
-    # so that finishing child i + 1 on any rank implies that every rank has
-    # finished child i (see ``_ordered_union``).
     exchange = SparseAlltoall(context, comm, collective_id, srcs=peers, dsts=peers)
     owned = [ChunkStore(context) for _ in range(comm.nranks)]
 
-    index = 0
-    while (msg := await ch_in.recv(context)) is not None:
-        if drop:
-            # Duplicated child: only rank 0's copy takes part.
-            continue
-        dst = plan.destination(child, rank, index)
-        chunk = TableChunk.from_message(msg, br=context.br())
-        if dst == rank:
-            owned[rank].insert(Message(index, chunk))
-        else:
-            chunk, extra = await make_table_chunks_available_or_wait(
-                context,
-                chunk,
-                reserve_extra=chunk.into_packed_data_cost(),
-                net_memory_delta=0,
-            )
-            exchange.insert(dst, chunk.into_packed_data(extra))
-        index += 1
+    try:
+        index = 0
+        while (msg := await ch_in.recv(context)) is not None:
+            if drop:
+                # Duplicated child: only rank 0's copy takes part.
+                continue
+            dst = plan.destination(child, rank, index)
+            chunk = TableChunk.from_message(msg, br=context.br())
+            if dst == rank:
+                owned[rank].insert(Message(index, chunk))
+            else:
+                chunk, extra = await make_table_chunks_available_or_wait(
+                    context,
+                    chunk,
+                    reserve_extra=chunk.into_packed_data_cost(),
+                    net_memory_delta=0,
+                )
+                exchange.insert(dst, chunk.into_packed_data(extra))
+            index += 1
+    finally:
+        # Finish the exchange even if reading or packing fails or the task
+        # is cancelled: destroying an unfinished exchange can abort the worker.
+        await exchange.insert_finished(context)
 
-    await exchange.insert_finished(context)
     for src in peers:
         for i, packed in enumerate(exchange.extract(src)):
             owned[src].insert(
@@ -317,13 +317,11 @@ async def _ordered_union(
     sampling) could stall this rank's exchange and deadlock other ranks.
     """
     nchildren = len(chs_in)
-    expected_ids = ordered_union_collective_id_count(nchildren)
-    if len(collective_ids) != expected_ids:
+    if len(collective_ids) != nchildren:
         raise RuntimeError(
-            f"Ordered multi-rank Union needs {expected_ids} collective IDs, "
-            f"got {len(collective_ids)}."
+            f"Ordered multi-rank Union needs {nchildren} collective IDs "
+            f"(one per child), got {len(collective_ids)}."
         )
-    allgather_id, *exchange_ids = collective_ids
 
     # One AllGather of every (child, rank) chunk count. Each rank fills its
     # own slots and leaves the rest zero, so the summed result is the full
@@ -332,7 +330,9 @@ async def _ordered_union(
     for child, meta in enumerate(metadata):
         if not meta.duplicated or comm.rank == 0:
             local_values[child * comm.nranks + comm.rank] = meta.local_count
-    gathered = await allgather_reduce(context, comm, allgather_id, *local_values)
+    # The AllGather completes before child 0's exchange starts, so the two
+    # share collective_ids[0].
+    gathered = await allgather_reduce(context, comm, collective_ids[0], *local_values)
     plan = _OrderedUnionPlan(
         nranks=comm.nranks,
         counts=tuple(
@@ -349,18 +349,13 @@ async def _ordered_union(
 
     async def read_and_exchange() -> None:
         for child, (ch_in, meta) in enumerate(zip(chs_in, metadata, strict=True)):
-            # Children alternate between two exchange IDs. Reusing child i's
-            # ID for child i + 2 is safe: because every rank takes part in
-            # every exchange, a rank only finishes child i + 1 once every
-            # rank has started it, and each rank extracts child i before
-            # starting child i + 1.
             owned = await _exchange_child(
                 context,
                 comm,
                 plan,
                 child,
                 ch_in,
-                exchange_ids[child % len(exchange_ids)],
+                collective_ids[child],
                 drop=meta.duplicated and comm.rank != 0,
             )
             exchanged.put_nowait(owned)
@@ -405,9 +400,8 @@ async def union_node(
     ir_context
         The execution context for the IR node.
     collective_ids
-        Collective IDs for an order-preserving multi-rank union (see
-        :func:`ordered_union_collective_id_count`). Empty (and unused) when
-        the union does not need to exchange chunks.
+        Collective IDs reserved for this node, one per child. Only used by
+        an order-preserving multi-rank union.
     ch_out
         The output Channel[TableChunk].
     chs_in

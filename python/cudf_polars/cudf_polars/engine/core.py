@@ -999,7 +999,7 @@ def _evaluate_on_rank(
         )
         attach_cached_parquet_metadata(ir, cached_parquet_info_map)
 
-    with ReserveOpIDs(ir, config_options, nranks=comm.nranks) as collective_id_map:
+    with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(
             ctx,
             comm,

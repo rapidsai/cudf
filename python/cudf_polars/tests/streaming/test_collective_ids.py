@@ -102,15 +102,10 @@ def test_evaluate_on_rank_uses_fresh_scope(monkeypatch) -> None:
     assert seen == [expected]
 
 
-@pytest.mark.parametrize("nchildren", [2, 3, 300])
-def test_ordered_union_reserves_bounded_ids(nchildren) -> None:
+@pytest.mark.parametrize("nchildren", [2, 3])
+def test_union_reserves_one_id_per_child(nchildren) -> None:
     q = pl.concat([pl.LazyFrame({"a": [i]}) for i in range(nchildren)])
     ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
     (union,) = (node for node in traversal([ir]) if isinstance(node, Union))
-    assert union.maintain_order
-    # One AllGather ID plus two alternating exchange IDs, however many
-    # children the union has.
-    with collective_id_scope(), ReserveOpIDs(ir, nranks=2) as collective_id_map:
-        assert len(collective_id_map[union]) == 3
-    with collective_id_scope(), ReserveOpIDs(ir, nranks=1) as collective_id_map:
-        assert union not in collective_id_map
+    with collective_id_scope(), ReserveOpIDs(ir) as collective_id_map:
+        assert len(collective_id_map[union]) == nchildren
