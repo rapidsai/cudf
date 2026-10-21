@@ -2687,6 +2687,33 @@ void copy_blocks(device_span<device_span<uint8_t const> const> inputs,
   cudf::detail::batched_memcpy_async(sources, destinations, sizes, inputs.size(), stream);
 }
 
+struct buffer_copy {
+  uint8_t const* source;
+  uint8_t* destination;
+  std::size_t size;
+};
+
+/// Copies every buffer with one kernel, where per-buffer memcpy calls cost microseconds each.
+void copy_buffers(std::span<buffer_copy const> copies,
+                  cuda::stream_ref stream,
+                  rmm::device_async_resource_ref temp_mr)
+{
+  if (copies.empty()) { return; }
+  auto const d_copies = cudf::detail::make_device_uvector_async(copies, stream, temp_mr);
+  auto const sources  = cuda::make_transform_iterator(
+    d_copies.begin(), cuda::proclaim_return_type<uint8_t const*>([] __device__(buffer_copy copy) {
+      return copy.source;
+    }));
+  auto const destinations = cuda::make_transform_iterator(
+    d_copies.begin(), cuda::proclaim_return_type<uint8_t*>([] __device__(buffer_copy copy) {
+      return copy.destination;
+    }));
+  auto const sizes = cuda::make_transform_iterator(
+    d_copies.begin(),
+    cuda::proclaim_return_type<std::size_t>([] __device__(buffer_copy copy) { return copy.size; }));
+  cudf::detail::batched_memcpy_async(sources, destinations, sizes, copies.size(), stream);
+}
+
 void compress_batch(block_batch const& batch,
                     device_span<device_span<uint8_t const> const> inputs,
                     device_span<device_span<uint8_t> const> outputs,
@@ -3177,7 +3204,7 @@ std::unique_ptr<table> materialize_uncompressed(packed_data_view input,
                "Packed column buffer lies outside the payload");
 
   std::vector<std::span<uint8_t const>> payload_ranges;
-  std::vector<void*> destinations;
+  std::vector<uint8_t*> destinations;
   buffer_source const source{
     [&](int64_t offset, std::size_t required_bytes, bool) {
       auto const next = std::ranges::upper_bound(offsets, offset);
@@ -3197,16 +3224,12 @@ std::unique_ptr<table> materialize_uncompressed(packed_data_view input,
     }};
   auto columns = materialize_columns(metadata, selection, source, stream, mr);
   loader.load(stream, mr);
-  std::vector<void const*> sources;
-  std::vector<std::size_t> sizes;
-  for (auto const range : payload_ranges) {
-    sources.push_back(loader.device_pointer(range.data()));
-    sizes.push_back(range.size());
+  std::vector<buffer_copy> copies;
+  for (std::size_t i = 0; i < payload_ranges.size(); ++i) {
+    copies.push_back(
+      {loader.device_pointer(payload_ranges[i].data()), destinations[i], payload_ranges[i].size()});
   }
-  if (!sources.empty()) {
-    CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
-      destinations.data(), sources.data(), sizes.data(), sources.size(), stream));
-  }
+  copy_buffers(copies, stream, mr.get_temporary_mr());
   // Host sources are read when the stream reaches each copy, so they must outlive this call.
   if (loader.has_pending_host_reads()) { stream.sync(); }
   return std::make_unique<table>(std::move(columns), metadata.num_rows());
