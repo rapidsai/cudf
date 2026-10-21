@@ -99,7 +99,8 @@ __device__ void transform_kernel(size_type row_size,
           InputAccessors::map([&]<typename... In> {
             auto const error =
               operation(row_index, &outs..., In::nullable_element(input_cols, row_index)...);
-            (Out::assign(output_cols, row_index, outs.operator*()), ...);
+            // Null outputs are disengaged; skip the write since the row's value is undefined.
+            ((outs.has_value() ? Out::assign(output_cols, row_index, *outs) : void()), ...);
             (jit::warp_compact_validity<Out>(active_mask, output_cols, row_index, outs.has_value()),
              ...);
             thread_error = cuda::std::max(thread_error, error);
