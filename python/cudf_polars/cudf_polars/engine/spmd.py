@@ -782,7 +782,23 @@ class SPMDEngine(StreamingEngine):
     def _set_quent(
         self, quent_context: cudf_polars.quent.QuentConfig | None
     ) -> cudf_polars.quent.QuentConfig | None:
-        """Replace this engine's SPMD Quent runtimes."""
+        """
+        Replace this engine's Quent runtimes.
+
+        Must be called collectively on all ranks, with ``quent_context`` either
+        ``None`` on all ranks or not ``None`` on all ranks. Rank 0 starts the
+        Collector and controller, and every rank starts a worker runtime.
+
+        Parameters
+        ----------
+        quent_context
+            Quent configuration to start, or ``None`` to only close.
+
+        Returns
+        -------
+        Rank 0's synchronized Quent configuration, or ``None`` if Quent is
+        disabled.
+        """
         assert self._comm is not None
         assert self._ctx is not None
         comm = self._comm

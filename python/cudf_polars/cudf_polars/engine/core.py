@@ -584,7 +584,22 @@ class StreamingEngine(pl.GPUEngine):
         self.shutdown()
 
     def _set_quent(self, quent_context: QuentConfig | None) -> QuentConfig | None:
-        """Replace this engine's Quent runtimes and return the effective config."""
+        """
+        Replace this engine's Quent runtimes.
+
+        Closes any running Quent runtimes (on all ranks), then starts new ones for
+        ``quent_context`` unless it is ``None``.
+
+        Parameters
+        ----------
+        quent_context
+            Quent configuration to start, or ``None`` to only close.
+
+        Returns
+        -------
+        The effective Quent configuration, which may differ from
+        ``quent_context``, or ``None`` if Quent is disabled.
+        """
         raise NotImplementedError(  # pragma: no cover
             f"{type(self).__name__} does not implement _set_quent"
         )
