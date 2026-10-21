@@ -31,8 +31,9 @@ def make_empty_column(dtype: DataType, stream: Stream) -> plc.Column:
     """
     Create an empty (0-row) column, including for nested types.
 
-    ``plc.column_factories.make_empty_column`` rejects LIST and STRUCT,
-    so we build those by hand with the correct child structure.
+    ``plc.column_factories.make_empty_column`` rejects LIST and STRUCT, and
+    returns DICTIONARY32 without children, so we build those by hand with the
+    correct child structure.
 
     Parameters
     ----------
@@ -55,6 +56,24 @@ def make_empty_column(dtype: DataType, stream: Stream) -> plc.Column:
             make_empty_column(child_dtype, stream) for child_dtype in dtype.children
         ]
         return plc.Column(dtype.plc_type, 0, None, None, 0, 0, children)
+
+    if dtype.id() == plc.TypeId.DICTIONARY32:
+        return plc.Column(
+            dtype.plc_type,
+            0,
+            None,
+            None,
+            0,
+            0,
+            [
+                plc.column_factories.make_empty_column(
+                    plc.DataType(plc.TypeId.INT32), stream=stream
+                ),
+                plc.column_factories.make_empty_column(
+                    plc.DataType(plc.TypeId.STRING), stream=stream
+                ),
+            ],
+        )
 
     return plc.column_factories.make_empty_column(dtype.plc_type, stream=stream)
 

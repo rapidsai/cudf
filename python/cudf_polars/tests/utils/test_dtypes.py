@@ -10,7 +10,12 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.containers import DataType
-from cudf_polars.utils.dtypes import can_cast, is_order_preserving_cast
+from cudf_polars.utils.cuda_stream import get_cuda_stream
+from cudf_polars.utils.dtypes import (
+    can_cast,
+    is_order_preserving_cast,
+    make_empty_column,
+)
 
 INT8 = plc.DataType(plc.TypeId.INT8)
 INT16 = plc.DataType(plc.TypeId.INT16)
@@ -69,3 +74,19 @@ def test_can_cast_nested():
     assert not can_cast(LIST, LIST)
     assert not can_cast(LIST, STRUCT)
     assert can_cast(INT8, INT16)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [pl.Enum(["a", "b"]), pl.Categorical()],
+    ids=["enum", "categorical"],
+)
+def test_make_empty_column_dictionary(dtype):
+    result = make_empty_column(DataType(dtype), get_cuda_stream())
+
+    assert result.type().id() == plc.TypeId.DICTIONARY32
+    assert result.size() == 0
+    assert [child.type().id() for child in result.children()] == [
+        plc.TypeId.INT32,
+        plc.TypeId.STRING,
+    ]
