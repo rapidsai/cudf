@@ -24,7 +24,9 @@ struct column_accessor {
 
   static constexpr bool as_scalar = AsScalar;
 
-  static constexpr bool is_inplace_output = cuda::std::is_same_v<element_type, mutable_string_view>;
+  static constexpr bool is_inplace_output =
+    cuda::std::is_same_v<element_type, mutable_string_view> ||
+    cuda::std::is_same_v<element_type, mutable_list_element>;
 
   static __device__ constexpr size_type map_index(size_type row)
   {

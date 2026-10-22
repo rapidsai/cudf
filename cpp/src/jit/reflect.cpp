@@ -4,6 +4,7 @@
  */
 
 #include <cudf/column/column_child_offsets.hpp>
+#include <cudf/lists/list_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -47,9 +48,16 @@ struct reflect_input_element_fn {
   }
 
   template <typename T>
+  std::string operator()(transform_input_spec const& spec, bool use_physical_type) const
+    requires(std::same_as<T, list_view>)
+  {
+    return "cudf::list_element";
+  }
+
+  template <typename T>
   std::string operator()(transform_input_spec const& spec, bool) const
     requires(!is_fixed_width<T>() && !std::same_as<T, string_view> &&
-             !std::same_as<T, dictionary32>)
+             !std::same_as<T, dictionary32> && !std::same_as<T, list_view>)
   {
     CUDF_FAIL(std::format("Unsupported input element type for JIT input: {}",
                           type_to_name(data_type{spec.type})),
@@ -72,8 +80,7 @@ struct reflect_output_element_fn {
   std::string operator()(transform_output_spec const& spec, bool use_physical_type) const
     requires(std::same_as<T, string_view>)
   {
-    return spec.has_string_offsets ? "cudf::mutable_string_view"
-                                   : "cudf::repr_element<cudf::string_view>";
+    return spec.has_offsets ? "cudf::mutable_string_view" : "cudf::repr_element<cudf::string_view>";
   }
 
   template <typename T>
@@ -87,9 +94,16 @@ struct reflect_output_element_fn {
   }
 
   template <typename T>
+  std::string operator()(transform_output_spec const& spec, bool use_physical_type) const
+    requires(std::same_as<T, list_view>)
+  {
+    return "cudf::mutable_list_element";
+  }
+
+  template <typename T>
   std::string operator()(transform_output_spec const& spec, bool) const
     requires(!is_fixed_width<T>() && !std::same_as<T, string_view> &&
-             !std::same_as<T, dictionary32>)
+             !std::same_as<T, dictionary32> && !std::same_as<T, list_view>)
   {
     CUDF_FAIL(std::format("Unsupported output element type for JIT output: {}",
                           type_to_name(data_type{spec.type})),
@@ -114,9 +128,16 @@ struct reflect_input_value_fn {
   }
 
   template <typename T>
+  std::string operator()(transform_input_spec const& spec, bool use_physical_type) const
+    requires(std::same_as<T, list_view>)
+  {
+    return "cudf::list_element";
+  }
+
+  template <typename T>
   std::string operator()(transform_input_spec const& spec, bool) const
     requires(!is_fixed_width<T>() && !std::same_as<T, string_view> &&
-             !std::same_as<T, dictionary32>)
+             !std::same_as<T, dictionary32> && !std::same_as<T, list_view>)
   {
     CUDF_FAIL(std::format("Unsupported input value type for JIT input: {}",
                           type_to_name(data_type{spec.type})),
@@ -137,12 +158,19 @@ struct reflect_output_value_fn {
   std::string operator()(transform_output_spec const& spec, bool use_physical_type) const
     requires(std::same_as<T, string_view>)
   {
-    return spec.has_string_offsets ? "cudf::mutable_string_view" : "cudf::string_view";
+    return spec.has_offsets ? "cudf::mutable_string_view" : "cudf::string_view";
+  }
+
+  template <typename T>
+  std::string operator()(transform_output_spec const& spec, bool use_physical_type) const
+    requires(std::same_as<T, list_view>)
+  {
+    return "cudf::mutable_list_element";
   }
 
   template <typename T>
   std::string operator()(transform_output_spec const& spec, bool) const
-    requires(!is_fixed_width<T>() && !std::same_as<T, string_view>)
+    requires(!is_fixed_width<T>() && !std::same_as<T, string_view> && !std::same_as<T, list_view>)
   {
     CUDF_FAIL(std::format("Unsupported output value type for JIT output: {}",
                           type_to_name(data_type{spec.type})),
@@ -232,7 +260,7 @@ column_view as_column_view(column_view const& column) { return column; }
 transform_input_spec make_input_spec(column_view const& column, bool is_scalar)
 {
   transform_input_spec result{.type = column.type().id(), .is_scalar = is_scalar};
-  if (is_dictionary(column.type())) {
+  if (is_dictionary(column.type()) || column.type().id() == type_id::LIST) {
     for (size_type i = 0; i < column.num_children(); ++i) {
       result.children.push_back(make_input_spec(column.child(i), false));
     }
@@ -277,12 +305,19 @@ transform_output_spec make_output_spec(string_views_column const&)
   return {.type = type_id::STRING};
 }
 
+transform_output_spec make_output_spec(mutable_lists_column const& output)
+{
+  return {
+    .type        = type_id::LIST,
+    .has_offsets = true,
+    .children    = {{.type = type_id::INT32}, {.type = output._col->view().child(1).type().id()}}};
+}
+
 transform_output_spec make_output_spec(mutable_strings_column const& output)
 {
   auto offsets = output._col->view().child(strings_column_view::offsets_column_index);
-  return {.type               = type_id::STRING,
-          .has_string_offsets = true,
-          .children           = {{.type = offsets.type().id()}}};
+  return {
+    .type = type_id::STRING, .has_offsets = true, .children = {{.type = offsets.type().id()}}};
 }
 
 }  // namespace
@@ -298,20 +333,24 @@ std::vector<transform_output_spec> make_output_specs(std::span<output_column con
 
 std::vector<transform_output_spec> make_output_specs(
   std::span<transform_output const> outputs,
-  std::span<std::unique_ptr<column> const> string_offsets)
+  std::span<std::unique_ptr<column> const> output_offsets)
 {
-  CUDF_EXPECTS(string_offsets.empty() || string_offsets.size() == outputs.size(),
+  CUDF_EXPECTS(output_offsets.empty() || output_offsets.size() == outputs.size(),
                "Number of output offsets must be empty or match the number of outputs",
                std::invalid_argument);
 
   std::vector<transform_output_spec> result;
   for (size_t i = 0; i < outputs.size(); ++i) {
-    auto has_string_offsets = !string_offsets.empty() && string_offsets[i] != nullptr;
-    transform_output_spec spec{.type               = outputs[i].type.id(),
-                               .nullability        = outputs[i].nullability,
-                               .has_string_offsets = has_string_offsets};
-    if (spec.type == type_id::STRING && spec.has_string_offsets) {
-      spec.children.push_back({.type = string_offsets[i]->type().id()});
+    auto has_offsets = !output_offsets.empty() && output_offsets[i] != nullptr;
+    transform_output_spec spec{.type        = outputs[i].type.id(),
+                               .nullability = outputs[i].nullability,
+                               .has_offsets = has_offsets};
+    if (spec.type == type_id::LIST) {
+      for (auto const& child : outputs[i].children) {
+        spec.children.push_back({.type = child.type.id()});
+      }
+    } else if (spec.type == type_id::STRING && spec.has_offsets) {
+      spec.children.push_back({.type = output_offsets[i]->type().id()});
     }
     result.push_back(std::move(spec));
   }
