@@ -53,6 +53,7 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/frame/select_test.py::test_select_boolean_cols": "NVIDIA/cudf#19421: selecting boolean columns raises a length-mismatch error.",
     "tests/frame/select_test.py::test_select_boolean_cols_multi_group_by": "NVIDIA/cudf#19421: selecting boolean columns raises a length-mismatch error.",
     "tests/frame/top_k_test.py::test_top_k[pandas]": "cudf.pandas top_k returns rows in a different order.",
+    "tests/no_imports_test.py::test_pandas": "pandas 3.1 imports pyarrow when constructing a DataFrame, but the test asserts pyarrow is not imported.",
     "tests/series_only/from_iterable_test.py::test_series_from_iterable[polars-cudf.pandas.fast_slow_proxy._FunctionProxy-Float64]": "cudf.pandas Series constructor rejects nullable/pyarrow-backed arrays produced via the fast-slow proxy.",
     "tests/series_only/from_iterable_test.py::test_series_from_iterable[polars-cudf.pandas.fast_slow_proxy._FunctionProxy-Int32]": "cudf.pandas Series constructor rejects nullable/pyarrow-backed arrays produced via the fast-slow proxy.",
     "tests/series_only/from_iterable_test.py::test_series_from_iterable[polars-cudf.pandas.fast_slow_proxy._FunctionProxy-String]": "cudf.pandas Series constructor rejects nullable/pyarrow-backed arrays produced via the fast-slow proxy.",
