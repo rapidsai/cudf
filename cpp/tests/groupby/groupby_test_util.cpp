@@ -6,43 +6,17 @@
 #include "groupby_test_util.hpp"
 
 #include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
-
-namespace {
-
-std::unique_ptr<cudf::table> reorder_aggregation_values(cudf::column_view values,
-                                                        cudf::column_view group_order)
-{
-  if (group_order.size() == 0 || values.size() == group_order.size()) {
-    return cudf::gather(cudf::table_view{{values}}, group_order);
-  }
-
-  // Multiple quantiles produce a contiguous block of results for each key.
-  CUDF_EXPECTS(values.size() % group_order.size() == 0, "Unexpected aggregation result size");
-  auto const values_per_group   = values.size() / group_order.size();
-  auto const [groups, validity] = cudf::test::to_host<cudf::size_type>(group_order);
-  std::vector<cudf::size_type> indices;
-  indices.reserve(values.size());
-  for (auto group : groups) {
-    for (cudf::size_type value = 0; value < values_per_group; ++value) {
-      indices.push_back(group * values_per_group + value);
-    }
-  }
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> order(indices.begin(), indices.end());
-  return cudf::gather(cudf::table_view{{values}}, order);
-}
-
-}  // namespace
 
 void test_single_agg(cudf::column_view const& keys,
                      cudf::column_view const& values,
@@ -94,10 +68,16 @@ void test_single_agg(cudf::column_view const& keys,
 
     auto result = gb_obj.aggregate(requests, cudf::test::get_default_stream());
 
-    auto const sort_order  = cudf::sorted_order(result.first->view(), column_order, precedence);
-    auto const sorted_keys = cudf::gather(result.first->view(), *sort_order);
-    auto const sorted_vals =
-      reorder_aggregation_values(result.second[0].results[0]->view(), *sort_order);
+    // Group order is unspecified. Some aggregations, like multiple quantiles, produce a contiguous
+    // block of values for each key, so sort the values by their repeated keys.
+    auto const result_keys = result.first->view();
+    auto const result_vals = result.second[0].results[0]->view();
+    auto const per_key =
+      result_keys.num_rows() == 0 ? 1 : result_vals.size() / result_keys.num_rows();
+    auto const repeated_keys = cudf::repeat(result_keys, per_key);
+    auto const sorted_vals   = cudf::stable_sort_by_key(
+      cudf::table_view{{result_vals}}, repeated_keys->view(), column_order, precedence);
+    auto const sorted_keys = cudf::sort(result_keys, column_order, precedence);
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(*sorted_expect_keys, *sorted_keys);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sorted_expect_vals->get_column(0),

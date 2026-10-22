@@ -369,6 +369,12 @@ TEST_F(groupby_cache_test, duplicate_agggregations)
   requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
   requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
+  // reductions only
+  EXPECT_NO_THROW(gb_obj.aggregate(requests));
+
+  // with a specialized aggregation
+  requests[0].aggregations.push_back(
+    cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
   EXPECT_NO_THROW(gb_obj.aggregate(requests));
 }
 
@@ -393,6 +399,12 @@ TEST_F(groupby_cache_test, duplicate_columns)
   requests[1].values = vals;
   requests[1].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
+  // reductions only
+  EXPECT_NO_THROW(gb_obj.aggregate(requests));
+
+  // with a specialized aggregation
+  requests[0].aggregations.push_back(
+    cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
   EXPECT_NO_THROW(gb_obj.aggregate(requests));
 }
 
