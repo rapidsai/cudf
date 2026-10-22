@@ -709,7 +709,7 @@ files:
     output: none
     matrix:
       cuda: ["12.9", "13.3"]
-      pandas_compat_version: ["3.0"]
+      pandas_compat_version: ["3.0", "3.1"]
     includes:
       - test_cudf_pandas_compat
   test_cudf_polars_compat:
@@ -1056,7 +1056,7 @@ dependencies:
       - output_types: [conda, requirements, constraints, pyproject]
         packages:
           - fsspec>=0.6.0
-          - &pandas pandas>=3.0.0,<3.1.0
+          - &pandas pandas>=3.0.0,<3.2.0
   run_libcudf:
     common:
       - output_types: [requirements, pyproject]
@@ -1758,7 +1758,7 @@ dependencies:
           - openpyxl
           - pyarrow
           - pyreadstat
-          - pytest'
+          - pytest
           # Used in cudf/ci/cudf_pandas_scripts/pandas-tests/run.sh
           - pytest-reportlog
           - pytest-xdist
@@ -1851,7 +1851,12 @@ dependencies:
               pandas_compat_version: "3.0"
             packages:
               - numpy>=2.0,<3.0
-              - *pandas
+              - pandas==3.0.*
+          - matrix:
+              pandas_compat_version: "3.1"
+            packages:
+              - numpy>=2.0,<3.0
+              - pandas==3.1.*
           - matrix:
             packages:
   test_cudf_polars_compat:

@@ -82,7 +82,7 @@ dependencies:
 - odfpy
 - openpyxl
 - packaging
-- pandas>=3.0.0,<3.1.0
+- pandas>=3.0.0,<3.2.0
 - pandoc
 - polars>=2.0,<2.1
 - pre-commit
@@ -92,7 +92,7 @@ dependencies:
 - pyqt
 - pyreadstat
 - pytables
-- pytest'
+- pytest
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov
