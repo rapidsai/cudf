@@ -32,7 +32,7 @@ def deletion_mask(
     lake_options: LakeScanOptions,
     *,
     stream: Stream,
-) -> Column | None:
+) -> Column:
     """
     Build the mask of rows a lake scan keeps.
 
@@ -49,8 +49,7 @@ def deletion_mask(
 
     Returns
     -------
-    Boolean column that is true for the rows to keep, or ``None`` when
-    nothing is deleted.
+    Boolean column that is true for the rows to keep.
     """
     positions: list[plc.Column] = []
     puffin_cache: dict[str, dict[str, pa.ChunkedArray]] = {}
@@ -82,8 +81,6 @@ def deletion_mask(
             )
             positions.append(plc.Column.from_arrow(deleted.to_arrow(), stream=stream))
         offset += num_rows
-    if not positions:
-        return None
     (mask,) = plc.copying.scatter(
         [
             plc.Scalar.from_py(
@@ -146,8 +143,6 @@ def apply_deletions(
     The frame without the deleted rows.
     """
     mask = deletion_mask(paths, rows_per_path, lake_options, stream=stream)
-    if mask is None:
-        return df
     if not df.columns:
         # Preserve the row counts
         kept_count = plc.stream_compaction.apply_retention_mask(
@@ -189,7 +184,6 @@ def _iceberg_positions(
                 PuffinFile(Path(puffin).read_bytes())
             )
         }
-    vector = puffin_cache[puffin].get(path)
-    if vector is None:  # pragma: no cover; polars passes covering Puffin files
-        return None
-    return plc.Column.from_arrow(vector.cast("int64"), stream=stream)
+    return plc.Column.from_arrow(
+        puffin_cache[puffin][path].cast("int64"), stream=stream
+    )

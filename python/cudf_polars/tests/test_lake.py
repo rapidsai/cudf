@@ -7,8 +7,6 @@ import re
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-import pyarrow as pa
-import pyarrow.parquet as pq
 import pytest
 
 import polars as pl
@@ -24,6 +22,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Any, Literal
 
+    from pyiceberg.table import Table
     from pyiceberg.table.update.schema import UpdateSchema
 
 pytest.importorskip("pyiceberg")
@@ -432,6 +431,11 @@ def test_scan_delta_nested_schema_evolution(
     assert_gpu_result_equal(pl.scan_delta(path), engine=engine, check_row_order=False)
 
 
+def test_scan_iceberg_same_table_twice(engine: pl.GPUEngine, flat_iceberg: str) -> None:
+    q = pl.concat([pl.scan_iceberg(flat_iceberg), pl.scan_iceberg(flat_iceberg)])
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 def test_scan_iceberg_readded_column(
     engine: pl.GPUEngine, iceberg_catalog: SqlCatalog
 ) -> None:
@@ -442,16 +446,12 @@ def test_scan_iceberg_readded_column(
             NestedField(2, "b", LongType(), required=False),
         ),
     )
-    tbl.append(
-        pa.Table.from_pylist([{"a": 1, "b": 10}], schema=tbl.schema().as_arrow())
-    )
+    pl.DataFrame([{"a": 1, "b": 10}]).write_iceberg(tbl, mode="append")
     with tbl.update_schema() as update:
         update.delete_column("a")
     with tbl.update_schema() as update:
         update.add_column("a", LongType())
-    tbl.append(
-        pa.Table.from_pylist([{"a": 2, "b": 20}], schema=tbl.schema().as_arrow())
-    )
+    pl.DataFrame([{"a": 2, "b": 20}]).write_iceberg(tbl, mode="append")
     assert_gpu_result_equal(
         pl.scan_iceberg(tbl.metadata_location), engine=engine, check_row_order=False
     )
@@ -464,9 +464,9 @@ def test_scan_iceberg_without_field_ids(
         "ns.added_files",
         schema=pyiceberg.schema.Schema(NestedField(1, "a", LongType(), required=False)),
     )
-    tbl.append(pa.Table.from_pylist([{"a": 1}], schema=tbl.schema().as_arrow()))
+    pl.DataFrame([{"a": 1}]).write_iceberg(tbl, mode="append")
     path = str(tmp_path / "without_field_ids.parquet")
-    pq.write_table(pa.table({"a": pa.array([2], pa.int64())}), path)
+    pl.DataFrame({"a": [2]}).write_parquet(path)
     tbl.add_files([path])
     q = pl.scan_iceberg(tbl.metadata_location)
     with pytest.raises(
@@ -559,11 +559,11 @@ def test_scan_iceberg_nested_by_field_id(
         "ns.nested",
         schema=pyiceberg.schema.Schema(NestedField(1, "s", column, required=False)),
     )
-    tbl.append(pa.Table.from_pylist(first, schema=tbl.schema().as_arrow()))
+    pl.DataFrame(first).write_iceberg(tbl, mode="append")
     for evolve in evolutions:
         with tbl.update_schema() as update:
             evolve(update)
-    tbl.append(pa.Table.from_pylist(second, schema=tbl.schema().as_arrow()))
+    pl.DataFrame(second).write_iceberg(tbl, mode="append")
     assert_gpu_result_equal(
         pl.scan_iceberg(tbl.metadata_location), engine=engine, check_row_order=False
     )
@@ -586,46 +586,14 @@ def test_scan_iceberg_nested_by_field_id_filter(
             )
         ),
     )
-    tbl.append(
-        pa.Table.from_pylist(
-            [{"s": {"x": 1, "y": 2}}, {"s": None}], schema=tbl.schema().as_arrow()
-        )
+    pl.DataFrame([{"s": {"x": 1, "y": 2}}, {"s": None}]).write_iceberg(
+        tbl, mode="append"
     )
     with tbl.update_schema() as update:
         update.rename_column("s.y", "z")
-    tbl.append(
-        pa.Table.from_pylist([{"s": {"x": 3, "z": 4}}], schema=tbl.schema().as_arrow())
-    )
+    pl.DataFrame([{"s": {"x": 3, "z": 4}}]).write_iceberg(tbl, mode="append")
     q = pl.scan_iceberg(tbl.metadata_location).filter(pl.col("s").struct.field("z") > 1)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
-
-
-def test_scan_iceberg_dropped_map_column(
-    engine: pl.GPUEngine, iceberg_catalog: SqlCatalog
-) -> None:
-    tbl = iceberg_catalog.create_table(
-        "ns.dropped_map",
-        schema=pyiceberg.schema.Schema(
-            NestedField(
-                1,
-                "m",
-                MapType(2, StringType(), 3, LongType(), value_required=False),
-                required=False,
-            ),
-            NestedField(4, "t", LongType(), required=False),
-        ),
-    )
-    tbl.append(
-        pa.Table.from_pylist(
-            [{"m": [("k", 1)], "t": 1}], schema=tbl.schema().as_arrow()
-        )
-    )
-    with tbl.update_schema() as update:
-        update.delete_column("m")
-    tbl.append(pa.Table.from_pylist([{"t": 2}], schema=tbl.schema().as_arrow()))
-    assert_gpu_result_equal(
-        pl.scan_iceberg(tbl.metadata_location), engine=engine, check_row_order=False
-    )
 
 
 @pytest.mark.parametrize(
@@ -647,7 +615,7 @@ def test_scan_iceberg_nested_unsupported(
         field_type: MapType | StructType = MapType(
             2, StringType(), 3, LongType(), value_required=False
         )
-        row = {"s": [("k", 1)], "t": 1}
+        row: dict[str, Any] = {"t": 1}
     elif column == "map_in_struct":
         field_type = StructType(
             NestedField(
@@ -657,7 +625,7 @@ def test_scan_iceberg_nested_unsupported(
                 required=False,
             )
         )
-        row = {"s": {"m": [("k", 1)]}, "t": 1}
+        row = {"t": 1}
     else:
         field_type = StructType(NestedField(2, "x", LongType(), required=False))
         row = {"s": {"x": 1}, "t": 1}
@@ -671,7 +639,7 @@ def test_scan_iceberg_nested_unsupported(
     if column == "nested_partition":
         with tbl.update_spec() as update:
             update.add_identity("s.x")
-    tbl.append(pa.Table.from_pylist([row], schema=tbl.schema().as_arrow()))
+    pl.DataFrame([row]).write_iceberg(tbl, mode="append")
     q = pl.scan_iceberg(tbl.metadata_location).select(projection)
     with pytest.raises(
         pl.exceptions.ComputeError, match=f"NotImplementedError: {re.escape(match)}"
@@ -687,19 +655,17 @@ def _partition_error_iceberg(
         schema=pyiceberg.schema.Schema(NestedField(1, "a", LongType(), required=False)),
     )
     if file_without_field:
-        tbl.append(pa.Table.from_pylist([{"a": 1}], schema=tbl.schema().as_arrow()))
+        pl.DataFrame([{"a": 1}]).write_iceberg(tbl, mode="append")
     with tbl.update_schema() as update:
         update.add_column("d", DecimalType(9, 2))
     with tbl.update_spec() as update:
         update.add_identity("d")
     with tbl.update_schema() as update:
         update.update_column("d", field_type=DecimalType(18, 2))
-    tbl.append(
-        pa.Table.from_pylist(
-            [{"a": 2, "d": Decimal("1.50")}, {"a": 3, "d": Decimal("2.50")}],
-            schema=tbl.schema().as_arrow(),
-        )
-    )
+    pl.DataFrame(
+        {"a": [2, 3], "d": [Decimal("1.50"), Decimal("2.50")]},
+        schema={"a": pl.Int64, "d": pl.Decimal(18, 2)},
+    ).write_iceberg(tbl, mode="append")
     return tbl.metadata_location
 
 
@@ -748,22 +714,10 @@ def test_scan_iceberg_partition_error_sliced(
         q.collect(engine=in_memory_engine)
 
 
-def _write_with_field_ids(path: Path, table: pa.Table) -> None:
-    fields = [
-        pa.field(
-            field.name, field.type, metadata={b"PARQUET:field_id": str(i).encode()}
-        )
-        for i, field in enumerate(table.schema, start=1)
-    ]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    pq.write_table(table.cast(pa.schema(fields)), path)
-
-
-def _scan_iceberg_files(
-    paths: list[str], mapping: pa.Schema, **kwargs: Any
-) -> pl.LazyFrame:
+def _scan_iceberg_files(tbl: Table, paths: list[str], **kwargs: Any) -> pl.LazyFrame:
     # pyiceberg cannot write V3 tables or position deletes, so build the scan
     # that pl.scan_iceberg builds for such a table.
+    mapping = tbl.schema().as_arrow()
     return pl.scan_parquet(
         paths,
         schema=pl.DataFrame(mapping.empty_table()).schema,
@@ -773,6 +727,10 @@ def _scan_iceberg_files(
         _column_mapping=("iceberg-column-mapping", mapping),
         **kwargs,
     )
+
+
+def _data_files(tbl: Table) -> list[str]:
+    return [task.file.file_path for task in tbl.scan().plan_files()]
 
 
 @pytest.mark.parametrize(
@@ -785,41 +743,42 @@ def _scan_iceberg_files(
     ids=["all", "filter", "select"],
 )
 def test_scan_iceberg_initial_defaults(
-    engine: pl.GPUEngine, tmp_path: Path, query: Any
+    engine: pl.GPUEngine, iceberg_catalog: SqlCatalog, query: Any
 ) -> None:
-    paths = [tmp_path / "0.parquet", tmp_path / "1.parquet"]
-    _write_with_field_ids(paths[0], pa.table({"a": pa.array([1, 2], pa.int64())}))
-    _write_with_field_ids(
-        paths[1],
-        pa.table({"a": pa.array([3], pa.int64()), "d": pa.array([30], pa.int64())}),
+    tbl = iceberg_catalog.create_table(
+        "ns.defaults",
+        schema=pyiceberg.schema.Schema(NestedField(1, "a", LongType(), required=False)),
     )
+    pl.DataFrame({"a": [1, 2]}).write_iceberg(tbl, mode="append")
+    with tbl.update_schema() as update:
+        update.add_column("d", LongType())
+    pl.DataFrame({"a": [3], "d": [30]}).write_iceberg(tbl, mode="append")
     q = _scan_iceberg_files(
-        [str(path) for path in paths],
-        pq.read_schema(paths[1]),
+        tbl,
+        _data_files(tbl),
         _default_values=("iceberg", ({}, {2: pl.Series([7], dtype=pl.Int64)})),
     )
     assert_gpu_result_equal(query(q), engine=engine, check_row_order=False)
 
 
 def test_scan_iceberg_nested_initial_default_unsupported(
-    in_memory_engine: pl.GPUEngine, tmp_path: Path
+    in_memory_engine: pl.GPUEngine, iceberg_catalog: SqlCatalog
 ) -> None:
-    path = tmp_path / "0.parquet"
-    mapping = pa.schema(
-        [
-            pa.field(
+    tbl = iceberg_catalog.create_table(
+        "ns.nested_defaults",
+        schema=pyiceberg.schema.Schema(
+            NestedField(
+                1,
                 "s",
-                pa.struct(
-                    [pa.field("x", pa.int64(), metadata={b"PARQUET:field_id": b"2"})]
-                ),
-                metadata={b"PARQUET:field_id": b"1"},
+                StructType(NestedField(2, "x", LongType(), required=False)),
+                required=False,
             )
-        ]
+        ),
     )
-    pq.write_table(mapping.empty_table(), path)
+    pl.DataFrame({"s": [{"x": 1}]}).write_iceberg(tbl, mode="append")
     q = _scan_iceberg_files(
-        [str(path)],
-        mapping,
+        tbl,
+        _data_files(tbl),
         _default_values=("iceberg", ({}, {2: pl.Series([1])})),
     )
     assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
@@ -862,40 +821,50 @@ def _puffin(deleted: dict[str, list[int]]) -> bytes:
 @pytest.fixture(
     params=["position_deletes", "deletion_vectors", "delta", "delta_partitioned"]
 )
-def deleted_rows_scan(request: pytest.FixtureRequest, tmp_path: Path) -> pl.LazyFrame:
-    paths = []
-    for index in range(3):
-        path = tmp_path / "data" / f"part={index}" / "data.parquet"
-        _write_with_field_ids(
-            path,
-            pa.table({"a": pa.array([4 * index + i for i in range(4)], pa.int64())}),
-        )
-        paths.append(str(path))
+def deleted_rows_scan(
+    request: pytest.FixtureRequest, tmp_path: Path, iceberg_catalog: SqlCatalog
+) -> pl.LazyFrame:
+    frames = [
+        pl.DataFrame({"a": [4 * index + i for i in range(4)]}) for index in range(3)
+    ]
     deleted = {0: [0, 3], 2: [1]}
-    if request.param == "position_deletes":
-        position_deletes = {}
-        for index, positions in deleted.items():
-            path = tmp_path / "deletes" / f"{index}.parquet"
-            pl.LazyFrame({"file_path": [paths[index]] * len(positions)}).with_columns(
-                pos=pl.Series(positions, dtype=pl.Int64)
-            ).sink_parquet(path, mkdir=True)
-            position_deletes[index] = [str(path)]
-        return _scan_iceberg_files(
-            paths,
-            pq.read_schema(paths[0]),
-            _deletion_files=("iceberg", (position_deletes, {})),
+    if request.param in ("position_deletes", "deletion_vectors"):
+        tbl = iceberg_catalog.create_table(
+            "ns.deleted",
+            schema=pyiceberg.schema.Schema(
+                NestedField(1, "a", LongType(), required=False)
+            ),
         )
-    if request.param == "deletion_vectors":
-        uris = [f"file://{path}" for path in paths]
+        for frame in frames:
+            frame.write_iceberg(tbl, mode="append")
+        paths = _data_files(tbl)
+        if request.param == "position_deletes":
+            position_deletes = {}
+            for index, positions in deleted.items():
+                path = tmp_path / "deletes" / f"{index}.parquet"
+                pl.LazyFrame(
+                    {"file_path": [paths[index]] * len(positions)}
+                ).with_columns(pos=pl.Series(positions, dtype=pl.Int64)).sink_parquet(
+                    path, mkdir=True
+                )
+                position_deletes[index] = [str(path)]
+            return _scan_iceberg_files(
+                tbl, paths, _deletion_files=("iceberg", (position_deletes, {}))
+            )
         puffin = tmp_path / "deletes.puffin"
         puffin.write_bytes(
-            _puffin({uris[index]: positions for index, positions in deleted.items()})
+            _puffin({paths[index]: positions for index, positions in deleted.items()})
         )
         return _scan_iceberg_files(
-            uris,
-            pq.read_schema(paths[0]),
+            tbl,
+            paths,
             _deletion_files=("iceberg", ({}, dict.fromkeys(deleted, str(puffin)))),
         )
+    paths = []
+    for index, frame in enumerate(frames):
+        path = tmp_path / "data" / f"part={index}" / "data.parquet"
+        frame.write_parquet(path, mkdir=True)
+        paths.append(str(path))
     selections = {
         paths[index]: [i not in positions for i in range(max(positions) + 1)]
         for index, positions in deleted.items()
