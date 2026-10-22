@@ -12,7 +12,9 @@
 #include <BS_thread_pool.hpp>
 
 #include <cstddef>
+#include <future>
 #include <memory>
+#include <vector>
 
 namespace cudf::detail {
 
@@ -104,6 +106,49 @@ class CUDF_EXPORT hierarchical_thread_pool {
    * @brief Get the number of threads in this pool.
    */
   [[nodiscard]] std::size_t get_thread_count() const { return pool_.get_thread_count(); }
+};
+
+/**
+ * @brief Waits for every submitted task in a group before the enclosing scope unwinds.
+ *
+ * Futures returned by `hierarchical_thread_pool::submit_task` do not wait for their task when
+ * destroyed. If submitting or collecting a group of tasks throws, tasks that are still running may
+ * access objects that unwinding has already destroyed. The destructor of this guard calls `get()`
+ * on every future in `futures` that is still valid and discards any exception it throws, so the
+ * exception that caused the unwinding propagates unchanged. On the normal path every future has
+ * already been retrieved and the destructor does nothing.
+ *
+ * Local variables are destroyed in reverse order of declaration, so a local declared after the
+ * guard is destroyed before the guard waits for the tasks. Every object that a task references
+ * must be declared before the futures vector, or be owned by the caller.
+ *
+ * @tparam T Result type of the futures
+ */
+template <typename T>
+class future_drain_guard {
+ public:
+  /**
+   * @brief Construct a guard over a vector of futures.
+   *
+   * @param futures Futures to wait on when the guard is destroyed
+   */
+  explicit future_drain_guard(std::vector<std::future<T>>& futures) noexcept : futures_{futures} {}
+
+  future_drain_guard(future_drain_guard const&)            = delete;
+  future_drain_guard& operator=(future_drain_guard const&) = delete;
+
+  ~future_drain_guard() noexcept
+  {
+    for (auto& future : futures_) {
+      try {
+        if (future.valid()) { future.get(); }
+      } catch (...) {
+      }
+    }
+  }
+
+ private:
+  std::vector<std::future<T>>& futures_;
 };
 
 /**
