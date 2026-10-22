@@ -1304,6 +1304,11 @@ dependencies:
           # uv and uv-build available (with --no-build-isolation)
           - uv
           - uv-build
+      - output_types: conda
+        packages:
+          # mkl 2026.2.0 is missing libmkl_gf_lp64, which aborts numpy imports
+          # https://github.com/conda-forge/intel_repack-feedstock/issues/145
+          - mkl<2026.2
   depends_on_libcudf:
     common:
       - output_types: conda
