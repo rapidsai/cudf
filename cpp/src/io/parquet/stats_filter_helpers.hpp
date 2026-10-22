@@ -239,7 +239,7 @@ class stats_caster_base {
 
     /**
      * @brief Sets whether a column chunk or page holds any `NaN`, or null if its NaN count is
-     * unknown and so `NaN`s may be present
+     * unknown or invalid (negative) and so `NaN`s may be present
      *
      * @param index Row of the column chunk or page in this column
      * @param nan_count Optional NaN count from the statistics or the column index
@@ -247,7 +247,7 @@ class stats_caster_base {
     void inline set_has_nan(size_type index, std::optional<int64_t> nan_count)
       requires(std::is_same_v<T, bool>)
     {
-      if (nan_count.has_value()) {
+      if (nan_count.has_value() and nan_count.value() >= 0) {
         val[index] = nan_count.value() > 0;
       } else {
         set_index(index, std::nullopt, {});
