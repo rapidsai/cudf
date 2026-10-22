@@ -922,6 +922,7 @@ add_library(
   src/jit/cache.cpp
   src/jit/helpers.cpp
   src/jit/parser.cpp
+  src/jit/reflect.cpp
   src/jit/row_ir.cpp
   src/jit/util.cpp
   src/join/conditional_join.cu
