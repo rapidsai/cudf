@@ -218,9 +218,6 @@ struct aggregate_result_functor;
  * framework through a set of ``get*`` accessors, as well as calling other built-in groupby
  * aggregations through the ``compute_aggregation`` function.
  *
- * @note Grouping metadata and value views are shared with the built-in aggregations. Values are
- * sorted within each group only when requested.
- *
  * Example:
  * @code{.cpp}
  * struct my_udf_aggregation : cudf::groupby_host_udf {
