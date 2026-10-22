@@ -121,8 +121,7 @@ void resize_scratch_buffer(cuda::device_buffer<T>& storage,
                            cuda::stream_ref stream)
 {
   if (new_size > storage.size()) {
-    cuda::device_buffer<T> replacement{
-      stream, storage.get_memory_resource(), new_size, cuda::no_init};
+    cuda::device_buffer<T> replacement{stream, storage.memory_resource(), new_size, cuda::no_init};
     if (!elements.empty()) {
       CUDF_CUDA_TRY(cudf::detail::memcpy_async(
         replacement.data(), elements.data(), elements.size_bytes(), stream));
