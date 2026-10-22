@@ -567,8 +567,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.is_enabled_use_jit_filter(),
              options.is_enabled_case_sensitive_names(),
              options.is_enabled_prepend_source_index_column(),
-             options.is_enabled_prepend_row_index_column(),
-             options.is_enabled_output_dict_columns()},
+             options.is_enabled_prepend_row_index_column()},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
@@ -618,18 +617,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
       return cudf::io::detail::inline_column_buffer::empty_like(buff);
     });
 
-  auto const& dictionary32_columns = options.get_dictionary32_columns();
-  auto dictionary32_column_names =
-    make_column_path_set(_options.case_sensitive_names, dictionary32_columns.size());
-  dictionary32_column_names.insert(dictionary32_columns.begin(), dictionary32_columns.end());
-  _output_dict_column_mask.resize(_output_buffers.size());
-  std::transform(_output_buffers.begin(),
-                 _output_buffers.end(),
-                 _output_dict_column_mask.begin(),
-                 [&](auto const& buff) {
-                   return _options.output_dict_columns or
-                          dictionary32_column_names.contains(buff.name);
-                 });
+  initialize_output_dict_column_mask(options);
 
   // The direct parquet-dict → DICTIONARY32 transcode fast path only supports single-pass,
   // non-chunked reads.
@@ -936,6 +924,37 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   return std::nullopt;
 }
 
+void reader_impl::initialize_output_dict_column_mask(parquet_reader_options const& options)
+{
+  auto const output_all_columns    = options.is_enabled_output_dict_columns();
+  auto const& dictionary32_columns = options.get_dictionary32_columns();
+  auto dictionary32_column_names =
+    make_column_path_set(_options.case_sensitive_names, dictionary32_columns.size());
+  dictionary32_column_names.insert(dictionary32_columns.begin(), dictionary32_columns.end());
+  _output_dict_column_mask.resize(_output_buffers.size());
+  std::transform(_output_buffers.begin(),
+                 _output_buffers.end(),
+                 _output_dict_column_mask.begin(),
+                 [&](auto const& buff) {
+                   return output_all_columns or dictionary32_column_names.contains(buff.name);
+                 });
+}
+
+std::unique_ptr<table> reader_impl::encode_output_dict_columns(
+  std::unique_ptr<table> tbl, std::size_t num_prepended_columns) const
+{
+  if (not has_output_dict_columns()) { return tbl; }
+  auto columns = tbl->release();
+  for (auto i = num_prepended_columns; i < columns.size(); ++i) {
+    auto& col = columns[i];
+    if (col and col->type().id() == type_id::STRING and
+        _output_dict_column_mask[i - num_prepended_columns]) {
+      col = cudf::dictionary::detail::encode(col->view(), data_type{type_id::INT32}, _stream, _mr);
+    }
+  }
+  return std::make_unique<table>(std::move(columns));
+}
+
 void reader_impl::apply_decimal_width_cast(std::vector<std::unique_ptr<column>>& out_columns)
 {
   // TODO: Instead of casting the columns after the read is done, we should
@@ -998,23 +1017,9 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   // them when the fast path was disabled (e.g. under a filter). This is applied to the FINAL output
   // table below -- after any filter is evaluated -- so the filter still operates on STRING columns
   // and the dictionary is built over only the surviving rows.
-  auto const encode_output_dict_columns =
-    [&](std::unique_ptr<table> tbl) -> std::unique_ptr<table> {
-    if (not has_output_dict_columns()) { return tbl; }
-    auto const num_prepended_columns =
-      static_cast<std::size_t>(_options.prepend_source_index_column) +
-      static_cast<std::size_t>(_options.prepend_row_index_column);
-    auto columns = tbl->release();
-    for (auto i = num_prepended_columns; i < columns.size(); ++i) {
-      auto& col = columns[i];
-      if (col and col->type().id() == type_id::STRING and
-          _output_dict_column_mask[i - num_prepended_columns]) {
-        col =
-          cudf::dictionary::detail::encode(col->view(), data_type{type_id::INT32}, _stream, _mr);
-      }
-    }
-    return std::make_unique<table>(std::move(columns));
-  };
+  auto const num_prepended_columns =
+    static_cast<std::size_t>(_options.prepend_source_index_column) +
+    static_cast<std::size_t>(_options.prepend_row_index_column);
 
   if (!_output_metadata) {
     populate_metadata(out_metadata);
@@ -1084,7 +1089,8 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
       // Exclude columns present in filter only in output
       auto output_table = cudf::detail::apply_mask(
         only_output, *predicate, cudf::detail::mask_type::RETENTION, _stream, _mr);
-      return {encode_output_dict_columns(std::move(output_table)), std::move(out_metadata)};
+      return {encode_output_dict_columns(std::move(output_table), num_prepended_columns),
+              std::move(out_metadata)};
     } else {
       auto predicate =
         cudf::compute_column_jit(read_table->view(), final_filter_expr.value().get(), _stream, _mr);
@@ -1093,10 +1099,12 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
       // Exclude columns present in filter only in output
       auto output_table = cudf::apply_retention_mask(only_output, predicate->view(), _stream, _mr);
 
-      return {encode_output_dict_columns(std::move(output_table)), std::move(out_metadata)};
+      return {encode_output_dict_columns(std::move(output_table), num_prepended_columns),
+              std::move(out_metadata)};
     }
   }
-  return {encode_output_dict_columns(std::make_unique<table>(std::move(out_columns))),
+  return {encode_output_dict_columns(std::make_unique<table>(std::move(out_columns)),
+                                     num_prepended_columns),
           std::move(out_metadata)};
 }
 

@@ -223,6 +223,26 @@ class reader_impl {
   }
 
   /**
+   * @brief Sets which output buffers should be output as DICTIONARY32 columns.
+   *
+   * Must be called after `_output_buffers` and `_options.case_sensitive_names` are set.
+   *
+   * @param options The reader options
+   */
+  void initialize_output_dict_column_mask(parquet_reader_options const& options);
+
+  /**
+   * @brief Encodes the selected flat STRING columns of a table as DICTIONARY32 columns.
+   *
+   * @param tbl The table whose columns, after the first `num_prepended_columns`, correspond to
+   * `_output_buffers`
+   * @param num_prepended_columns Number of synthesized columns preceding the output buffer columns
+   * @return The table with the selected flat STRING columns encoded as DICTIONARY32 columns
+   */
+  [[nodiscard]] std::unique_ptr<table> encode_output_dict_columns(
+    std::unique_ptr<table> tbl, std::size_t num_prepended_columns) const;
+
+  /**
    * @brief Copies over the relevant page mask information for the subpass
    */
   void set_subpass_page_mask();
@@ -549,8 +569,6 @@ class reader_impl {
     bool prepend_source_index_column = false;
     // Whether to prepend the file-local row index column to the output
     bool prepend_row_index_column = false;
-    // Whether to try outputting DICTIONARY32 columns for fully dict-encoded string columns
-    bool output_dict_columns = false;
   } _options;
 
   // Converts the input filter to AST output filter.
