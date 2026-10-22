@@ -1740,19 +1740,6 @@ def dictionary32_source(tmp_path) -> os.PathLike[str]:
     return path
 
 
-def _cast_to_dictionary32(table: pa.Table, names: list[str]) -> pa.Table:
-    return table.cast(
-        pa.schema(
-            [
-                field.with_type(pa.dictionary(pa.int32(), field.type))
-                if field.name in names
-                else field
-                for field in table.schema
-            ]
-        )
-    )
-
-
 def test_read_parquet_dictionary32_columns_default(
     dictionary32_source,
 ) -> None:
@@ -1779,8 +1766,13 @@ def test_read_parquet_output_dict_columns(
 
     assert options.is_enabled_output_dict_columns() is True
 
+    expect = read_table(dictionary32_source)
+    dictionary32_type = pa.dictionary(pa.int32(), pa.string())
+    expect = expect.set_column(
+        1, "a", expect["a"].cast(dictionary32_type)
+    ).set_column(2, "b", expect["b"].cast(dictionary32_type))
     assert_table_and_meta_eq(
-        _cast_to_dictionary32(read_table(dictionary32_source), ["a", "b"]),
+        expect,
         plc.io.parquet.read_parquet(options),
         check_field_nullability=False,
     )
@@ -1801,8 +1793,12 @@ def test_read_parquet_dictionary32_columns(
 
     assert options.get_dictionary32_columns() == ["b", "missing"]
 
+    expect = read_table(dictionary32_source)
+    expect = expect.set_column(
+        2, "b", expect["b"].cast(pa.dictionary(pa.int32(), pa.string()))
+    )
     assert_table_and_meta_eq(
-        _cast_to_dictionary32(read_table(dictionary32_source), ["b"]),
+        expect,
         plc.io.parquet.read_parquet(options),
         check_field_nullability=False,
     )
@@ -1820,8 +1816,12 @@ def test_chunked_parquet_reader_dictionary32_columns(
     )
     reader = plc.io.parquet.ChunkedParquetReader(options)
 
+    expect = read_table(dictionary32_source)
+    expect = expect.set_column(
+        1, "a", expect["a"].cast(pa.dictionary(pa.int32(), pa.string()))
+    )
     assert_table_and_meta_eq(
-        _cast_to_dictionary32(read_table(dictionary32_source), ["a"]),
+        expect,
         reader.read_chunk(),
         check_field_nullability=False,
     )
@@ -1851,11 +1851,14 @@ def test_read_parquet_dictionary32_columns_with_filter(
             "source_index": pa.array([0, 0, 0], type=pa.int32()),
             "key": pa.array([1, 2, 3], type=pa.int64()),
             "a": pa.array(["y", None, "x"]),
-            "b": pa.array(["foo", "foo", None]),
+            "b": pa.array(
+                ["foo", "foo", None],
+                type=pa.dictionary(pa.int32(), pa.string()),
+            ),
         }
     )
     assert_table_and_meta_eq(
-        _cast_to_dictionary32(expect, ["b"]),
+        expect,
         plc.io.parquet.read_parquet(options),
         check_field_nullability=False,
     )
