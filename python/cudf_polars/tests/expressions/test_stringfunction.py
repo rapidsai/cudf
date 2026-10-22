@@ -174,6 +174,26 @@ def test_contains_re_non_strict_libcudf_unsupported(engine: pl.GPUEngine, ldf):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
+@pytest.mark.parametrize(
+    "pattern",
+    ["(?s)special.*requests", "(?i)SPECIAL", "(?m)^requests$", "(?is)SPECIAL.*x"],
+)
+def test_contains_inline_regex_flags(engine: pl.GPUEngine, pattern):
+    lf = pl.LazyFrame(
+        {"a": ["no special requests", "special\nrequests", "plain", "x\nrequests\ny"]}
+    )
+    q = lf.select(pl.col("a").str.contains(pattern))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_like_dotall_sql(engine: pl.GPUEngine):
+    lf = pl.LazyFrame(
+        {"comment": ["no special requests", "special\nrequests", "plain"]}
+    )
+    q = lf.sql("SELECT * FROM self WHERE comment NOT LIKE '%special%requests%'")
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_contains_re_non_literal_raises(engine: pl.GPUEngine, ldf):
     q = ldf.select(pl.col("a").str.contains(pl.col("c"), literal=False))
 
@@ -484,7 +504,7 @@ def test_invalid_regex_raises():
         q.collect(engine=pl.GPUEngine(executor="in-memory", raise_on_fail=True))
 
 
-@pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)", ""])
+@pytest.mark.parametrize("pattern", ["a{1000}", "a(?i:B)", "(?s)", ""])
 def test_unsupported_regex_raises(engine: pl.GPUEngine, pattern):
     df = pl.LazyFrame({"a": ["abc"]})
 

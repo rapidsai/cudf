@@ -161,6 +161,12 @@ class StringFunction(Expr):
     # backslash via a back-reference replacement template.
     _ESCAPE_REGEX_PATTERN: ClassVar[str] = r"([#$&()*+\-.?\[\\\]\^{|}~])"
     _ESCAPE_REGEX_REPLACEMENT: ClassVar[str] = r"\\1"
+    _INLINE_REGEX_FLAGS: ClassVar[dict[str, plc.strings.regex_flags.RegexFlags]] = {
+        "i": plc.strings.regex_flags.RegexFlags.IGNORECASE,
+        "m": plc.strings.regex_flags.RegexFlags.MULTILINE,
+        "s": plc.strings.regex_flags.RegexFlags.DOTALL,
+    }
+    _LEADING_INLINE_FLAGS: ClassVar[re.Pattern[str]] = re.compile(r"^\(\?([ims]+)\)")
     __slots__ = ("_empty_regex", "_invalid_regex", "_regex_program", "name", "options")
     _non_child = ("dtype", "name", "options")
 
@@ -332,6 +338,12 @@ class StringFunction(Expr):
     ) -> plc.strings.regex_program.RegexProgram:
         if pattern == "":
             raise NotImplementedError("Empty regex pattern is not yet supported")
+        if match := StringFunction._LEADING_INLINE_FLAGS.match(pattern):
+            for flag in match.group(1):
+                flags |= StringFunction._INLINE_REGEX_FLAGS[flag]
+            pattern = pattern[match.end() :]
+            if pattern == "":
+                raise NotImplementedError("Empty regex pattern is not yet supported")
         try:
             return plc.strings.regex_program.RegexProgram.create(
                 pattern,
