@@ -33,10 +33,12 @@ struct grouped_rows;
  * 2. Group offsets: starting offsets of all groups in grouped key table
  * 3. Group rows: original row indices and scheduling metadata for direct reductions
  *
- * A request that the memoized grouping cannot serve, grouped rows or their input order within
- * each group, rebuilds it. A rebuild may change the group order and invalidates all spans and
- * references returned before, so every operation requests the grouping it needs before taking
- * any of them. A stable grouping serves every request and is never rebuilt.
+ * A grouping built without grouped rows is rebuilt when an operation needs them. The rebuild may
+ * change the group order and invalidates all spans and references returned before, so every
+ * operation requests the grouping it needs before taking any of them. Grouped rows built without
+ * input order within each group are reordered in place when an operation needs that order: the
+ * groups, their offsets, and their labels are kept, while spans of the grouped rows and the
+ * reduction scheduling are invalidated.
  */
 struct groupby_helper {
   /**
@@ -165,11 +167,15 @@ struct groupby_helper {
 
   /**
    * @brief Get grouped row indices without requiring input order within each group.
+   *
+   * The returned span is invalidated if a later request materializes stable row order.
    */
   device_span<size_type const> unordered_grouped_order(cuda::stream_ref stream);
 
   /**
    * @brief Get cached row indices, offsets, and scheduling arrays for direct reductions.
+   *
+   * The returned reference is invalidated if a later request materializes stable row order.
    */
   hash::grouped_rows const& reduction_groups(cuda::stream_ref stream);
 
@@ -216,12 +222,15 @@ struct groupby_helper {
    */
   device_span<size_type const> input_labels(cuda::stream_ref stream);
 
-  /// Build the grouping unless the memoized one already has the requested grouped rows and order.
-  /// A stable build keeps the group labels sorted alongside the rows when requested.
+  /// Materialize grouping metadata, optionally retaining grouped rows, their input order, and the
+  /// group labels sorted alongside them.
   void build_groups(bool need_grouped_rows,
                     bool stable_rows,
                     bool keep_labels,
                     cuda::stream_ref stream);
+
+  /// Materialize a stable row permutation only when an ordered operation needs it.
+  void make_stable(bool keep_labels, cuda::stream_ref stream);
 
   std::unique_ptr<cuda::device_buffer<size_type>>
     _input_labels;   ///< Labels in input order; excluded rows get num_groups

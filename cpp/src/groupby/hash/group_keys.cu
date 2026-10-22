@@ -212,26 +212,23 @@ stable_grouped_rows(size_type num_rows,
 
   cuda::device_buffer<size_type> ordered_labels(stream, labels_mr, num_rows, cuda::no_init);
   cuda::device_buffer<size_type> ordered_rows(stream, rows_mr, num_rows, cuda::no_init);
-  // Sort only the bits that the largest label can set.
   auto const end_bit =
     cuda::std::bit_width(static_cast<cuda::std::uint32_t>(filtered ? num_groups : num_groups - 1));
-  auto labels            = cub::DoubleBuffer<size_type>{input_labels.data(), ordered_labels.data()};
-  auto rows              = cub::DoubleBuffer<size_type>{input_rows.data(), ordered_rows.data()};
-  std::size_t temp_bytes = 0;
-  CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(
-    nullptr, temp_bytes, labels, rows, num_rows, 0, end_bit, stream.get()));
-  cuda::device_buffer<std::byte> temp(stream, temp_mr, temp_bytes, cuda::no_init);
-  CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(
-    temp.data(), temp_bytes, labels, rows, num_rows, 0, end_bit, stream.get()));
+  auto const sorted = stable_sort_group_rows({input_labels.data(), input_rows.data()},
+                                             {ordered_labels.data(), ordered_rows.data()},
+                                             num_rows,
+                                             end_bit,
+                                             stream,
+                                             mr);
   auto grouped_rows =
-    rows.Current() == input_rows.data() ? std::move(input_rows) : std::move(ordered_rows);
+    sorted.rows == input_rows.data() ? std::move(input_rows) : std::move(ordered_rows);
   if (filtered) {
     grouped_rows = cuda::device_buffer<size_type>{
       stream, mr.get_output_mr(), grouped_rows.data(), grouped_rows.data() + num_grouped_rows};
   }
   if (!keep_labels) { return {std::move(grouped_rows), std::nullopt}; }
   auto group_labels =
-    labels.Current() == input_labels.data() ? std::move(input_labels) : std::move(ordered_labels);
+    sorted.labels == input_labels.data() ? std::move(input_labels) : std::move(ordered_labels);
   if (filtered) {
     group_labels = cuda::device_buffer<size_type>{
       stream, mr.get_output_mr(), group_labels.data(), group_labels.data() + num_grouped_rows};
@@ -516,6 +513,24 @@ grouped_keys group_keys(table_view const& keys,
                     domain_capacity,
                     stream,
                     mr);
+}
+
+group_row_buffers stable_sort_group_rows(group_row_buffers input,
+                                         group_row_buffers alternate,
+                                         size_type num_rows,
+                                         int end_bit,
+                                         cuda::stream_ref stream,
+                                         cudf::memory_resources mr)
+{
+  auto labels            = cub::DoubleBuffer<size_type>{input.labels, alternate.labels};
+  auto rows              = cub::DoubleBuffer<size_type>{input.rows, alternate.rows};
+  std::size_t temp_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(
+    nullptr, temp_bytes, labels, rows, num_rows, 0, end_bit, stream.get()));
+  cuda::device_buffer<std::byte> temp(stream, mr.get_temporary_mr(), temp_bytes, cuda::no_init);
+  CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(
+    temp.data(), temp_bytes, labels, rows, num_rows, 0, end_bit, stream.get()));
+  return {labels.Current(), rows.Current()};
 }
 
 }  // namespace cudf::groupby::detail::hash

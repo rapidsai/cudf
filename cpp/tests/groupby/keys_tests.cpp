@@ -450,7 +450,7 @@ TEST_F(groupby_key_shape_test, CountsBeforeRowBasedRequests)
       }
     };
 
-    // A reduction rebuilds the grouping with rows, and an ordered aggregation with stable rows.
+    // A reduction rebuilds the grouping with rows, which an ordered aggregation reorders in place.
     cudf::groupby::groupby reused(keys, nulls);
     check(reused);
     check(reused, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
@@ -560,7 +560,7 @@ TEST_F(groupby_key_shape_test, StableGroupedRows)
         cudf::stable_sort_by_key(included->view(), included->select({0}), {}, {}, stream);
 
       cudf::groupby::groupby grouped(cudf::table_view{{keys}}, nulls);
-      // A reduction caches grouped rows in any order, so get_groups rebuilds them in input order.
+      // A reduction caches grouped rows in any order, which get_groups reorders in place.
       std::vector<cudf::groupby::aggregation_request> sums(1);
       sums[0].values = *values;
       sums[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
@@ -576,7 +576,9 @@ TEST_F(groupby_key_shape_test, StableGroupedRows)
 
       cudf::groupby::groupby presorted(expected->select({0}), nulls, cudf::sorted::YES);
       auto const expected_scan = scan(presorted, expected->get_column(1));
+      // The scan reorders the rows cached by a reduction and keeps the labels sorted with them.
       cudf::groupby::groupby hashed(cudf::table_view{{keys}}, nulls);
+      hashed.aggregate(sums, stream);
       auto const actual_scan = scan(hashed, *values);
       auto const sorted_scan =
         cudf::stable_sort_by_key(actual_scan->view(), actual_scan->select({0}), {}, {}, stream);
@@ -589,11 +591,14 @@ TEST_F(groupby_key_shape_test, StableGroupedRows)
   // A single group without excluded rows, and repeated keys with and without excluded rows.
   check(int32s{5, 5, 5});
   check(int32s{{2, 0, 1, 2, 0, 1, 2}, nulls_at({1, 4})});
-  // A large input sizes its table from an estimate, so the build counts rows by hash slot.
+  // Large inputs size their table from an estimate. Concurrent threads append the rows of both few
+  // large groups and many small groups in any order.
   constexpr cudf::size_type num_rows = (1 << 21) + 3;
-  auto const key_it =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 1000; });
-  check(int32s(key_it, key_it + num_rows, nulls_at_multiples_of(7)));
+  for (cudf::size_type const num_groups : {1000, 100000}) {
+    auto const key_it = cudf::detail::make_counting_transform_iterator(
+      0, [num_groups](auto i) { return i % num_groups; });
+    check(int32s(key_it, key_it + num_rows, nulls_at_multiples_of(7)));
+  }
 }
 
 template <typename T>

@@ -330,7 +330,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
                           }),
                "values and fill_value should have the same type.",
                cudf::data_type_error);
-  // Shifts need input order within each group, so materialize stable rows up front.
+  // Build the grouped rows before reading offsets, which a counts-only grouping rebuild changes.
   helper().grouped_order(false, stream);
   std::vector<std::unique_ptr<column>> results;
   auto const& group_offsets = helper().group_offsets(stream);

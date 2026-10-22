@@ -746,8 +746,8 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> detail::hash:
   cuda::stream_ref stream,
   cudf::memory_resources mr)
 {
-  // Establish the grouping every request needs before computing any result: stable rows when
-  // any request needs them, otherwise grouped rows for specialized aggregations.
+  // Build ordered rows directly when any request needs them, before metadata or unordered
+  // requests can materialize an intermediate permutation. Existing cached groups are reused.
   auto const any_agg = [&](auto predicate) {
     return std::ranges::any_of(requests, [&](auto const& request) {
       return std::ranges::any_of(request.aggregations,
@@ -759,6 +759,8 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> detail::hash:
   if (any_agg(detail::needs_stable_groups)) {
     helper.grouped_order(any_agg(detail::uses_group_labels), stream);
   } else if (has_specialized) {
+    // Specialized aggregations need grouped rows too. Establish their final group order before
+    // a preceding counts-only reduction can cache results using the same group indices.
     helper.unordered_grouped_order(stream);
   }
 
