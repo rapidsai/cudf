@@ -169,6 +169,32 @@ def test_true_div_with_decimals(engine: pl.GPUEngine):
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_sql_decimal_div(engine: pl.GPUEngine):
+    df = pl.LazyFrame(
+        {
+            "revenue": [Decimal("10.00"), Decimal("20.00")],
+            "total": [Decimal("40.00"), Decimal("50.00")],
+        },
+        schema={"revenue": pl.Decimal(15, 2), "total": pl.Decimal(15, 2)},
+    )
+    q = df.sql("SELECT revenue / total AS share FROM self")
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("scales", [(2, 2), (2, 4), (4, 2)])
+def test_sql_decimal_div_rounding_nulls(engine: pl.GPUEngine, scales):
+    left_scale, right_scale = scales
+    df = pl.LazyFrame(
+        {
+            "x": [Decimal("1"), Decimal("2"), Decimal("-1"), Decimal("5"), None],
+            "y": [Decimal("3"), Decimal("3"), Decimal("3"), None, Decimal("7")],
+        },
+        schema={"x": pl.Decimal(15, left_scale), "y": pl.Decimal(15, right_scale)},
+    )
+    q = df.sql("SELECT x / y AS share FROM self")
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_multiply_with_decimals(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
