@@ -20,7 +20,6 @@
 #include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/bit>
-#include <cuda/std/cstddef>
 #include <cuda/std/cstdint>
 #include <cuda/std/functional>
 #include <thrust/binary_search.h>
@@ -87,7 +86,7 @@ void stabilize_rows(hash::grouped_keys& groups,
 
   // Scattering the labels to their rows in grouped order writes all over the input, so every
   // write misses the cache once the input outgrows it. Sorting the rows by their 8 most
-  // significant bits first, a single radix pass, makes the scatter write one input range at a time.
+  // significant bits first makes the scatter write one input range at a time.
   auto const row_bits    = cuda::std::bit_width(static_cast<cuda::std::uint32_t>(num_rows - 1));
   auto const partitioned = hash::sort_pairs({groups.grouped_rows->data(), ordered_labels.data()},
                                             {ordered_rows.data(), input_labels.data()},
@@ -213,8 +212,8 @@ void groupby_helper::make_stable(bool keep_labels, cuda::stream_ref stream)
   if (_stable) { return; }
   // Rows cached by an unordered operation keep their groups and are reordered within them.
   // Scheduling contains spans into the current row buffer and hints derived from its order.
-  _reduction_groups.reset();
   if (static_cast<size_type>(_groups->key_indices.size()) < _num_keys) {
+    _reduction_groups.reset();
     stabilize_rows(*_groups, _num_keys, _group_labels, _keys.num_rows(), keep_labels, stream);
   }
   _stable = true;

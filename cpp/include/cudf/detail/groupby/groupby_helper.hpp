@@ -222,8 +222,8 @@ struct groupby_helper {
    */
   device_span<size_type const> input_labels(cuda::stream_ref stream);
 
-  /// Materialize grouping metadata, optionally retaining grouped rows, their input order, and the
-  /// group labels sorted alongside them.
+  /// Build the grouping unless one with the needed rows exists; `stable_rows` and `keep_labels`
+  /// apply only to a new build.
   void build_groups(bool need_grouped_rows,
                     bool stable_rows,
                     bool keep_labels,
