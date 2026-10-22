@@ -176,7 +176,13 @@ def test_contains_re_non_strict_libcudf_unsupported(engine: pl.GPUEngine, ldf):
 
 @pytest.mark.parametrize(
     "pattern",
-    ["(?s)special.*requests", "(?i)SPECIAL", "(?m)^requests$", "(?is)SPECIAL.*x"],
+    [
+        "(?s)special.*requests",
+        "(?i)SPECIAL",
+        "(?m)^requests$",
+        "(?is)SPECIAL.*x",
+        "(?i)(?s)SPECIAL.*x",
+    ],
 )
 def test_contains_inline_regex_flags(engine: pl.GPUEngine, pattern):
     lf = pl.LazyFrame(
