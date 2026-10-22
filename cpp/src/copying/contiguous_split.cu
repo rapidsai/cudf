@@ -1020,7 +1020,7 @@ struct size_of_helper {
  * structs) return 0.
  */
 struct num_batches_func {
-  cuda::device_buffer<cuda::std::pair<std::size_t, std::size_t>>::iterator const batches;
+  cuda::device_buffer<cuda::std::pair<std::size_t, std::size_t>>::const_iterator const batches;
   __device__ std::size_t operator()(size_type i) const { return cuda::std::get<0>(batches[i]); }
 };
 
@@ -1029,7 +1029,7 @@ struct num_batches_func {
  */
 struct batch_byte_size_function {
   size_type const num_batches;
-  cuda::device_buffer<dst_buf_info>::iterator const infos;
+  cuda::device_buffer<dst_buf_info>::const_iterator const infos;
   __device__ std::size_t operator()(size_type i) const
   {
     if (i == num_batches) { return 0; }
@@ -1044,7 +1044,7 @@ struct batch_byte_size_function {
  * @brief Get the input buffer index given the output buffer index.
  */
 struct out_to_in_index_function {
-  cuda::device_buffer<size_type>::iterator batch_offsets;
+  cuda::device_buffer<size_type>::const_iterator batch_offsets;
   int const num_bufs;
   __device__ int operator()(size_type i) const
   {
