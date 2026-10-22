@@ -111,11 +111,15 @@ def test_parquet_filter_is_in_list_literal(engine: pl.GPUEngine, tmp_path, use_s
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_parquet_filter_is_in_empty_list_literal(engine: pl.GPUEngine, tmp_path):
+@pytest.mark.parametrize("negate", [False, True])
+def test_parquet_filter_is_in_empty_list_literal(
+    engine: pl.GPUEngine, tmp_path, negate
+):
     df = pl.DataFrame({"l_shipmode": ["MAIL", "SHIP", "AIR"]})
     df.write_parquet(tmp_path / "df.parquet")
+    predicate = pl.col("l_shipmode").is_in(pl.Series([], dtype=pl.String).implode())
     q = pl.scan_parquet(tmp_path / "df.parquet").filter(
-        pl.col("l_shipmode").is_in(pl.Series([], dtype=pl.String).implode())
+        ~predicate if negate else predicate
     )
     assert_gpu_result_equal(q, engine=engine)
 
