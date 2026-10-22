@@ -29,6 +29,7 @@
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <utility>
 
@@ -71,66 +72,63 @@ void stabilize_rows(hash::grouped_keys& groups,
   auto input_labels       = cuda::device_buffer<size_type>(stream, mr, num_rows, cuda::no_init);
   auto ordered_labels     = cuda::device_buffer<size_type>(stream, mr, num_rows, cuda::no_init);
   auto ordered_rows       = cuda::device_buffer<size_type>(stream, mr, num_rows, cuda::no_init);
-  if (filtered) {
-    auto const initialize_rows = cuda::tabulate_output_iterator{
-      [labels = input_labels.data(), rows = ordered_rows.data(), num_groups] __device__(
-        cuda::std::ptrdiff_t index, size_type row) {
-        labels[index] = num_groups;
-        rows[index]   = row;
-      }};
-    thrust::sequence(policy, initialize_rows, initialize_rows + num_rows, size_type{0});
-  }
-
-  // Write into separate storage while the original CSR permutation is still being read.
-  auto const write_label = [labels = input_labels.data(),
-                            rows   = ordered_rows.data(),
-                            filtered] __device__(cuda::std::ptrdiff_t row, size_type label) {
-    labels[row] = label;
-    if (!filtered) { rows[row] = static_cast<size_type>(row); }
-  };
-  auto const label_output = cuda::tabulate_output_iterator{
-    [grouped_rows = groups.grouped_rows->data(), write_label] __device__(
-      cuda::std::ptrdiff_t position, size_type label) {
-      write_label(grouped_rows[position], label);
-    }};
   if (group_labels) {
-    thrust::copy_n(policy, group_labels->begin(), size, label_output);
+    thrust::copy_n(policy, group_labels->begin(), size, ordered_labels.begin());
   } else {
     // A CSR position's group ID is the number of segment ends at or before that position.
-    // Compute it directly instead of materializing labels that only this ordering needs.
-    auto const offsets = device_span<size_type const>{groups.group_offsets->data(),
-                                                      static_cast<std::size_t>(num_groups) + 1};
+    auto const offsets = groups.group_offsets->data();
     thrust::upper_bound(policy,
-                        offsets.begin() + 1,
-                        offsets.end(),
+                        offsets + 1,
+                        offsets + num_groups + 1,
                         cuda::counting_iterator<size_type>{0},
                         cuda::counting_iterator<size_type>{size},
-                        label_output);
+                        ordered_labels.begin());
   }
+
+  // Scattering the labels to their rows in grouped order writes all over the input, so every
+  // write misses the cache once the input outgrows it. Sorting the rows by their 8 most
+  // significant bits first, a single radix pass, makes the scatter write one input range at a time.
+  auto const row_bits    = cuda::std::bit_width(static_cast<cuda::std::uint32_t>(num_rows - 1));
+  auto const partitioned = hash::sort_pairs({groups.grouped_rows->data(), ordered_labels.data()},
+                                            {ordered_rows.data(), input_labels.data()},
+                                            size,
+                                            std::max(0, row_bits - 8),
+                                            row_bits,
+                                            stream,
+                                            mr);
+  // Label the input rows in the label buffer the partition left free. Only excluded rows keep the
+  // sentinel group ID, which sorts after every included group.
+  auto const row_labels =
+    partitioned.values == input_labels.data() ? ordered_labels.data() : input_labels.data();
+  if (filtered) { thrust::fill(policy, row_labels, row_labels + num_rows, num_groups); }
+  thrust::scatter(
+    policy, partitioned.values, partitioned.values + size, partitioned.keys, row_labels);
+  thrust::sequence(policy, ordered_rows.begin(), ordered_rows.end(), size_type{0});
 
   // The unfiltered CSR buffer is now free to serve as the alternate sorting buffer. With
   // exclusions, retain its exact-sized allocation for the sorted prefix instead.
   auto alternate_rows =
     cuda::device_buffer<size_type>(stream, mr, filtered ? num_rows : 0, cuda::no_init);
-  // Only excluded rows use the sentinel group ID, which sorts after every included group.
   auto const end_bit =
     cuda::std::bit_width(static_cast<cuda::std::uint32_t>(filtered ? num_groups : num_groups - 1));
-  auto const sorted = hash::stable_sort_group_rows(
-    {input_labels.data(), ordered_rows.data()},
-    {ordered_labels.data(), filtered ? alternate_rows.data() : groups.grouped_rows->data()},
+  auto const sorted = hash::sort_pairs(
+    {row_labels, ordered_rows.data()},
+    {row_labels == input_labels.data() ? ordered_labels.data() : input_labels.data(),
+     filtered ? alternate_rows.data() : groups.grouped_rows->data()},
     num_rows,
+    0,
     end_bit,
     stream,
     mr);
   if (filtered) {
-    thrust::copy_n(policy, sorted.rows, size, groups.grouped_rows->begin());
-  } else if (sorted.rows == ordered_rows.data()) {
+    thrust::copy_n(policy, sorted.values, size, groups.grouped_rows->begin());
+  } else if (sorted.values == ordered_rows.data()) {
     groups.grouped_rows = std::move(ordered_rows);
   }
   // The sorted labels are the group of each grouped row; keep them for group_labels().
   if (store_labels) {
     auto labels =
-      sorted.labels == input_labels.data() ? std::move(input_labels) : std::move(ordered_labels);
+      sorted.keys == input_labels.data() ? std::move(input_labels) : std::move(ordered_labels);
     if (labels.size() != static_cast<std::size_t>(size)) {
       labels = cuda::device_buffer<size_type>{stream, mr, labels.begin(), labels.begin() + size};
     }
