@@ -78,7 +78,7 @@ namespace {
 template <typename T>
 class selected_buffer {
   cuda::device_buffer<T> all;
-  device_span<T const> selected;
+  device_span<T> selected;
 
  public:
   selected_buffer(cuda::device_buffer<T>&& data, device_span<T const> selected_span)
@@ -91,6 +91,7 @@ class selected_buffer {
   }
 
   operator device_span<T const>() const { return selected; }
+  operator device_span<T>() { return selected; }
   void shrink(size_t size)
   {
     CUDF_EXPECTS(size <= selected.size(), "New size must be smaller");
