@@ -22,6 +22,7 @@
 #include <cudf/reduction/detail/sum_overflow.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/concepts.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -159,8 +160,7 @@ struct rep_type {
   using type = device_storage_type_t<T>;
 };
 
-template <typename T>
-  requires(cudf::is_chrono<T>())
+template <cudf::concepts::chrono T>
 struct rep_type<T> {
   using type = typename T::rep;
 };
