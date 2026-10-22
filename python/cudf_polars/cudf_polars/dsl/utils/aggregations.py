@@ -260,7 +260,13 @@ def decompose_single_agg(
                 expr.Cast(dtype, True, is_null_bool),  # noqa: FBT003
             ),
         )
-        count = expr.Cast(dtype, True, expr.Col(dtype, sum_name))  # noqa: FBT003
+        count = expr.UnaryFunction(
+            dtype,
+            "fill_null",
+            (),
+            expr.Cast(dtype, True, expr.Col(dtype, sum_name)),  # noqa: FBT003
+            expr.Literal(dtype, 0),
+        )
         if isinstance(agg, expr.BooleanFunction):
             count = expr.BinOp(
                 agg.dtype,
