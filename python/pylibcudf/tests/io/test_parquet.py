@@ -1732,12 +1732,25 @@ def dictionary32_source(tmp_path) -> os.PathLike[str]:
             {
                 "key": pa.array([0, 1, 2, 3], type=pa.int64()),
                 "a": pa.array(["x", "y", None, "x"]),
-                "b": pa.array(["foo", "bar", "foo", None]),
+                "b": pa.array(["bar", "foo", "foo", None]),
             }
         ),
         path,
     )
     return path
+
+
+def _cast_to_dictionary32(table: pa.Table, names: list[str]) -> pa.Table:
+    return table.cast(
+        pa.schema(
+            [
+                field.with_type(pa.dictionary(pa.int32(), field.type))
+                if field.name in names
+                else field
+                for field in table.schema
+            ]
+        )
+    )
 
 
 def test_read_parquet_dictionary32_columns_default(
@@ -1766,16 +1779,11 @@ def test_read_parquet_output_dict_columns(
 
     assert options.is_enabled_output_dict_columns() is True
 
-    got = plc.io.parquet.read_parquet(options).tbl
-    assert [col.type().id() for col in got.columns()] == [
-        plc.TypeId.INT64,
-        plc.TypeId.DICTIONARY32,
-        plc.TypeId.DICTIONARY32,
-    ]
-    expect = read_table(dictionary32_source)
-    got_arrow = got.to_arrow()
-    for i in range(1, 3):
-        assert got_arrow.column(i).cast(pa.string()).equals(expect.column(i))
+    assert_table_and_meta_eq(
+        _cast_to_dictionary32(read_table(dictionary32_source), ["a", "b"]),
+        plc.io.parquet.read_parquet(options),
+        check_field_nullability=False,
+    )
 
 
 @pytest.mark.parametrize("use_builder", [False, True])
@@ -1793,16 +1801,11 @@ def test_read_parquet_dictionary32_columns(
 
     assert options.get_dictionary32_columns() == ["b", "missing"]
 
-    got = plc.io.parquet.read_parquet(options).tbl
-    assert [col.type().id() for col in got.columns()] == [
-        plc.TypeId.INT64,
-        plc.TypeId.STRING,
-        plc.TypeId.DICTIONARY32,
-    ]
-    expect = read_table(dictionary32_source)
-    got_arrow = got.to_arrow()
-    assert got_arrow.column(1).equals(expect.column(1))
-    assert got_arrow.column(2).cast(pa.string()).equals(expect.column(2))
+    assert_table_and_meta_eq(
+        _cast_to_dictionary32(read_table(dictionary32_source), ["b"]),
+        plc.io.parquet.read_parquet(options),
+        check_field_nullability=False,
+    )
 
 
 def test_chunked_parquet_reader_dictionary32_columns(
@@ -1816,12 +1819,12 @@ def test_chunked_parquet_reader_dictionary32_columns(
         .build()
     )
     reader = plc.io.parquet.ChunkedParquetReader(options)
-    got = reader.read_chunk().tbl
-    assert [col.type().id() for col in got.columns()] == [
-        plc.TypeId.INT64,
-        plc.TypeId.DICTIONARY32,
-        plc.TypeId.STRING,
-    ]
+
+    assert_table_and_meta_eq(
+        _cast_to_dictionary32(read_table(dictionary32_source), ["a"]),
+        reader.read_chunk(),
+        check_field_nullability=False,
+    )
 
 
 def test_read_parquet_dictionary32_columns_with_filter(
@@ -1843,19 +1846,18 @@ def test_read_parquet_dictionary32_columns_with_filter(
         .build()
     )
 
-    got = plc.io.parquet.read_parquet(options).tbl
-    assert [col.type().id() for col in got.columns()] == [
-        plc.TypeId.INT32,
-        plc.TypeId.INT64,
-        plc.TypeId.STRING,
-        plc.TypeId.DICTIONARY32,
-    ]
-    got_arrow = got.to_arrow()
-    assert got_arrow.column(2).equals(pa.chunked_array([["y", None, "x"]]))
-    assert (
-        got_arrow.column(3)
-        .cast(pa.string())
-        .equals(pa.chunked_array([["bar", "foo", None]]))
+    expect = pa.table(
+        {
+            "source_index": pa.array([0, 0, 0], type=pa.int32()),
+            "key": pa.array([1, 2, 3], type=pa.int64()),
+            "a": pa.array(["y", None, "x"]),
+            "b": pa.array(["foo", "foo", None]),
+        }
+    )
+    assert_table_and_meta_eq(
+        _cast_to_dictionary32(expect, ["b"]),
+        plc.io.parquet.read_parquet(options),
+        check_field_nullability=False,
     )
 
 
