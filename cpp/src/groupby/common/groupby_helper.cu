@@ -7,14 +7,12 @@
 #include "groupby/hash/group_keys.hpp"
 #include "groupby_helper_group_offsets.cuh"
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/groupby_helper.hpp>
 #include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/exec_policy.hpp>

@@ -73,7 +73,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
       input, default_outputs, preceding_window, following_window, min_periods, aggr, stream, mr);
   }
 
-  using groupby_helper = cudf::groupby::detail::groupby_helper;
+  using cudf::groupby::detail::groupby_helper;
 
   groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
   auto const& group_offsets{helper.group_offsets(stream)};
@@ -447,7 +447,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
   };
   auto [preceding_column, following_column] = [&]() {
     if (group_keys.num_columns() > 0 && order_by_column.has_nulls()) {
-      using groupby_helper = cudf::groupby::detail::groupby_helper;
+      using cudf::groupby::detail::groupby_helper;
       groupby_helper helper{group_keys, null_policy::INCLUDE, sorted::YES};
       auto const& labels   = helper.group_labels(stream);
       auto const& offsets  = helper.group_offsets(stream);

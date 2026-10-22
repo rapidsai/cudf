@@ -129,9 +129,9 @@ struct groupby_helper {
   size_type num_groups(cuda::stream_ref stream) { return group_offsets(stream).size() - 1; }
 
   /**
-   * @brief Check if the groupby keys are presorted
+   * @brief check if the groupby keys are presorted
    */
-  [[nodiscard]] bool is_presorted() const { return _keys_pre_sorted == sorted::YES; }
+  bool is_presorted() { return _keys_pre_sorted == sorted::YES; }
 
   /**
    * @brief Check whether the cached grouped rows already retain input order within each group
@@ -230,8 +230,8 @@ struct groupby_helper {
   std::unique_ptr<hash::grouped_rows> _reduction_groups;          ///< Cached reduction scheduling
   std::unique_ptr<cuda::device_buffer<size_type>> _group_labels;  ///< Labels in grouped order
   size_type _num_keys{};           ///< Number of grouped rows, set when they are built
-  sorted _keys_pre_sorted;         ///< Whether key groups are already contiguous
-  null_policy _include_null_keys;  ///< Whether to retain null key rows
+  sorted _keys_pre_sorted;         ///< Whether _keys are pre-sorted
+  null_policy _include_null_keys;  ///< Whether to use rows with nulls in _keys for grouping
   bool _stable{false};             ///< Whether rows within each group are in input order
 };
 

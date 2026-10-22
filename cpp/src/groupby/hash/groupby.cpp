@@ -530,15 +530,14 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
   aggregate_result_functor(values_child1, helper, cache, expose_intermediates, stream, mr)
     .operator()<aggregation::STD>(*std_agg);
 
-  auto mean_agg = make_mean_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, expose_intermediates, stream, mr)
-    .operator()<aggregation::MEAN>(*mean_agg);
-  aggregate_result_functor(values_child1, helper, cache, expose_intermediates, stream, mr)
-    .operator()<aggregation::MEAN>(*mean_agg);
-
   // Compute covariance here to avoid repeated computation of mean & count
   auto cov_agg = make_covariance_aggregation(corr_agg._min_periods);
   if (not cache.has_result(values, *cov_agg)) {
+    auto mean_agg = make_mean_aggregation();
+    aggregate_result_functor(values_child0, helper, cache, expose_intermediates, stream, mr)
+      .operator()<aggregation::MEAN>(*mean_agg);
+    aggregate_result_functor(values_child1, helper, cache, expose_intermediates, stream, mr)
+      .operator()<aggregation::MEAN>(*mean_agg);
     auto const mean0 = cache.get_result(values_child0, *mean_agg);
     auto const mean1 = cache.get_result(values_child1, *mean_agg);
     auto count_agg   = make_count_aggregation();
