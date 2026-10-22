@@ -366,6 +366,10 @@ ConfigureTest(
   io/parquet_test.cpp
 )
 ConfigureTest(VARIANT_EXTRACT_TEST io/experimental/variant_extract_test.cpp)
+ConfigureTest(VARIANT_JSON_STRING_TEST io/experimental/variant_json_string_test.cu)
+target_include_directories(
+  VARIANT_JSON_STRING_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+)
 ConfigureTest(
   PARQUET_DELETION_VECTORS_TEST
   io/parquet_deletion_vectors_test.cpp
