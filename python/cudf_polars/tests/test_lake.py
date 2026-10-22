@@ -729,10 +729,6 @@ def _scan_iceberg_files(tbl: Table, paths: list[str], **kwargs: Any) -> pl.LazyF
     )
 
 
-def _data_files(tbl: Table) -> list[str]:
-    return [task.file.file_path for task in tbl.scan().plan_files()]
-
-
 @pytest.mark.parametrize(
     "query",
     [
@@ -755,7 +751,7 @@ def test_scan_iceberg_initial_defaults(
     pl.DataFrame({"a": [3], "d": [30]}).write_iceberg(tbl, mode="append")
     q = _scan_iceberg_files(
         tbl,
-        _data_files(tbl),
+        [task.file.file_path for task in tbl.scan().plan_files()],
         _default_values=("iceberg", ({}, {2: pl.Series([7], dtype=pl.Int64)})),
     )
     assert_gpu_result_equal(query(q), engine=engine, check_row_order=False)
@@ -778,7 +774,7 @@ def test_scan_iceberg_nested_initial_default_unsupported(
     pl.DataFrame({"s": [{"x": 1}]}).write_iceberg(tbl, mode="append")
     q = _scan_iceberg_files(
         tbl,
-        _data_files(tbl),
+        [task.file.file_path for task in tbl.scan().plan_files()],
         _default_values=("iceberg", ({}, {2: pl.Series([1])})),
     )
     assert_ir_translation_raises(q, in_memory_engine, NotImplementedError)
@@ -837,7 +833,7 @@ def deleted_rows_scan(
         )
         for frame in frames:
             frame.write_iceberg(tbl, mode="append")
-        paths = _data_files(tbl)
+        paths = [task.file.file_path for task in tbl.scan().plan_files()]
         if request.param == "position_deletes":
             position_deletes = {}
             for index, positions in deleted.items():
