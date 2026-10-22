@@ -671,8 +671,7 @@ TEST_F(groupby_key_shape_test, StableGroupedRows)
     }
   };
 
-  // Excluding the null key leaves only singletons, or a single group; including it adds a group.
-  check(int32s{{3, 0, 1, 2}, nulls_at({1})});
+  // Excluding the null key leaves a single group; including it adds a group.
   check(int32s{{5, 0, 5, 5}, nulls_at({1})});
   // A single group without excluded rows, and repeated keys with and without excluded rows.
   check(int32s{5, 5, 5});

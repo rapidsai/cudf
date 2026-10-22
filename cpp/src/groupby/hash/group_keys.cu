@@ -164,12 +164,12 @@ std::size_t estimate_capacity(size_type num_rows,
  * @brief Materializes stable grouped rows directly from the HashCSR build positions.
  *
  * Sorting the rows by group label also sorts the labels, so `keep_labels` returns them instead of
- * discarding them. The singleton and single-group shortcuts do not sort and return no labels.
+ * discarding them.
  */
 std::pair<cuda::device_buffer<size_type>, std::optional<cuda::device_buffer<size_type>>>
 stable_grouped_rows(size_type num_rows,
                     size_type num_grouped_rows,
-                    device_span<size_type const> key_indices,
+                    size_type num_groups,
                     cuda::device_buffer<build_position_type> positions,
                     cuda::device_buffer<size_type> slot_counts,
                     cuda::device_buffer<cuda::std::uint32_t> group_slots,
@@ -177,42 +177,8 @@ stable_grouped_rows(size_type num_rows,
                     cuda::stream_ref stream,
                     cudf::memory_resources mr)
 {
-  auto const temp_mr    = mr.get_temporary_mr();
-  auto const policy     = rmm::exec_policy_nosync(stream, temp_mr);
-  auto const num_groups = static_cast<size_type>(key_indices.size());
-
-  // Every included group is a singleton, including the empty grouping.
-  if (num_groups == num_grouped_rows) {
-    positions   = cuda::device_buffer<build_position_type>{stream, temp_mr};
-    slot_counts = cuda::device_buffer<size_type>{stream, temp_mr};
-    group_slots = cuda::device_buffer<cuda::std::uint32_t>{stream, temp_mr};
-    cuda::device_buffer<size_type> rows(stream, mr.get_output_mr(), num_groups, cuda::no_init);
-    thrust::copy(policy, key_indices.begin(), key_indices.end(), rows.data());
-    return {std::move(rows), std::nullopt};
-  }
-  // A single group holds every included row in input order.
-  if (num_groups == 1) {
-    slot_counts = cuda::device_buffer<size_type>{stream, temp_mr};
-    group_slots = cuda::device_buffer<cuda::std::uint32_t>{stream, temp_mr};
-    // Only the compaction of filtered rows still reads the build positions.
-    if (num_grouped_rows == num_rows) {
-      positions = cuda::device_buffer<build_position_type>{stream, temp_mr};
-    }
-    cuda::device_buffer<size_type> rows(
-      stream, mr.get_output_mr(), num_grouped_rows, cuda::no_init);
-    if (num_grouped_rows == num_rows) {
-      thrust::sequence(policy, rows.data(), rows.data() + num_rows, size_type{0});
-    } else {
-      thrust::copy_if(policy,
-                      cuda::counting_iterator<size_type>{0},
-                      cuda::counting_iterator<size_type>{num_rows},
-                      rows.data(),
-                      [positions = positions.data()] __device__(size_type row) {
-                        return positions[row].first != hash_csr_no_slot;
-                      });
-    }
-    return {std::move(rows), std::nullopt};
-  }
+  auto const temp_mr = mr.get_temporary_mr();
+  auto const policy  = rmm::exec_policy_nosync(stream, temp_mr);
 
   // The count indices can be hash slots or representative rows. Reuse their counts for
   // compact group IDs after the group offsets have consumed the counts.
@@ -458,16 +424,15 @@ grouped_keys group_keys(size_type num_rows,
   }
 
   if (stable_rows) {
-    auto [rows, labels] = stable_grouped_rows(
-      num_rows,
-      num_grouped_rows,
-      device_span<size_type const>{key_indices.data(), static_cast<std::size_t>(num_groups)},
-      std::move(positions),
-      std::move(slot_counts),
-      std::move(group_slots),
-      keep_labels,
-      stream,
-      mr);
+    auto [rows, labels] = stable_grouped_rows(num_rows,
+                                              num_grouped_rows,
+                                              num_groups,
+                                              std::move(positions),
+                                              std::move(slot_counts),
+                                              std::move(group_slots),
+                                              keep_labels,
+                                              stream,
+                                              mr);
     return {std::move(key_indices),
             std::move(group_offsets),
             std::move(rows),
