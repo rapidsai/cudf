@@ -46,7 +46,7 @@ FileMetaData const& make_test_footer()
        .repetition_type = FieldRepetitionType::REQUIRED,
        .name            = "schema",
        .num_children    = 3},
-      {.type            = Type::INT32,
+      {.type            = Type::DOUBLE,
        .repetition_type = FieldRepetitionType::OPTIONAL,
        .name            = "a",
        .field_id        = 1},
@@ -66,7 +66,7 @@ FileMetaData const& make_test_footer()
 
     ColumnChunk const cc[] = {
       {.file_offset = 4,
-       .meta_data   = {.type                    = Type::INT32,
+       .meta_data   = {.type                    = Type::DOUBLE,
                        .encodings               = {Encoding::PLAIN, Encoding::RLE_DICTIONARY},
                        .path_in_schema          = {"a"},
                        .codec                   = Compression::SNAPPY,
@@ -75,7 +75,8 @@ FileMetaData const& make_test_footer()
                        .total_compressed_size   = 500,
                        .data_page_offset        = 8,
                        // non-zero exercises the dictionary_page_offset field
-                       .dictionary_page_offset = 4}},
+                       .dictionary_page_offset = 4,
+                       .statistics             = {.null_count = 0, .nan_count = 3}}},
       {.file_offset = 504,
        .meta_data   = {.type                    = Type::BYTE_ARRAY,
                        .encodings               = {Encoding::PLAIN},
@@ -99,7 +100,8 @@ FileMetaData const& make_test_footer()
       {"empty", std::string("")},
       {"novalue", std::nullopt},
     };
-    meta.column_orders = {{{ColumnOrder::TYPE_ORDER}, {ColumnOrder::TYPE_ORDER}}};
+    meta.column_orders = {
+      {{ColumnOrder::IEEE_754_TOTAL_ORDER}, {ColumnOrder::TYPE_ORDER}, {ColumnOrder::TYPE_ORDER}}};
 
     return meta;
   }();
@@ -137,6 +139,8 @@ void expect_column_meta_equal(ColumnChunkMetaData const& e, ColumnChunkMetaData 
   EXPECT_EQ(e.data_page_offset, a.data_page_offset);
   EXPECT_EQ(e.index_page_offset, a.index_page_offset);
   EXPECT_EQ(e.dictionary_page_offset, a.dictionary_page_offset);
+  EXPECT_EQ(e.statistics.null_count, a.statistics.null_count);
+  EXPECT_EQ(e.statistics.nan_count, a.statistics.nan_count);
 }
 
 void expect_column_chunk_equal(ColumnChunk const& e, ColumnChunk const& a)
