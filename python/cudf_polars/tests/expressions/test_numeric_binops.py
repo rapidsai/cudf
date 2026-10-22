@@ -12,6 +12,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import is_streaming_engine
 
 dtypes = [
     pl.Int8,
@@ -193,6 +194,44 @@ def test_sql_decimal_div_rounding_nulls(engine: pl.GPUEngine, scales):
     )
     q = df.sql("SELECT x / y AS share FROM self")
     assert_gpu_result_equal(q, engine=engine)
+
+
+def assert_decimal_div_by_zero_raises(q: pl.LazyFrame, engine: pl.GPUEngine):
+    match = "division by zero"
+    if is_streaming_engine(engine):
+        with pytest.RaisesGroup(
+            pytest.RaisesExc(pl.exceptions.ComputeError, match=match)
+        ):
+            q.collect(engine=engine)
+    else:
+        with pytest.raises(pl.exceptions.ComputeError, match=match):
+            q.collect(engine=engine)
+
+
+def test_sql_decimal_div_by_zero_raises(engine: pl.GPUEngine):
+    df = pl.LazyFrame(
+        {"x": [Decimal("1.00"), Decimal("2.00")], "y": [Decimal("3.00"), Decimal("0")]},
+        schema={"x": pl.Decimal(15, 2), "y": pl.Decimal(15, 2)},
+    )
+    q = df.sql("SELECT x / y AS share FROM self")
+    assert_decimal_div_by_zero_raises(q, engine)
+
+
+def test_sql_decimal_div_by_zero_null_dividend(engine: pl.GPUEngine):
+    df = pl.LazyFrame(
+        {"x": [Decimal("1.00"), None], "y": [Decimal("3.00"), Decimal("0")]},
+        schema={"x": pl.Decimal(15, 2), "y": pl.Decimal(15, 2)},
+    )
+    q = df.sql("SELECT x / y AS share FROM self")
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_sql_decimal_div_by_zero_literal(engine: pl.GPUEngine):
+    df = pl.LazyFrame(
+        {"x": [Decimal("1.00"), Decimal("2.00")]}, schema={"x": pl.Decimal(15, 2)}
+    )
+    q = df.sql("SELECT x / 0.00 AS share FROM self")
+    assert_decimal_div_by_zero_raises(q, engine)
 
 
 def test_multiply_with_decimals(engine: pl.GPUEngine):
