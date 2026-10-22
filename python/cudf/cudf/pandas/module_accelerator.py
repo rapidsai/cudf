@@ -469,8 +469,9 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             try:
                 wrapped_attr = self._wrap_attribute(slow_attr, fast_attr, key)
                 self._wrapped_objs[slow_attr] = wrapped_attr
-            except TypeError:
-                # slow_attr is not hashable
+            except (TypeError, ImportError):
+                # slow_attr is not hashable, or hashing it imports from
+                # a module that is not populated yet
                 pass
 
         # Our module has (basically) no static attributes and instead

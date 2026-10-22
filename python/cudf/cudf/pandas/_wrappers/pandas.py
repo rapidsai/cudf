@@ -102,6 +102,13 @@ def make_intermediate_proxy_type(
     )
 
 
+def _pandas_groupby_type(module, name):
+    # pandas 3.1 renamed the "*Groupby" classes to "*GroupBy"
+    return getattr(
+        module, name.replace("Groupby", "GroupBy"), None
+    ) or getattr(module, name)
+
+
 class _AccessorAttr:
     """
     Descriptor that ensures that accessors like `.dt` and `.str`
@@ -1203,7 +1210,7 @@ DataFrameGroupBy = make_intermediate_proxy_type(
 RollingGroupBy = make_intermediate_proxy_type(
     "RollingGroupBy",
     cudf.core.window.rolling.RollingGroupby,
-    pd.core.window.rolling.RollingGroupby,
+    _pandas_groupby_type(pd.core.window.rolling, "RollingGroupby"),
 )
 
 _SeriesIlocIndexer = make_intermediate_proxy_type(
@@ -1295,7 +1302,7 @@ ExponentialMovingWindow = make_intermediate_proxy_type(
 ExponentialMovingWindowGroupby = make_intermediate_proxy_type(
     "ExponentialMovingWindowGroupby",
     _Unusable,
-    pd.core.window.ewm.ExponentialMovingWindowGroupby,
+    _pandas_groupby_type(pd.core.window.ewm, "ExponentialMovingWindowGroupby"),
 )
 
 OnlineExponentialMovingWindow = make_intermediate_proxy_type(
@@ -1319,7 +1326,7 @@ Expanding = make_intermediate_proxy_type(
 ExpandingGroupby = make_intermediate_proxy_type(
     "ExpandingGroupby",
     _Unusable,
-    pd.core.window.expanding.ExpandingGroupby,
+    _pandas_groupby_type(pd.core.window.expanding, "ExpandingGroupby"),
 )
 
 Resampler = make_intermediate_proxy_type(
@@ -1359,19 +1366,19 @@ TimedeltaIndexResampler = make_intermediate_proxy_type(
 DatetimeIndexResamplerGroupby = make_intermediate_proxy_type(
     "DatetimeIndexResamplerGroupby",
     _Unusable,
-    pd.core.resample.DatetimeIndexResamplerGroupby,
+    _pandas_groupby_type(pd.core.resample, "DatetimeIndexResamplerGroupby"),
 )
 
 PeriodIndexResamplerGroupby = make_intermediate_proxy_type(
     "PeriodIndexResamplerGroupby",
     _Unusable,
-    pd.core.resample.PeriodIndexResamplerGroupby,
+    _pandas_groupby_type(pd.core.resample, "PeriodIndexResamplerGroupby"),
 )
 
 TimedeltaIndexResamplerGroupby = make_intermediate_proxy_type(
     "TimedeltaIndexResamplerGroupby",
     _Unusable,
-    pd.core.resample.TimedeltaIndexResamplerGroupby,
+    _pandas_groupby_type(pd.core.resample, "TimedeltaIndexResamplerGroupby"),
 )
 
 StataReader = make_final_proxy_type(
