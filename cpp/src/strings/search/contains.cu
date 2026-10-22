@@ -187,13 +187,15 @@ CUDF_KERNEL void lrb_histogram_kernel(column_device_view const d_strings,
       auto const peers = active.match_any(bin);  // lanes of `active` with the same bin
       if (bin != 0 &&
           active.thread_rank() == static_cast<unsigned>(cuda::std::countr_zero(peers))) {
-        atomicAdd(&s_hist[bin], cuda::std::popcount(peers));
+        cuda::atomic_ref<size_type, cuda::thread_scope_block>{s_hist[bin]}.fetch_add(
+          cuda::std::popcount(peers), cuda::memory_order_relaxed);
       }
     }
   }
   __syncthreads();
   if (threadIdx.x < LRB_NUM_BINS && s_hist[threadIdx.x] != 0) {
-    atomicAdd(&d_hist[threadIdx.x], s_hist[threadIdx.x]);
+    cuda::atomic_ref<size_type, cuda::thread_scope_device>{d_hist[threadIdx.x]}.fetch_add(
+      s_hist[threadIdx.x], cuda::memory_order_relaxed);
   }
 }
 
@@ -248,14 +250,17 @@ CUDF_KERNEL void lrb_scatter_kernel(column_device_view const d_strings,
     auto const leader = cuda::std::countr_zero(peers);
     size_type wbase   = 0;
     if (bin != 0 && lane == static_cast<unsigned>(leader)) {
-      wbase = atomicAdd(&s_count[bin], cuda::std::popcount(peers));
+      wbase = cuda::atomic_ref<size_type, cuda::thread_scope_block>{s_count[bin]}.fetch_add(
+        cuda::std::popcount(peers), cuda::memory_order_relaxed);
     }
     wbase           = warp.shfl(wbase, leader);
     auto const rank = wbase + cuda::std::popcount(peers & ((1u << lane) - 1u));
     __syncthreads();
 
     if (threadIdx.x < LRB_NUM_BINS && s_count[threadIdx.x] != 0) {
-      s_base[threadIdx.x] = atomicAdd(&d_cursor[threadIdx.x], s_count[threadIdx.x]);
+      s_base[threadIdx.x] =
+        cuda::atomic_ref<size_type, cuda::thread_scope_device>{d_cursor[threadIdx.x]}.fetch_add(
+          s_count[threadIdx.x], cuda::memory_order_relaxed);
     }
     __syncthreads();
 
