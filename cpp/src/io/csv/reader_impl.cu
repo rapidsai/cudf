@@ -81,7 +81,7 @@ class selected_buffer {
   device_span<T> selected;
 
  public:
-  selected_buffer(cuda::device_buffer<T>&& data, device_span<T const> selected_span)
+  selected_buffer(cuda::device_buffer<T>&& data, device_span<T> selected_span)
     : all{std::move(data)}, selected{selected_span}
   {
   }
