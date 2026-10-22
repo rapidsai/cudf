@@ -97,8 +97,8 @@ struct groupby_helper {
   /**
    * @brief Groups values without requiring their original order within each group.
    *
-   * Groups have the same offsets and labels as `grouped_values`. The returned column owns its
-   * gathered values, so subsequently requesting a stable grouped order does not change it.
+   * Groups follow the current `group_offsets` and `group_labels`; only the order within each group
+   * is unspecified.
    *
    * @param values The value column to group
    * @param stream CUDA stream used for device memory operations and kernel launches
