@@ -1159,6 +1159,7 @@ add_library(
   src/strings/search/find.cu
   src/strings/search/find_instance.cu
   src/strings/search/find_multiple.cu
+  src/strings/search/starts_with.cu
   src/strings/slice.cu
   src/strings/split/partition.cu
   src/strings/split/split.cu
