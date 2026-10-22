@@ -20,6 +20,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/concepts.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
@@ -30,6 +31,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cuda/std/concepts>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/tuple>
@@ -191,10 +193,9 @@ class device_row_comparator {
     {
     }
 
-    template <typename KeyType>
+    template <cuda::std::totally_ordered KeyType>
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type lhs_element_index, size_type rhs_element_index) const noexcept
-      requires(cudf::is_relationally_comparable<KeyType, KeyType>())
     {
       auto const lidx = _lhs.element<cudf::dictionary32>(lhs_element_index).value();
       auto const ridx = _rhs.element<cudf::dictionary32>(rhs_element_index).value();
@@ -208,7 +209,7 @@ class device_row_comparator {
     template <typename KeyType>
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type const, size_type const) const noexcept
-      requires(not cudf::is_relationally_comparable<KeyType, KeyType>())
+      requires(not cuda::std::totally_ordered<KeyType>)
     {
       CUDF_UNREACHABLE("Key types are not comparable");
     }
@@ -270,8 +271,7 @@ class device_row_comparator {
     template <typename Element>
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
-      requires(cudf::is_relationally_comparable<Element, Element>() and
-               not cudf::is_dictionary<Element>())
+      requires(cuda::std::totally_ordered<Element> and not cudf::concepts::dictionary<Element>)
     {
       if (_check_nulls) {
         bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
@@ -288,13 +288,12 @@ class device_row_comparator {
                              cuda::std::numeric_limits<int>::max());
     }
 
-    template <typename Element>
+    template <cudf::concepts::dictionary Element>
 #ifndef NDEBUG
     __attribute__((noinline))
 #endif
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int>
     operator()(size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
-      requires(cudf::is_dictionary<Element>())
     {
       if (_check_nulls) {
         bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
@@ -323,8 +322,8 @@ class device_row_comparator {
     template <typename Element>
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type const, size_type const) const noexcept
-      requires(not cudf::is_relationally_comparable<Element, Element>() and
-               (not has_nested_columns or not cudf::is_nested<Element>()))
+      requires(not cuda::std::totally_ordered<Element> and
+               (not has_nested_columns or not cudf::concepts::nested<Element>))
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
@@ -343,7 +342,7 @@ class device_row_comparator {
 #endif
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int>
     operator()(size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
-      requires(has_nested_columns and cuda::std::is_same_v<Element, cudf::struct_view>)
+      requires(has_nested_columns and cudf::concepts::struct_view<Element>)
     {
       column_device_view lcol = _lhs;
       column_device_view rcol = _rhs;
@@ -389,7 +388,7 @@ class device_row_comparator {
 #endif
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int>
     operator()(size_type lhs_element_index, size_type rhs_element_index)
-      requires(has_nested_columns and cuda::std::is_same_v<Element, cudf::list_view>)
+      requires(has_nested_columns and cudf::concepts::list_view<Element>)
     {
       auto const is_l_row_null = _lhs.is_null(lhs_element_index);
       auto const is_r_row_null = _rhs.is_null(rhs_element_index);

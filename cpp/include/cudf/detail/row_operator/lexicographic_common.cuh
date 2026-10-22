@@ -8,6 +8,7 @@
 #include <cudf/detail/row_operator/common_utils.cuh>
 #include <cudf/utilities/export.hpp>
 
+#include <cuda/std/concepts>
 #include <cuda/std/type_traits>
 
 #include <cmath>
@@ -54,7 +55,7 @@ struct sorting_physical_element_comparator {
   template <typename Element>
   __device__ constexpr cudf::detail::weak_ordering operator()(Element const lhs,
                                                               Element const rhs) const noexcept
-    requires(not cuda::std::is_floating_point_v<Element>)
+    requires(not cuda::std::floating_point<Element>)
   {
     return cudf::detail::compare_elements(lhs, rhs);
   }
@@ -66,10 +67,9 @@ struct sorting_physical_element_comparator {
    * @param rhs Second element
    * @return Relation between elements
    */
-  template <typename Element>
+  template <cuda::std::floating_point Element>
   __device__ constexpr cudf::detail::weak_ordering operator()(Element const lhs,
                                                               Element const rhs) const noexcept
-    requires(cuda::std::is_floating_point_v<Element>)
   {
     if (isnan(lhs)) {
       return isnan(rhs) ? cudf::detail::weak_ordering::EQUIVALENT
