@@ -667,6 +667,8 @@ struct Statistics {
   std::optional<bool> is_max_value_exact;
   /// If true, min_value is the actual minimum value for a column
   std::optional<bool> is_min_value_exact;
+  /// count of NaN values in a floating point column. NaNs may be present if absent
+  std::optional<int64_t> nan_count;
 };
 
 /**
@@ -737,6 +739,8 @@ struct ColumnIndex {
   std::optional<std::vector<int64_t>> repetition_level_histogram;
   /// Definition level histogram for the column chunk
   std::optional<std::vector<int64_t>> definition_level_histogram;
+  /// Optional count of NaN values per page of a floating point column
+  std::optional<std::vector<int64_t>> nan_counts;
 };
 
 /**
