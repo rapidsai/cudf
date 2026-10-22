@@ -61,7 +61,8 @@ enum class use_data_page_mask : bool {
 };
 
 /**
- * @brief Columns selection
+ * @brief Columns selection to use for pass memory estimation
+ * row group passes
  */
 enum class read_columns_mode : int8_t {
   FILTER_COLUMNS  = 0,  ///< Filter columns
