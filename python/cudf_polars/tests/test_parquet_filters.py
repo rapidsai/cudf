@@ -111,6 +111,15 @@ def test_parquet_filter_is_in_list_literal(engine: pl.GPUEngine, tmp_path, use_s
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_parquet_filter_is_in_empty_list_literal(engine: pl.GPUEngine, tmp_path):
+    df = pl.DataFrame({"l_shipmode": ["MAIL", "SHIP", "AIR"]})
+    df.write_parquet(tmp_path / "df.parquet")
+    q = pl.scan_parquet(tmp_path / "df.parquet").filter(
+        pl.col("l_shipmode").is_in(pl.Series([], dtype=pl.String).implode())
+    )
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_parquet_filter_boolean_column(engine: pl.GPUEngine, tmp_path):
     df = pl.DataFrame({"x": [1, 2, 3], "y": [True, False, True]})
     df.write_parquet(tmp_path / "df.parquet")

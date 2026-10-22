@@ -207,7 +207,7 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
             if haystack_values.dtype == pl.List:
                 # An imploded literal is a one-row list column, use the inner values
                 haystack_values = haystack_values.explode()
-            if len(haystack_values) < 16:
+            if 0 < len(haystack_values) < 16:
                 # 16 is an arbitrary limit
                 needle_ref = self(needles)
                 if haystack.dtype.id() == plc.TypeId.LIST:
