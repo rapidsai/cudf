@@ -105,13 +105,13 @@ void groupby_helper::build_groups(bool need_grouped_rows,
       ? compute_nested_group_offsets(_keys, rows.data(), size, offsets, stream)
       : compute_group_offsets<false>(_keys, rows.data(), size, offsets, stream);
   thrust::fill_n(policy, offsets.data() + num_groups, 1, size);
-  // The first row of each group is its representative input row, which the group offset already
-  // identifies.
+  // The first row of each group represents it, and in input order its index is the group offset.
+  auto key_indices =
+    cuda::device_buffer<size_type>(stream, mr, offsets.data(), offsets.data() + num_groups);
   _groups = std::make_unique<hash::grouped_keys>(
-    cuda::device_buffer<size_type>(stream, mr), std::move(offsets), std::move(rows), num_groups);
-  _groups->key_indices = {_groups->group_offsets->data(), static_cast<std::size_t>(num_groups)};
-  _num_keys            = size;
-  _stable              = true;
+    std::move(key_indices), std::move(offsets), std::move(rows), num_groups);
+  _num_keys = size;
+  _stable   = true;
 }
 
 size_type groupby_helper::num_keys(cuda::stream_ref stream)
