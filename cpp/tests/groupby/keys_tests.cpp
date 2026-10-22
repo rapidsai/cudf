@@ -576,9 +576,13 @@ TEST_F(groupby_key_shape_test, StableGroupedRows)
 
       cudf::groupby::groupby presorted(expected->select({0}), nulls, cudf::sorted::YES);
       auto const expected_scan = scan(presorted, expected->get_column(1));
-      // The scan reorders the rows cached by a reduction and keeps the labels sorted with them.
+      // The scan reorders the rows and labels cached by a histogram and keeps them sorted together.
       cudf::groupby::groupby hashed(cudf::table_view{{keys}}, nulls);
-      hashed.aggregate(sums, stream);
+      std::vector<cudf::groupby::aggregation_request> histograms(1);
+      histograms[0].values = *values;
+      histograms[0].aggregations.push_back(
+        cudf::make_histogram_aggregation<cudf::groupby_aggregation>());
+      hashed.aggregate(histograms, stream);
       auto const actual_scan = scan(hashed, *values);
       auto const sorted_scan =
         cudf::stable_sort_by_key(actual_scan->view(), actual_scan->select({0}), {}, {}, stream);
