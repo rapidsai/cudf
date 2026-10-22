@@ -79,9 +79,6 @@ ordering ordering::as_strict(rapidsmpf::BufferResource& br) const
                                         cudf::null_equality::EQUAL,
                                         stream,
                                         br.device_mr());
-  if (unique_boundaries->num_rows() == boundary_view.num_rows()) {
-    return ordering{keys, boundaries, true, locally_ordered};
-  }
   return ordering{keys,
                   std::make_shared<table_chunk>(std::move(unique_boundaries), stream),
                   true,
