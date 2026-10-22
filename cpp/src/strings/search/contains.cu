@@ -417,6 +417,8 @@ CUDF_KERNEL void lrb_search_kernel(column_device_view const d_strings,
   }
 }
 
+}  // namespace
+
 /**
  * @brief contains(column, scalar) scheduled with logarithmic radix binning.
  *
@@ -431,10 +433,10 @@ CUDF_KERNEL void lrb_search_kernel(column_device_view const d_strings,
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return BOOL8 column, true where the row contains `target`; nulls follow the input
  */
-std::unique_ptr<column> contains_lrb(strings_column_view const& input,
-                                     string_scalar const& target,
-                                     cuda::stream_ref stream,
-                                     rmm::device_async_resource_ref mr)
+std::unique_ptr<column> contains(strings_column_view const& input,
+                                 string_scalar const& target,
+                                 cuda::stream_ref stream,
+                                 rmm::device_async_resource_ref mr)
 {
   auto const num_rows = input.size();
   if (num_rows == 0) { return make_empty_column(type_id::BOOL8); }
@@ -492,93 +494,45 @@ std::unique_ptr<column> contains_lrb(strings_column_view const& input,
   return results;
 }
 
-/**
- * @brief Utility to return a bool column indicating the presence of
- * a string targets[i] in strings[i].
- *
- * Null string entries return corresponding null output column entries.
- *
- * @tparam BoolFunction Return bool value given two strings.
- *
- * @param strings Column of strings to check for `targets[i]`.
- * @param targets Column of strings to be checked in `strings[i]``.
- * @param pfn Returns bool value if target is found in the given string.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New BOOL column.
- */
-template <typename BoolFunction>
-std::unique_ptr<column> contains_fn(strings_column_view const& strings,
-                                    strings_column_view const& targets,
-                                    BoolFunction pfn,
-                                    cuda::stream_ref stream,
-                                    rmm::device_async_resource_ref mr)
-{
-  if (strings.is_empty()) return make_empty_column(type_id::BOOL8);
-
-  CUDF_EXPECTS(targets.size() == strings.size(),
-               "strings and targets column must be the same size");
-
-  auto targets_column = column_device_view::create(targets.parent(), stream);
-  auto d_targets      = *targets_column;
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_strings      = *strings_column;
-  // create output column
-  auto results      = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings.size(),
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
-                                     stream,
-                                     mr);
-  auto results_view = results->mutable_view();
-  auto d_results    = results_view.data<bool>();
-  // set the bool values by evaluating the passed function
-  thrust::transform(
-    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    cuda::counting_iterator<size_type>{0},
-    cuda::counting_iterator<size_type>{strings.size()},
-    d_results,
-    [d_strings, pfn, d_targets] __device__(size_type idx) {
-      // empty target string returns true
-      if (d_targets.is_valid(idx) && d_targets.element<string_view>(idx).length() == 0) {
-        return true;
-      } else if (!d_strings.is_null(idx) && !d_targets.is_null(idx)) {
-        return bool{pfn(d_strings.element<string_view>(idx), d_targets.element<string_view>(idx))};
-      } else {
-        return false;
-      }
-    });
-  results->set_null_count(strings.null_count());
-  return results;
-}
-}  // namespace
-
-/**
- * @copydoc cudf::strings::contains(strings_column_view const&, string_scalar const&,
- *                                  cuda::stream_ref, rmm::device_async_resource_ref)
- */
-std::unique_ptr<column> contains(strings_column_view const& input,
-                                 string_scalar const& target,
-                                 cuda::stream_ref stream,
-                                 rmm::device_async_resource_ref mr)
-{
-  // Logarithmic radix binning adapts the thread-group size per row, so no column-wide
-  // average-width heuristic (and no device-to-host read of the offsets) is needed.
-  return contains_lrb(input, target, stream, mr);
-}
-
 std::unique_ptr<column> contains(strings_column_view const& strings,
                                  strings_column_view const& targets,
                                  cuda::stream_ref stream,
                                  rmm::device_async_resource_ref mr)
 {
-  auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    for (size_type i = 0; i <= (d_string.size_bytes() - d_target.size_bytes()); ++i) {
-      if (d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0) { return true; }
-    }
-    return false;
-  };
-  return contains_fn(strings, targets, pfn, stream, mr);
+  if (strings.is_empty()) { return make_empty_column(type_id::BOOL8); }
+
+  CUDF_EXPECTS(targets.size() == strings.size(),
+               "strings and targets column must be the same size");
+
+  auto const d_strings = column_device_view::create(strings.parent(), stream);
+  auto const d_targets = column_device_view::create(targets.parent(), stream);
+
+  auto results = make_numeric_column(data_type{type_id::BOOL8},
+                                     strings.size(),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
+  thrust::transform(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{strings.size()},
+    results->mutable_view().data<bool>(),
+    [d_strings = *d_strings, d_targets = *d_targets] __device__(size_type idx) {
+      // empty target string returns true
+      if (d_targets.is_valid(idx) && d_targets.element<string_view>(idx).length() == 0) {
+        return true;
+      }
+      if (d_strings.is_null(idx) || d_targets.is_null(idx)) { return false; }
+      auto const d_str    = d_strings.element<string_view>(idx);
+      auto const d_target = d_targets.element<string_view>(idx);
+      for (size_type i = 0; i <= (d_str.size_bytes() - d_target.size_bytes()); ++i) {
+        if (d_target.compare(d_str.data() + i, d_target.size_bytes()) == 0) { return true; }
+      }
+      return false;
+    });
+  results->set_null_count(strings.null_count());
+  return results;
 }
 
 }  // namespace detail
