@@ -19,7 +19,7 @@ cudf supports every minor and patch version of pandas within one major version. 
 ## Step 1. Update the pandas pins in `dependencies.yaml`
 
 1. Change the `&pandas` anchor in the `run_common` section as described above for a minor or major version bump. The `*pandas` aliases reuse this pin.
-2. Update the `test_cudf_pandas_compat` matrix so it has one entry for each supported pandas minor version. Each entry sets `pandas_compat_version: "X.Y"` and pins `pandas==X.Y.*`, together with the same `numpy` pin as the existing entry. Keep the trailing `- matrix:` entry with no packages. For a major version bump, remove the entries of the old major version, so only the new `X.0` entry is left.
+2. Update the `test_cudf_pandas_compat` matrix so it has one entry for each supported pandas minor version. Each entry sets `pandas_compat_version: "X.Y"` and pins `pandas==X.Y.*`, together with the same `numpy` pin as the existing entry. Keep the trailing `- matrix:` entry with no packages. For a major version bump, remove the entries of the old major version, so only the new `X.0` entry is left. Also update the `pandas_compat_version` list in the `test_cudf_pandas_compat` section under `files:` so it has the same versions as the entries, for example `pandas_compat_version: ["3.0", "3.1"]`. CI reads this list to decide which pandas versions to test.
 3. Search `dependencies.yaml` and `python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml` for pins whose comments mention a pandas version, release, or pull request. If the target pandas version contains the fix, remove the pin and its comment. If you can't tell, keep the pin and report it to the user.
 4. Regenerate the files derived from `dependencies.yaml`:
    ```bash
@@ -45,6 +45,11 @@ Run every later step in this environment.
    python -c "import cudf, dask_cudf, pandas; print(pandas.__version__)"
    ```
    If it prints a different pandas version, check the pandas pin in the environment file from Step 1, and report the mismatch to the user before you continue.
+5. Confirm that cudf.pandas imports with the target pandas version. Steps 3, 5, and 6 need it:
+   ```bash
+   python -m cudf.pandas -c "import pandas; print(pandas.__version__)"
+   ```
+   If the import fails, report the error to the user before you continue.
 
 ## Step 3. Iterate and classify failures in the pandas test suite under cudf.pandas
 
@@ -52,11 +57,13 @@ The `pandas-tests` CI job (`ci/cudf_pandas_scripts/pandas-tests/run.sh`) runs th
 
 The plugin `python/cudf/cudf/pandas/scripts/pandas-testing-plugin.py` marks tests before they run. Its dictionaries map a pytest node id (`tests/...py::<test>[...]`) to a reason:
 
-- `NODEIDS_THAT_FAIL`: marked `xfail`. Use for tests that fail because of a cudf or cudf.pandas bug. Write the root cause as the reason, not only the exception type.
+- `NODEIDS_THAT_FAIL`: marked `xfail`. Use for tests that fail because of a cudf or cudf.pandas bug.
 - `NODEIDS_THAT_MAY_FAIL`: marked `xfail(strict=False)`. Use for flaky or environment-sensitive tests.
 - `NODEIDS_TO_SKIP`: marked `skip`. Use for tests that crash, hang, or exercise behavior that cudf.pandas cannot support.
 - `NODEIDS_TO_SKIP_WHEN_SHARDED`: skipped only in sharded CI runs. Use for tests that fail only when the suite is split across runners.
 - `NODEIDS_PATHS_TO_SKIP`: skips every test whose node id starts with the key.
+
+For every entry that you add or update, set the reason to `"TODO: Started failing with pandas X.Y"`, where `X.Y` is the target pandas version.
 
 Keep the keys of every dictionary in alphabetical order. The vendored `pandas-testing/pandas-tests/pyproject.toml` sets `xfail_strict = true`, so a `NODEIDS_THAT_FAIL` entry that now passes reports `[XPASS(strict)]` and fails the run. Remove such entries.
 
@@ -123,7 +130,7 @@ If notebook tests fail because no `python3` Jupyter kernel exists, run `python -
 
 ## Step 6. Run the Narwhals tests with cudf.pandas
 
-Run the cudf.pandas variation of `ci/test_narwhals.sh` against the target pandas version, keeping the current Narwhals version. Record failures in `ci/narwhals_cudf_pandas_test_plugin.py` as described in Step 3 of the `update-narwhals-testing` skill.
+Run the cudf.pandas variation of `ci/test_narwhals.sh` against the target pandas version, keeping the current Narwhals version. Record failures in `ci/narwhals_cudf_pandas_test_plugin.py` as described in Step 3 of the `update-narwhals-testing` skill. For every entry that you add or update, set the reason to `"TODO: Started failing with pandas X.Y"`, where `X.Y` is the target pandas version.
 
 ## Scope and report
 
