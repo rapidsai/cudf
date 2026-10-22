@@ -83,11 +83,6 @@ def make_all_null_column(dtype: DataType, size: int, stream: Stream) -> plc.Colu
     """
     Create an all-null column, including for nested types and dictionaries.
 
-    ``plc.Column.all_null_like`` rejects DICTIONARY32 and needs a non-empty
-    template for STRUCT, so those are built by hand under an all-null mask:
-    dictionaries from zeroed indices and an empty keys column, structs from
-    all-null children.
-
     Parameters
     ----------
     dtype
@@ -107,6 +102,7 @@ def make_all_null_column(dtype: DataType, size: int, stream: Stream) -> plc.Colu
             for child_dtype in dtype.children
         ]
     elif dtype.id() == plc.TypeId.DICTIONARY32:
+        # Can be removed if https://github.com/NVIDIA/cudf/issues/24763 is addressed
         children = [
             plc.Column.from_scalar(
                 plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=stream),

@@ -79,42 +79,6 @@ class _ObjectWithArrowMetadata:
         )
 
 
-def _dictionary_indices(column: plc.Column, stream: Stream) -> plc.Column:
-    """Return the indices of a dictionary column as a standalone integer column."""
-    assert column.type().id() == plc.TypeId.DICTIONARY32
-    if column.num_children() == 0:
-        return plc.column_factories.make_empty_column(
-            plc.DataType(plc.TypeId.INT32), stream=stream
-        )
-    indices = column.children()[0]
-    return plc.Column(
-        indices.type(),
-        column.size(),
-        indices.data(),
-        column.null_mask(),
-        column.null_count(),
-        column.offset(),
-        [],
-    )
-
-
-def _dictionary_keys(column: plc.Column, stream: Stream) -> pl.Series:
-    """Return the keys of a dictionary column as a polars Series."""
-    assert column.type().id() == plc.TypeId.DICTIONARY32
-    keys = (
-        column.children()[1]
-        if column.num_children() == 2
-        else plc.column_factories.make_empty_column(
-            plc.DataType(plc.TypeId.STRING), stream=stream
-        )
-    )
-    return pl.DataFrame(
-        _ObjectWithArrowMetadata(
-            plc.Table([keys]), [plc.interop.ColumnMetadata(name="keys")], stream
-        )
-    ).to_series()
-
-
 # Pacify the type checker. DataFrame init asserts that all the columns
 # have a string name, so let's narrow the type.
 class NamedColumn(Column):
@@ -178,7 +142,22 @@ class DataFrame:
                     c.obj.children(),
                 )
             elif c.dtype.is_categorical:
-                table_columns[i] = _dictionary_indices(c.obj, self.stream)
+                assert c.obj.type().id() == plc.TypeId.DICTIONARY32
+                if c.obj.num_children() == 0:
+                    table_columns[i] = plc.column_factories.make_empty_column(
+                        plc.DataType(plc.TypeId.INT32), stream=self.stream
+                    )
+                else:
+                    indices = c.obj.children()[0]
+                    table_columns[i] = plc.Column(
+                        indices.type(),
+                        c.obj.size(),
+                        indices.data(),
+                        c.obj.null_mask(),
+                        c.obj.null_count(),
+                        c.obj.offset(),
+                        [],
+                    )
         table = plc.Table(table_columns)
         table_with_metadata = _ObjectWithArrowMetadata(table, metadata, self.stream)
         df = pl.DataFrame(table_with_metadata).rename(name_map)
@@ -195,7 +174,22 @@ class DataFrame:
         categorical_columns = [c for c in self.columns if c.dtype.is_categorical]
         if categorical_columns:
             df = df.with_columns(
-                _dictionary_keys(c.obj, self.stream)
+                pl.DataFrame(
+                    _ObjectWithArrowMetadata(
+                        plc.Table(
+                            [
+                                c.obj.children()[1]
+                                if c.obj.num_children() == 2
+                                else plc.column_factories.make_empty_column(
+                                    plc.DataType(plc.TypeId.STRING), stream=self.stream
+                                )
+                            ]
+                        ),
+                        [plc.interop.ColumnMetadata(name="keys")],
+                        self.stream,
+                    )
+                )
+                .to_series()
                 .cast(c.dtype.polars_type, strict=True)
                 .gather(df[c.name])
                 .alias(c.name)

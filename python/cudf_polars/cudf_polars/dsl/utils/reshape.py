@@ -14,13 +14,6 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
 
-def _repeat_unit_column(
-    column: plc.Column, nrows: int, *, stream: Stream
-) -> plc.Column:
-    """Repeat the only row of ``column`` ``nrows`` times, keeping its type."""
-    return plc.filling.repeat(plc.Table([column]), nrows, stream=stream).columns()[0]
-
-
 def broadcast(
     *columns: Column, target_length: int | None = None, stream: Stream
 ) -> list[Column]:
@@ -80,7 +73,9 @@ def broadcast(
         column
         if column.size == nrows
         else Column(
-            _repeat_unit_column(column.obj, nrows, stream=stream)
+            plc.filling.repeat(plc.Table([column.obj]), nrows, stream=stream).columns()[
+                0
+            ]
             if column.obj.type().id() == plc.TypeId.DICTIONARY32
             else plc.Column.from_scalar(
                 column.obj_scalar(stream=stream), nrows, stream=stream
