@@ -455,7 +455,7 @@ TEST_F(groupby_key_shape_test, CountsBeforeRowBasedRequests)
     check(reused);
     check(reused, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
     check(reused, cudf::make_collect_list_aggregation<cudf::groupby_aggregation>());
-    check(reused);
+    check(reused, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
     // Within one call, specialized aggregations establish their grouping before the counts.
     cudf::groupby::groupby ordered(keys, nulls);
     check(ordered, cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
