@@ -265,8 +265,6 @@ enum class mask_allocation_policy : int32_t {
 /**
  * @brief Initializes and returns an empty column of the same type as the `input`.
  *
- * For nested and dictionary columns, the full column hierarchy is preserved.
- *
  * @param[in] input Immutable view of input column to emulate
  * @return An empty column of same type as `input`
  */
