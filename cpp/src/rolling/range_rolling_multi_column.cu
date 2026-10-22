@@ -188,9 +188,9 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   CUDF_EXPECTS(is_peer_bound(preceding) && is_peer_bound(following),
                "Multi-column RANGE windows support only UNBOUNDED and CURRENT ROW bounds");
 
-  using grouping_helper = cudf::groupby::detail::groupby_helper;
+  using groupby_helper = cudf::groupby::detail::groupby_helper;
 
-  std::optional<grouping_helper> peer_helper;
+  std::optional<groupby_helper> peer_helper;
   std::optional<rolling::grouped> peers;
   if (std::holds_alternative<current_row>(preceding) ||
       std::holds_alternative<current_row>(following)) {
@@ -201,7 +201,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
                              peer_helper->group_offsets(stream).data()};
   }
 
-  std::optional<grouping_helper> group_helper;
+  std::optional<groupby_helper> group_helper;
   if (group_keys.num_columns() > 0 && (std::holds_alternative<unbounded>(preceding) ||
                                        std::holds_alternative<unbounded>(following))) {
     group_helper.emplace(group_keys, null_policy::INCLUDE, sorted::YES);

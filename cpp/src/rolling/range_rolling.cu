@@ -114,8 +114,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
   rmm::device_async_resource_ref mr)
 {
   if (group_keys.num_columns() > 0) {
-    using grouping_helper = cudf::groupby::detail::groupby_helper;
-    grouping_helper helper{group_keys, null_policy::INCLUDE, sorted::YES};
+    using groupby_helper = cudf::groupby::detail::groupby_helper;
+    groupby_helper helper{group_keys, null_policy::INCLUDE, sorted::YES};
     auto const& labels   = helper.group_labels(stream);
     auto const& offsets  = helper.group_offsets(stream);
     auto per_group_nulls = orderby.has_nulls() ? nulls_per_group(orderby, offsets, stream)
