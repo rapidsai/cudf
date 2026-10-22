@@ -25,6 +25,8 @@
 
 #include <cuda/stream>
 
+#include <algorithm>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -209,6 +211,16 @@ class reader_impl {
    * @param out_columns The output columns vector to transcode in place.
    */
   void assemble_dict_transcoded_columns(std::vector<std::unique_ptr<column>>& out_columns);
+
+  /**
+   * @brief Whether any output column should be output as DICTIONARY32.
+   *
+   * @return `true` if any output column should be output as DICTIONARY32
+   */
+  [[nodiscard]] bool has_output_dict_columns() const
+  {
+    return std::ranges::any_of(_output_dict_column_mask, std::identity{});
+  }
 
   /**
    * @brief Copies over the relevant page mask information for the subpass
@@ -604,6 +616,9 @@ class reader_impl {
   // Per-input-column flag indicating whether that column was selected for direct
   // Parquet-dict → DICTIONARY32 transcode.
   std::vector<bool> _dict_transcode_eligible;
+
+  // Per-output-buffer flag indicating whether that column should be output as DICTIONARY32.
+  std::vector<bool> _output_dict_column_mask;
 
   // LIBCUDF_PARQUET_NZ_MAP selector is fixed for the reader lifetime so
   // every pass and output chunk agrees on which nz map consumer kinds may

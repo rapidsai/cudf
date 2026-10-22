@@ -1722,3 +1722,180 @@ def test_read_parquet_prepend_source_index_column_with_filter(
         plc.io.parquet.read_parquet(options),
         check_field_nullability=False,
     )
+
+
+@pytest.fixture
+def dictionary32_source(tmp_path) -> os.PathLike[str]:
+    path = tmp_path / "dictionary32.parquet"
+    write_table(
+        pa.table(
+            {
+                "key": pa.array([0, 1, 2, 3], type=pa.int64()),
+                "a": pa.array(["x", "y", None, "x"]),
+                "b": pa.array(["foo", "bar", "foo", None]),
+            }
+        ),
+        path,
+    )
+    return path
+
+
+def test_read_parquet_dictionary32_columns_default(
+    dictionary32_source,
+) -> None:
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([dictionary32_source])
+    ).build()
+
+    assert options.is_enabled_output_dict_columns() is False
+    assert options.get_dictionary32_columns() == []
+
+
+@pytest.mark.parametrize("use_builder", [False, True])
+def test_read_parquet_output_dict_columns(
+    dictionary32_source, use_builder
+) -> None:
+    builder = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([dictionary32_source])
+    )
+    if use_builder:
+        options = builder.output_dict_columns(True).build()
+    else:
+        options = builder.build()
+        options.enable_output_dict_columns(True)
+
+    assert options.is_enabled_output_dict_columns() is True
+
+    got = plc.io.parquet.read_parquet(options).tbl
+    assert [col.type().id() for col in got.columns()] == [
+        plc.TypeId.INT64,
+        plc.TypeId.DICTIONARY32,
+        plc.TypeId.DICTIONARY32,
+    ]
+    expect = read_table(dictionary32_source)
+    got_arrow = got.to_arrow()
+    for i in range(1, 3):
+        assert got_arrow.column(i).cast(pa.string()).equals(expect.column(i))
+
+
+@pytest.mark.parametrize("use_builder", [False, True])
+def test_read_parquet_dictionary32_columns(
+    dictionary32_source, use_builder
+) -> None:
+    builder = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([dictionary32_source])
+    )
+    if use_builder:
+        options = builder.dictionary32_columns(["b", "missing"]).build()
+    else:
+        options = builder.build()
+        options.set_dictionary32_columns(["b", "missing"])
+
+    assert options.get_dictionary32_columns() == ["b", "missing"]
+
+    got = plc.io.parquet.read_parquet(options).tbl
+    assert [col.type().id() for col in got.columns()] == [
+        plc.TypeId.INT64,
+        plc.TypeId.STRING,
+        plc.TypeId.DICTIONARY32,
+    ]
+    expect = read_table(dictionary32_source)
+    got_arrow = got.to_arrow()
+    assert got_arrow.column(1).equals(expect.column(1))
+    assert got_arrow.column(2).cast(pa.string()).equals(expect.column(2))
+
+
+def test_chunked_parquet_reader_dictionary32_columns(
+    dictionary32_source,
+) -> None:
+    options = (
+        plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo([dictionary32_source])
+        )
+        .dictionary32_columns(["a"])
+        .build()
+    )
+    reader = plc.io.parquet.ChunkedParquetReader(options)
+    got = reader.read_chunk().tbl
+    assert [col.type().id() for col in got.columns()] == [
+        plc.TypeId.INT64,
+        plc.TypeId.DICTIONARY32,
+        plc.TypeId.STRING,
+    ]
+
+
+def test_read_parquet_dictionary32_columns_with_filter(
+    dictionary32_source,
+) -> None:
+    options = (
+        plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo([dictionary32_source])
+        )
+        .dictionary32_columns(["b"])
+        .prepend_source_index_column(True)
+        .filter(
+            Operation(
+                ASTOperator.GREATER_EQUAL,
+                ColumnNameReference("key"),
+                Literal(plc.Scalar.from_arrow(pa.scalar(1, type=pa.int64()))),
+            )
+        )
+        .build()
+    )
+
+    got = plc.io.parquet.read_parquet(options).tbl
+    assert [col.type().id() for col in got.columns()] == [
+        plc.TypeId.INT32,
+        plc.TypeId.INT64,
+        plc.TypeId.STRING,
+        plc.TypeId.DICTIONARY32,
+    ]
+    got_arrow = got.to_arrow()
+    assert got_arrow.column(2).equals(pa.chunked_array([["y", None, "x"]]))
+    assert (
+        got_arrow.column(3)
+        .cast(pa.string())
+        .equals(pa.chunked_array([["bar", "foo", None]]))
+    )
+
+
+@pytest.mark.parametrize("output_dict_columns_first", [True, False])
+def test_read_parquet_dictionary32_columns_and_output_dict_columns_exclusive(
+    dictionary32_source, output_dict_columns_first
+) -> None:
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([dictionary32_source])
+    ).build()
+    if output_dict_columns_first:
+        options.enable_output_dict_columns(True)
+        with pytest.raises(RuntimeError, match="DICTIONARY32"):
+            options.set_dictionary32_columns(["a"])
+    else:
+        options.set_dictionary32_columns(["a"])
+        with pytest.raises(RuntimeError, match="DICTIONARY32"):
+            options.enable_output_dict_columns(True)
+
+
+@pytest.mark.parametrize("output_dict_columns_first", [True, False])
+def test_read_parquet_builder_dictionary32_columns_and_output_dict_columns_exclusive(
+    dictionary32_source, output_dict_columns_first
+) -> None:
+    builder = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([dictionary32_source])
+    )
+    if output_dict_columns_first:
+        with pytest.raises(RuntimeError, match="DICTIONARY32"):
+            builder.output_dict_columns(True).dictionary32_columns(["a"])
+    else:
+        with pytest.raises(RuntimeError, match="DICTIONARY32"):
+            builder.dictionary32_columns(["a"]).output_dict_columns(True)
+
+
+def test_read_parquet_dictionary32_columns_non_string_raises(
+    dictionary32_source,
+) -> None:
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([dictionary32_source])
+    ).build()
+    with pytest.raises(TypeError, match="must be strings"):
+        options.set_dictionary32_columns([1])
