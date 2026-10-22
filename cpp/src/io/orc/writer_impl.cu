@@ -269,7 +269,6 @@ class orc_column_view {
 
   [[nodiscard]] auto type_width() const noexcept { return _type_width; }
   auto size() const noexcept { return cudf_column.size(); }
-  [[nodiscard]] column_view const& cudf_view() const noexcept { return cudf_column; }
 
   auto null_count() const noexcept { return cudf_column.null_count(); }
   auto null_mask() const noexcept { return cudf_column.null_mask(); }

@@ -105,11 +105,12 @@ struct calculate_group_statistics_functor {
       uint32_t row = r + s.group.start_row;
       if (r < s.group.num_rows) {
         if (s.col.leaf_column->is_valid(row)) {
-          auto converted_value = type_convert::convert(get_element<T>(s, row));
+          auto const element = get_element<T>(s, row);
           if constexpr (std::is_same_v<CT, detail::timestamp_ns128>) {
-            converted_value = detail::to_wall_clock(converted_value, s.col.ut_offsets);
+            chunk.reduce(detail::to_wall_clock_ns(element, s.col.ut_offsets));
+          } else {
+            chunk.reduce(type_convert::convert(element));
           }
-          chunk.reduce(converted_value);
         } else {
           chunk.null_count++;
         }

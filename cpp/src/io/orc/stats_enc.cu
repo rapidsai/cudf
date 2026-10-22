@@ -201,8 +201,9 @@ __device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, void const* r
   return p + 9;
 }
 
-// Splits a nanosecond timestamp into milliseconds and nanoseconds. The milliseconds fit an int64_t
-// for every timestamp ORC can hold, since the field they are written to is one.
+// Splits a nanosecond timestamp into the milliseconds and the sub-millisecond remainder ORC writes
+// a timestamp bound as. The milliseconds are narrowed to the int64_t that field holds, which covers
+// any input within ±292 million years of the epoch.
 __device__ cuda::std::pair<int64_t, int32_t> split_nanosecond_timestamp(__int128_t nano_count)
 {
   auto constexpr ns_per_ms = __int128_t{1'000'000};

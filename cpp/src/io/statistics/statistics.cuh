@@ -16,6 +16,8 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/wrappers/durations.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/stream>
 

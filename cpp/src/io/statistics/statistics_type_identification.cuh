@@ -79,6 +79,9 @@ struct conversion_map<io_file_format::PARQUET, is_int96_timestamp::NO> {
                            std::pair<cudf::duration_s, cudf::duration_ms>>;
 };
 
+template <class T>
+struct dependent_false : std::false_type {};
+
 /**
  * @brief Utility class to help conversion of timestamps and durations to their
  * representation type
@@ -100,9 +103,9 @@ class type_conversion {
     if constexpr (cudf::is_duration<T>()) {
       return cuda::std::chrono::duration_cast<Type>(elem);
     } else if constexpr (std::is_same_v<Type, timestamp_ns128>) {
-      auto constexpr ticks_to_ns =
-        cuda::std::ratio_divide<typename T::period, cuda::std::nano>::num;
-      return Type{static_cast<__int128_t>(elem.time_since_epoch().count()) * ticks_to_ns};
+      static_assert(dependent_false<T>::value,
+                    "ORC timestamp statistics are converted by to_wall_clock_ns, which also puts "
+                    "them on the writer's wall clock");
     } else if constexpr (cudf::is_timestamp<T>()) {
       using Duration = typename Type::duration;
       return cuda::std::chrono::time_point_cast<Duration>(elem);
@@ -112,9 +115,6 @@ class type_conversion {
     return Type{};
   }
 };
-
-template <class T>
-struct dependent_false : std::false_type {};
 
 /**
  * @brief Utility class to convert a leaf column element into its extrema type
@@ -190,30 +190,32 @@ class extrema_type<timestamp_ns128> {
 };
 
 /**
- * @brief Moves a nanosecond count from the input instant onto the writer's wall clock.
+ * @brief Converts an instant into the nanosecond count ORC statistics hold, on the writer's wall
+ * clock.
  *
  * Shifted per value, like Apache's `TimestampTreeWriter` does, because daylight saving makes the
  * offset vary within a column.
  *
- * @param value Instant to shift
+ * @param elem Instant to convert
  * @param ut_offsets Offsets of the writer's timezone from UT; empty when writing UTC
- * @return The value on the wall clock of the timezone the offsets describe
+ * @return Nanoseconds since the epoch, on the wall clock of the timezone the offsets describe
  */
-__device__ inline timestamp_ns128 to_wall_clock(timestamp_ns128 value,
-                                                ut_offset_table const& ut_offsets)
+template <typename T>
+__device__ inline timestamp_ns128 to_wall_clock_ns(T const& elem, ut_offset_table const& ut_offsets)
 {
-  if (ut_offsets.num_entries == 0) { return value; }
+  auto constexpr ns_per_s    = __int128_t{1'000'000'000};
+  auto constexpr ticks_to_ns = cuda::std::ratio_divide<typename T::period, cuda::std::nano>::num;
 
-  auto constexpr ns_per_s = __int128_t{1'000'000'000};
-  // Floor, to take the offset in effect in the second the value falls in
-  auto const seconds = value.count / ns_per_s - ((value.count % ns_per_s < 0) ? 1 : 0);
-  auto const offset =
-    cudf::detail::get_ut_offset(ut_offsets.times,
-                                ut_offsets.offsets,
-                                ut_offsets.num_entries,
-                                timestamp_s{duration_s{static_cast<int64_t>(seconds)}});
+  auto const count = static_cast<__int128_t>(elem.time_since_epoch().count()) * ticks_to_ns;
+  if (ut_offsets.num_entries == 0) { return {count}; }
 
-  return {value.count + offset.count() * ns_per_s};
+  // Taken before widening, to keep the division out of 128-bit arithmetic, and floored so that the
+  // offset is the one in effect in the second the value falls in rather than the one after it
+  auto const second = cuda::std::chrono::floor<duration_s>(elem.time_since_epoch());
+  auto const offset = cudf::detail::get_ut_offset(
+    ut_offsets.times, ut_offsets.offsets, ut_offsets.num_entries, timestamp_s{second});
+
+  return {count + offset.count() * ns_per_s};
 }
 
 /**
