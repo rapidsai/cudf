@@ -105,6 +105,12 @@ struct RoundFunctor {
   }
 };
 
+// The minutes, hours, and days since the epoch of a 64-bit timestamp may not fit in the
+// int32_t-based duration_m, duration_h, and duration_D types, so round through 64-bit durations.
+using minutes64 = cuda::std::chrono::duration<int64_t, cuda::std::chrono::minutes::period>;
+using hours64   = cuda::std::chrono::duration<int64_t, cuda::std::chrono::hours::period>;
+using days64    = cuda::std::chrono::duration<int64_t, cuda::std::chrono::days::period>;
+
 struct RoundingDispatcher {
   rounding_function round_kind;
   rounding_frequency component;
@@ -120,13 +126,13 @@ struct RoundingDispatcher {
     switch (component) {
       case rounding_frequency::DAY:
         return time_point_cast<typename Timestamp::duration>(
-          RoundFunctor<duration_D>{}(round_kind, ts));
+          RoundFunctor<days64>{}(round_kind, ts));
       case rounding_frequency::HOUR:
         return time_point_cast<typename Timestamp::duration>(
-          RoundFunctor<duration_h>{}(round_kind, ts));
+          RoundFunctor<hours64>{}(round_kind, ts));
       case rounding_frequency::MINUTE:
         return time_point_cast<typename Timestamp::duration>(
-          RoundFunctor<duration_m>{}(round_kind, ts));
+          RoundFunctor<minutes64>{}(round_kind, ts));
       case rounding_frequency::SECOND:
         return time_point_cast<typename Timestamp::duration>(
           RoundFunctor<duration_s>{}(round_kind, ts));
