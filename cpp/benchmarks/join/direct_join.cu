@@ -66,6 +66,7 @@ void nvbench_direct_inner_join(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().get()));
   state.add_element_count(input_bytes, "input_bytes");
   state.add_global_memory_reads<nvbench::int8_t>(input_bytes);
+  auto const mem_stats_logger = cudf::memory_stats_logger();
 
   if (algorithm == "hash") {
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
@@ -95,7 +96,10 @@ void nvbench_direct_inner_join(nvbench::state& state)
     });
   } else {
     state.skip("unknown algorithm");
+    return;
   }
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(nvbench_direct_inner_join)

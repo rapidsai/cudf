@@ -51,6 +51,7 @@ void filter_join_indices_benchmark(nvbench::state& state,
     join_input_size + (left_indices->size() + right_indices->size()) * sizeof(cudf::size_type);
   state.add_element_count(filter_input_size, "filter_input_size");  // number of bytes
   state.template add_global_memory_reads<nvbench::int8_t>(filter_input_size);
+  auto const mem_stats_logger = cudf::memory_stats_logger();
 
   if (method == "AST") {
     auto col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
@@ -77,6 +78,8 @@ void filter_join_indices_benchmark(nvbench::state& state,
     });
   }
   set_throughputs(state);
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 void filter_join_indices_inner_join(nvbench::state& state)

@@ -60,8 +60,8 @@ target_include_directories(
 
 # Use an OBJECT library so we only compile these helper source files only once
 add_library(
-  cudf_benchmark_common OBJECT io/cuio_common.cpp common/table_utilities.cpp
-                               common/nvbench_utilities.cpp
+  cudf_benchmark_common OBJECT io/cuio_common.cpp common/memory_stats.cpp
+                               common/table_utilities.cpp common/nvbench_utilities.cpp
 )
 target_link_libraries(
   cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env> GTest::gmock
