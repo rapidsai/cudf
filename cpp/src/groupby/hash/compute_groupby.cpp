@@ -54,22 +54,22 @@ auto extract_hash_groupby_aggs(std::span<aggregation_request const> requests,
   auto [values, kinds, aggs, is_intermediate, has_compound] =
     extract_single_pass_aggs(requests, stream);
   aggregation_set extracted;
-  std::vector<column_view> unique_values;
-  unique_values.reserve(aggs.size());
+  std::vector<column_view> distinct_values;
+  distinct_values.reserve(aggs.size());
   for (std::size_t i = 0; i < aggs.size(); ++i) {
     auto const key =
       std::pair<column_view, std::reference_wrapper<aggregation const>>{values.column(i), *aggs[i]};
     if (!extracted.insert(key).second) { continue; }
-    auto const output       = unique_values.size();
+    auto const output       = distinct_values.size();
     kinds[output]           = kinds[i];
     is_intermediate[output] = !expose_intermediates && !requested.contains(key);
     if (output != i) { aggs[output] = std::move(aggs[i]); }
-    unique_values.push_back(values.column(i));
+    distinct_values.push_back(values.column(i));
   }
-  kinds.resize(unique_values.size());
-  aggs.resize(unique_values.size());
-  is_intermediate.resize(unique_values.size());
-  return std::tuple{table_view{unique_values},
+  kinds.resize(distinct_values.size());
+  aggs.resize(distinct_values.size());
+  is_intermediate.resize(distinct_values.size());
+  return std::tuple{table_view{distinct_values},
                     std::move(kinds),
                     std::move(aggs),
                     std::move(is_intermediate),
@@ -85,7 +85,7 @@ void compute_groupby(std::span<aggregation_request const> requests,
                      cuda::stream_ref stream,
                      cudf::memory_resources mr)
 {
-  // In case of no requests, only the unique keys are needed and the helper builds them alone.
+  // In case of no requests, only the distinct keys are needed and the helper builds them alone.
   if (requests.empty()) { return; }
 
   auto const temp_mr             = mr.get_temporary_mr();

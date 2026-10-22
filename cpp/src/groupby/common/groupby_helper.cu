@@ -229,8 +229,8 @@ std::unique_ptr<column> groupby_helper::unordered_grouped_values(column_view con
   return std::move(result->release()[0]);
 }
 
-std::unique_ptr<table> groupby_helper::unique_keys(cuda::stream_ref stream,
-                                                   rmm::device_async_resource_ref mr)
+std::unique_ptr<table> groupby_helper::distinct_keys(cuda::stream_ref stream,
+                                                     rmm::device_async_resource_ref mr)
 {
   std::unique_ptr<hash::grouped_keys> key_groups;
   if (!_groups && _keys_pre_sorted == sorted::NO) {

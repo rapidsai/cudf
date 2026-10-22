@@ -757,7 +757,7 @@ TEST_F(groupby_key_shape_test, NearlyDistinctSampleUnderestimatesPopulation)
   constexpr cudf::size_type num_samples = (num_rows + stride - 1) / stride;
 
   // The periodic sample is almost entirely distinct, but still has far fewer keys than the
-  // complete input. Every row outside the sample has a unique key. An undersized table must
+  // complete input. Every row outside the sample has a distinct key. An undersized table must
   // restart the build without dropping rows or duplicating groups.
   std::vector<int32_t> keys_data(num_rows);
   std::vector<int32_t> expected_keys;

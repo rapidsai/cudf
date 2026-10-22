@@ -116,7 +116,7 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
  *
  * @param values Grouped and sorted (within group) values to get unique count of
  * @param group_labels ID of group that the corresponding value belongs to
- * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param num_groups Number of groups ( distinct values in @p group_labels )
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param null_handling Exclude nulls while counting if null_policy::EXCLUDE,
  *  Include nulls if null_policy::INCLUDE.
@@ -151,7 +151,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
  *  the number of valid elements per group
  * @param group_labels ID of group that the corresponding value belongs to
  * @param group_offsets Offsets of groups' starting points within @p values
- * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param num_groups Number of groups ( distinct values in @p group_labels )
  * @param n nth element to choose from each group of @p values
  * @param null_handling Exclude nulls while counting if null_policy::EXCLUDE,
  *  Include nulls if null_policy::INCLUDE.

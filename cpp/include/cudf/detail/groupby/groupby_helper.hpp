@@ -110,11 +110,11 @@ struct groupby_helper {
                                                    rmm::device_async_resource_ref mr);
 
   /**
-   * @brief Get a table of unique keys
+   * @brief Get a table of distinct keys
    *
-   * @return a new table in which each row is a unique row in the grouped key table.
+   * @return a new table in which each row is a distinct row in the grouped key table.
    */
-  std::unique_ptr<table> unique_keys(cuda::stream_ref stream, rmm::device_async_resource_ref mr);
+  std::unique_ptr<table> distinct_keys(cuda::stream_ref stream, rmm::device_async_resource_ref mr);
 
   /**
    * @brief Get a table of grouped keys

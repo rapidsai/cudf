@@ -487,7 +487,7 @@ TYPED_TEST(groupby_max_floating_point_test, values_with_nan)
 // Test the shared memory kernel in hash-based groupby aggregations.
 struct groupby_max_hash_based_shmem_kernel_test : cudf::test::BaseFixture {};
 
-TEST_F(groupby_max_hash_based_shmem_kernel_test, all_unique_keys)
+TEST_F(groupby_max_hash_based_shmem_kernel_test, all_distinct_keys)
 {
   auto constexpr block_size      = 128;
   auto constexpr size_multiplier = 4;

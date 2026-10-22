@@ -200,7 +200,7 @@ TEST_F(GroupByDecimal128ShmemAlignmentTest, Decimal128SumAfterInt32Sum)
 
   auto const scale = scale_type{0};
 
-  // 11 unique keys → num_agg_locations = 22, valid_col_size = round_up_safe(22, 8) = 24.
+  // 11 distinct keys → num_agg_locations = 22, valid_col_size = round_up_safe(22, 8) = 24.
   // INT32 SUM output is INT64 (8 bytes): data = 176, total = 176 + 24 = 200.
   // 200 % 16 = 8 → DECIMAL128 slot starts misaligned for 16-byte shared-memory access.
   // clang-format off

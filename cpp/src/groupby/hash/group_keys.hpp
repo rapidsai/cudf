@@ -42,7 +42,7 @@ class grouped_keys {
   grouped_keys(grouped_keys&&)                 = default;
   grouped_keys& operator=(grouped_keys&&)      = default;
 
-  /// Input row indices for unique keys; size equals the number of groups.
+  /// Input row indices for distinct keys; size equals the number of groups.
   device_span<size_type const> key_indices;
   /// `key_indices.size() + 1` group offsets, present when requested.
   std::optional<cuda::device_buffer<size_type>> group_offsets;

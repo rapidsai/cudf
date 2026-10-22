@@ -802,7 +802,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> detail::hash:
 
   auto results = detail::extract_results(requests, cache, stream, mr.get_output_mr());
 
-  return std::pair(helper.unique_keys(stream, mr.get_output_mr()), std::move(results));
+  return std::pair(helper.distinct_keys(stream, mr.get_output_mr()), std::move(results));
 }
 }  // namespace groupby
 }  // namespace cudf
