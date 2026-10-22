@@ -60,6 +60,7 @@ dependencies:
 - lxml
 - make
 - matplotlib-base
+- mkl<2026.2
 - mmh3
 - moto>=4.0.8
 - msgpack-python
