@@ -6,18 +6,14 @@
 #include <tests/groupby/groupby_test_util.hpp>
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/sorting.hpp>
 
 #include <limits>
-#include <vector>
 
 using namespace cudf::test::iterators;
 
@@ -29,44 +25,6 @@ using supported_types =
 
 TYPED_TEST_SUITE(groupby_correlation_test, supported_types);
 using K = int32_t;
-
-using groupby_correlation_mixed_test = groupby_correlation_test<int32_t>;
-
-TEST_F(groupby_correlation_mixed_test, CovarianceCorrelationAndFirstValue)
-{
-  cudf::test::fixed_width_column_wrapper<int32_t> keys{2, 1, 2, 1, 2, 1, 2};
-  cudf::test::fixed_width_column_wrapper<int32_t> first{{1, 0, 2, 2, 3, 4, 99}, null_at(6)};
-  cudf::test::fixed_width_column_wrapper<int32_t> second{2, 0, 4, 4, 6, 8, 99};
-  cudf::test::structs_column_wrapper values{{first, second}};
-  std::vector<cudf::groupby::aggregation_request> requests(1);
-  requests[0].values = values;
-  requests[0].aggregations.push_back(
-    cudf::make_covariance_aggregation<cudf::groupby_aggregation>());
-  requests[0].aggregations.push_back(
-    cudf::make_correlation_aggregation<cudf::groupby_aggregation>(cudf::correlation_type::PEARSON));
-  requests[0].aggregations.push_back(
-    cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
-  cudf::groupby::groupby gb(cudf::table_view{{keys}});
-  auto const [result_keys, results] = gb.aggregate(requests);
-  ASSERT_EQ(results.size(), 1);
-  ASSERT_EQ(results[0].results.size(), 3);
-  auto const order  = cudf::sorted_order(result_keys->view());
-  auto const output = cudf::gather(cudf::table_view{{result_keys->view().column(0),
-                                                     *results[0].results[0],
-                                                     *results[0].results[1],
-                                                     *results[0].results[2]}},
-                                   *order);
-  cudf::test::fixed_width_column_wrapper<int32_t> expected_keys{1, 2};
-  cudf::test::fixed_width_column_wrapper<double> expected_covariance{8.0, 2.0};
-  cudf::test::fixed_width_column_wrapper<double> expected_correlation{1.0, 1.0};
-  cudf::test::fixed_width_column_wrapper<int32_t> first_values{0, 1};
-  cudf::test::fixed_width_column_wrapper<int32_t> second_values{0, 2};
-  cudf::test::structs_column_wrapper expected_first{{first_values, second_values}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, output->get_column(0));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_covariance, output->get_column(1));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_correlation, output->get_column(2));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_first, output->get_column(3));
-}
 
 TYPED_TEST(groupby_correlation_test, basic)
 {

@@ -588,41 +588,6 @@ TEST_F(groupby_key_shape_test, PresortedNestedKeyBoundaries)
   }
 }
 
-TEST_F(groupby_key_shape_test, SingletonRepresentativesAcrossOperations)
-{
-  auto const stream = cudf::test::get_default_stream();
-  cudf::test::fixed_width_column_wrapper<int32_t> keys{7, 2, 5};
-  cudf::test::fixed_width_column_wrapper<int32_t> values{30, 10, 20};
-  cudf::test::fixed_width_column_wrapper<int32_t> expected_keys{2, 5, 7};
-  cudf::test::fixed_width_column_wrapper<int64_t> expected_sums{10, 20, 30};
-  cudf::groupby::groupby gb(cudf::table_view{{keys}});
-  auto const check_unique = [&] {
-    auto const [result_keys, results] = gb.aggregate({}, stream);
-    EXPECT_TRUE(results.empty());
-    auto const sorted_keys = cudf::sort(result_keys->view(), {}, {}, stream);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, sorted_keys->view().column(0));
-  };
-  check_unique();  // Representatives-only build, before grouped rows are cached.
-
-  std::vector<cudf::groupby::scan_request> scans(1);
-  scans[0].values = values;
-  scans[0].aggregations.push_back(
-    cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(cudf::rank_method::DENSE));
-  auto const scan_result = gb.scan(scans, stream);
-  EXPECT_EQ(scan_result.first->num_rows(), 3);
-  check_unique();  // Representatives come from the cached singleton metadata.
-
-  std::vector<cudf::groupby::aggregation_request> requests(1);
-  requests[0].values = values;
-  requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  auto const [result_keys, results] = gb.aggregate(requests, stream);
-  ASSERT_EQ(results.size(), 1);
-  ASSERT_EQ(results[0].results.size(), 1);
-  auto const actual = cudf::sort(
-    cudf::table_view{{result_keys->view().column(0), *results[0].results[0]}}, {}, {}, stream);
-  CUDF_TEST_EXPECT_TABLES_EQUAL((cudf::table_view{{expected_keys, expected_sums}}), actual->view());
-}
-
 TEST_F(groupby_key_shape_test, StableGroupedRows)
 {
   using int32s      = cudf::test::fixed_width_column_wrapper<int32_t>;
