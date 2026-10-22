@@ -906,6 +906,11 @@ TEST_F(OrcWriterTest, WriterTimezoneStatisticsOutsideNanosecondRange)
   auto constexpr highest_s = cudf::timestamp_s::rep{9'223'372'036};   // 2262-04-11T23:47:16Z
   auto constexpr lowest_s  = cudf::timestamp_s::rep{-9'223'372'036};  // 1677-09-21T00:12:44Z
 
+  // Fixed-offset zones, because the offset a named zone had in 1677 is local mean time and varies
+  // between tzdata releases. One entry each, with a non-zero offset, so the shift still runs.
+  auto constexpr east_offset = cudf::duration_s{cudf::duration_h{8}}.count();   // Etc/GMT-8
+  auto constexpr west_offset = cudf::duration_s{cudf::duration_h{-5}}.count();  // Etc/GMT+5
+
   // Shifting these onto the wall clock leaves the range an int64 nanosecond count covers, in one
   // direction or the other, so bounds reduced as absolute nanoseconds wrap and change sign
   auto const bounds_survive_the_shift = [](auto const& input, auto timezone, int64_t expected_ms) {
@@ -924,11 +929,9 @@ TEST_F(OrcWriterTest, WriterTimezoneStatisticsOutsideNanosecondRange)
     auto const nanos =
       column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{value * 1'000'000'000};
 
-    // Shanghai leaves the range at the top, New York at the bottom. April 2262 falls in New York's
-    // daylight saving, while 1677 predates its transitions and takes the earliest standard offset.
-    auto const new_york = (value == highest_s) ? new_york_dst_offset : new_york_offset;
+    // The eastern offset leaves the range at the top, the western one at the bottom
     for (auto const [timezone, offset] :
-         {std::pair{"Asia/Shanghai", shanghai_offset}, std::pair{"America/New_York", new_york}}) {
+         {std::pair{"Etc/GMT-8", east_offset}, std::pair{"Etc/GMT+5", west_offset}}) {
       auto const expected_ms = (value + offset) * 1000;
       bounds_survive_the_shift(seconds, timezone, expected_ms);
       bounds_survive_the_shift(micros, timezone, expected_ms);
