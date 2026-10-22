@@ -37,7 +37,7 @@ using parquet::detail::simplified_expression_opt;
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public metadata_base {
-  explicit metadata(cudf::host_span<uint8_t const> footer_bytes);
+  explicit metadata(std::span<uint8_t const> footer_bytes);
   explicit metadata(FileMetaData const& other) { static_cast<FileMetaData&>(*this) = other; }
   metadata(metadata const& other)            = delete;
   metadata(metadata&& other)                 = default;
@@ -158,7 +158,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *
    * @param page_index_bytes Host span of Parquet page index buffer bytes, one per source
    */
-  void setup_page_indexes(cudf::host_span<cudf::host_span<uint8_t const> const> page_index_bytes);
+  void setup_page_indexes(std::span<cudf::host_span<uint8_t const> const> page_index_bytes);
 
   /**
    * @brief Get all available row group indices, one inner vector per source
