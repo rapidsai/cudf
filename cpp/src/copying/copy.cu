@@ -157,6 +157,8 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      cuda::stream_ref stream,
                                                      rmm::device_async_resource_ref mr)
 {
+  // TODO: switch these to resizable buffers once https://github.com/NVIDIA/cccl/issues/12051
+  // is resolved
   auto gather_map_storage = cuda::device_buffer<size_type>{
     stream, cudf::get_current_device_resource_ref(), static_cast<std::size_t>(size), cuda::no_init};
   auto const gather_map_end = cudf::detail::copy_if(cuda::counting_iterator<size_type>{0},
