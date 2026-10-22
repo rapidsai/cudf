@@ -1,39 +1,35 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
-#include <cstddef>
-#include <memory>
+#include <cudf/utilities/memory_resource.hpp>
+
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 namespace cudf {
 
-/**
- * @brief Tracks peak device memory usage for the lifetime of this object
- *
- * Wraps the current device resource in an `rmm::mr::statistics_resource_adaptor` on construction
- * and restores the upstream resource on destruction.
- *
- * The implementation is kept out of this header so it can be included from `.cu` translation
- * units without pulling in `<rmm/mr/statistics_resource_adaptor.hpp>`.
- */
 class memory_stats_logger {
  public:
-  memory_stats_logger();
-  ~memory_stats_logger();
+  memory_stats_logger() : statistics_mr(cudf::get_current_device_resource_ref())
+  {
+    cudf::set_current_device_resource(statistics_mr);
+  }
 
-  memory_stats_logger(memory_stats_logger const&)            = delete;
-  memory_stats_logger& operator=(memory_stats_logger const&) = delete;
-  memory_stats_logger(memory_stats_logger&&)                 = delete;
-  memory_stats_logger& operator=(memory_stats_logger&&)      = delete;
+  ~memory_stats_logger()
+  {
+    cudf::set_current_device_resource(statistics_mr.get_upstream_resource());
+  }
 
-  [[nodiscard]] std::size_t peak_memory_usage() const noexcept;
+  [[nodiscard]] size_t peak_memory_usage() const noexcept
+  {
+    return statistics_mr.get_bytes_counter().peak;
+  }
 
  private:
-  class impl;
-  std::unique_ptr<impl> _impl;
+  rmm::mr::statistics_resource_adaptor statistics_mr;
 };
 
 }  // namespace cudf
