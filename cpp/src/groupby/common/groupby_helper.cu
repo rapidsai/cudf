@@ -150,7 +150,7 @@ device_span<size_type const> groupby_helper::group_offsets(cuda::stream_ref stre
 
 device_span<size_type const> groupby_helper::group_labels(cuda::stream_ref stream)
 {
-  // Labels must use the final grouping order before any row consumer can observe them.
+  // Labels have one entry per grouped row, so build the rows first.
   build_groups(true, false, false, stream);
   if (!_group_labels) {
     auto labels = std::make_unique<cuda::device_buffer<size_type>>(
