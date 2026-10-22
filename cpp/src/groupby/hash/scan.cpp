@@ -177,13 +177,10 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                           stream,
                           cudf::get_current_device_resource_ref());
   if (rank_agg._percentage != rank_percentage::NONE) {
-    auto const null_handling =
-      get_grouped_values().nullable() and rank_agg._null_handling == null_policy::EXCLUDE
-        ? null_policy::EXCLUDE
-        : null_policy::INCLUDE;
     aggregation_request request;
     request.values = values;
-    request.aggregations.push_back(make_count_aggregation<groupby_aggregation>(null_handling));
+    request.aggregations.push_back(
+      make_count_aggregation<groupby_aggregation>(rank_agg._null_handling));
     cudf::detail::result_cache counts(1);
     hash::compute_groupby(std::span{&request, 1},
                           helper,
