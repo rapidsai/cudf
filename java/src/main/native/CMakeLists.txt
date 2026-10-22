@@ -86,7 +86,7 @@ rapids_find_package(cudf REQUIRED)
 #   fetch (and install) from source if the target does not exist to avoid name conflict when the
 #   same target is exported multiple times.
 
-if(USE_NVTX AND NOT TARGET nvtx3::nvtx3-cpp)
+if(NOT TARGET nvtx3::nvtx3-cpp)
   message(STATUS "Fetch package nvtx3 from source.")
   include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_nvtx.cmake)
 endif()
