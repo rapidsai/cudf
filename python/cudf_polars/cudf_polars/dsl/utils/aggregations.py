@@ -236,7 +236,10 @@ def decompose_single_agg(
                 "Range rolling over a window does not support nested window expressions"
             )
         return [(named_expr, True)], named_expr.reconstruct(expr.Col(agg.dtype, name))
-    if isinstance(agg, expr.UnaryFunction) and agg.name == "null_count":
+    if (isinstance(agg, expr.UnaryFunction) and agg.name == "null_count") or (
+        isinstance(agg, expr.BooleanFunction)
+        and agg.name == expr.BooleanFunction.Name.HasNulls
+    ):
         (child,) = agg.children
 
         is_null_bool = expr.BooleanFunction(
@@ -245,7 +248,7 @@ def decompose_single_agg(
             (),
             child,
         )
-        dtype = agg.dtype
+        dtype = DataType(pl.UInt32())
         sum_name = next(name_generator)
         sum_agg = expr.NamedExpr(
             sum_name,
@@ -257,9 +260,15 @@ def decompose_single_agg(
                 expr.Cast(dtype, True, is_null_bool),  # noqa: FBT003
             ),
         )
-        return [(sum_agg, True)], named_expr.reconstruct(
-            expr.Cast(dtype, True, expr.Col(dtype, sum_name))  # noqa: FBT003
-        )
+        count = expr.Cast(dtype, True, expr.Col(dtype, sum_name))  # noqa: FBT003
+        if isinstance(agg, expr.BooleanFunction):
+            count = expr.BinOp(
+                agg.dtype,
+                plc.binaryop.BinaryOperator.GREATER,
+                count,
+                expr.Literal(dtype, 0),
+            )
+        return [(sum_agg, True)], named_expr.reconstruct(count)
     if isinstance(agg, expr.Col):
         # TODO: collect_list produces null for empty group in libcudf, empty list in polars.
         # But we need the nested value type, so need to track proper dtypes in our DSL.
