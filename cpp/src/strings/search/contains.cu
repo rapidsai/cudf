@@ -25,6 +25,7 @@
 #include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/algorithm>
+#include <cuda/std/bit>
 #include <cuda/stream>
 #include <thrust/fill.h>
 #include <thrust/transform.h>
@@ -94,7 +95,7 @@ constexpr int LRB_CHUNK_SHIFT = 12;  // log2(LRB_CHUNK_BYTES)
 static_assert((1 << LRB_CHUNK_SHIFT) == LRB_CHUNK_BYTES);
 
 /// log2 of the number of chunk tasks per row of `bin`: rows in bin b have at most 2^b bytes.
-__host__ __device__ constexpr int lrb_chunk_shift(int bin)
+CUDF_HOST_DEVICE constexpr int lrb_chunk_shift(int bin)
 {
   return bin > LRB_CHUNK_SHIFT ? bin - LRB_CHUNK_SHIFT : 0;
 }
@@ -123,7 +124,7 @@ __device__ __forceinline__ int lrb_bin(size_type size_bytes, size_type target_by
   if (is_null || size_bytes < target_bytes || size_bytes <= LRB_DIRECT_MAX_BYTES) { return 0; }
   // ceil(log2(bytes)): bin b holds 2^(b-1) < bytes <= 2^b, so a row of exactly 2^b bytes sits at
   // the top of bin b and the bin's chunk count (2^b / LRB_CHUNK_BYTES) is exact for it
-  return 32 - __clz(static_cast<unsigned>(size_bytes - 1));
+  return cuda::std::bit_width(static_cast<unsigned>(size_bytes - 1));
 }
 
 /**
@@ -135,7 +136,7 @@ __device__ __forceinline__ int lrb_bin(size_type size_bytes, size_type target_by
  * @param bin Bin index
  * @return 8, 16 or 32 for the bins that reach the search pass
  */
-__host__ __device__ constexpr int lrb_threads_per_row(int bin)
+CUDF_HOST_DEVICE constexpr int lrb_threads_per_row(int bin)
 {
   auto const shift = bin - LRB_SHIFT;
   return 1 << (shift < 0 ? 0 : (shift > 5 ? 5 : shift));
@@ -161,7 +162,6 @@ CUDF_KERNEL void lrb_histogram_kernel(column_device_view const d_strings,
 
   auto const num_rows = static_cast<thread_index_type>(d_strings.size());
   auto const stride   = cudf::detail::grid_1d::grid_stride();
-  auto const lane     = threadIdx.x % cudf::detail::warp_size;
   for (auto idx = cudf::detail::grid_1d::global_thread_id(); idx < num_rows; idx += stride) {
     auto const row     = static_cast<size_type>(idx);
     auto const is_null = d_strings.is_null(row);
@@ -182,11 +182,12 @@ CUDF_KERNEL void lrb_histogram_kernel(column_device_view const d_strings,
     }
     // one shared atomic per (warp, distinct bin) instead of one per lane; nothing at all when
     // the whole warp was resolved directly (the common case for short-string columns)
-    auto const active = __activemask();
-    if (__any_sync(active, bin != 0)) {
-      auto const peers = __match_any_sync(active, bin);
-      if (bin != 0 && lane == static_cast<unsigned>(__ffs(peers) - 1)) {
-        atomicAdd(&s_hist[bin], __popc(peers));
+    auto const active = cooperative_groups::coalesced_threads();
+    if (active.any(bin != 0)) {
+      auto const peers = active.match_any(bin);  // lanes of `active` with the same bin
+      if (bin != 0 &&
+          active.thread_rank() == static_cast<unsigned>(cuda::std::countr_zero(peers))) {
+        atomicAdd(&s_hist[bin], cuda::std::popcount(peers));
       }
     }
   }
@@ -243,14 +244,14 @@ CUDF_KERNEL void lrb_scatter_kernel(column_device_view const d_strings,
       bin                = lrb_bin(bytes, target_bytes, is_null);
     }
     // rank within (block, bin): warp-aggregated shared atomic, then lane order within the warp
-    auto const peers  = __match_any_sync(0xffffffffu, bin);
-    auto const leader = __ffs(peers) - 1;
+    auto const peers  = warp.match_any(bin);
+    auto const leader = cuda::std::countr_zero(peers);
     size_type wbase   = 0;
     if (bin != 0 && lane == static_cast<unsigned>(leader)) {
-      wbase = atomicAdd(&s_count[bin], __popc(peers));
+      wbase = atomicAdd(&s_count[bin], cuda::std::popcount(peers));
     }
-    wbase           = __shfl_sync(0xffffffffu, wbase, leader);
-    auto const rank = wbase + __popc(peers & ((1u << lane) - 1u));
+    wbase           = warp.shfl(wbase, leader);
+    auto const rank = wbase + cuda::std::popcount(peers & ((1u << lane) - 1u));
     __syncthreads();
 
     if (threadIdx.x < LRB_NUM_BINS && s_count[threadIdx.x] != 0) {
@@ -395,7 +396,7 @@ CUDF_KERNEL void lrb_search_kernel(column_device_view const d_strings,
 
   for (int64_t task = warp_id; task < total_tasks; task += num_warps) {
     // the bin owning this task is the first lane whose inclusive task count exceeds it
-    auto const bin = __ffs(warp.ballot(task < tasks_incl)) - 1;
+    auto const bin = cuda::std::countr_zero(warp.ballot(task < tasks_incl));
     // per-lane candidates computed for the lane's own bin, then broadcast from lane `bin`
     auto const my_local = task - tasks_excl;
     auto const my_first =
