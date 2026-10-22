@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "groupby/common/utils.hpp"
 #include "groupby/hash/compute_single_pass_aggs.hpp"
 #include "groupby/hash/group_keys.hpp"
 #include "groupby_helper_group_offsets.cuh"
@@ -15,7 +14,6 @@
 #include <cudf/detail/groupby/groupby_helper.hpp>
 #include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -27,11 +25,9 @@
 #include <cuda/std/cstddef>
 #include <cuda/std/cstdint>
 #include <cuda/std/functional>
-#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/fill.h>
-#include <thrust/gather.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
@@ -53,34 +49,6 @@ size_type compact_group_offsets(bool* flags,
 }
 
 namespace {
-
-std::pair<cuda::device_buffer<size_type>, size_type> included_rows(table_view const& keys,
-                                                                   null_policy include_null_keys,
-                                                                   cuda::stream_ref stream)
-{
-  auto const mr     = cudf::get_current_device_resource_ref();
-  auto const policy = rmm::exec_policy_nosync(stream, mr);
-  auto rows         = cuda::device_buffer<size_type>(stream, mr, keys.num_rows(), cuda::no_init);
-  auto size         = keys.num_rows();
-  auto [row_bitmask_data, row_bitmask] =
-    include_null_keys == null_policy::EXCLUDE
-      ? compute_row_bitmask(keys, stream)
-      : std::pair<cuda::device_buffer<cudf::bitmask_type>, bitmask_type const*>{
-          cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr), nullptr};
-  if (row_bitmask == nullptr) {
-    thrust::sequence(policy, rows.begin(), rows.end(), size_type{0});
-  } else {
-    // Stable compaction retains the input order while dropping null key rows.
-    auto const end = thrust::copy_if(
-      policy,
-      cuda::counting_iterator<size_type>{0},
-      cuda::counting_iterator<size_type>{keys.num_rows()},
-      rows.begin(),
-      [row_bitmask] __device__(size_type row) { return cudf::bit_is_set(row_bitmask, row); });
-    size = static_cast<size_type>(cuda::std::distance(rows.begin(), end));
-  }
-  return {std::move(rows), size};
-}
 
 /**
  * @brief Restores input order within each group of the grouped rows.
@@ -177,12 +145,15 @@ void stabilize_rows(hash::grouped_keys& groups,
 groupby_helper::groupby_helper(table_view const& keys,
                                null_policy include_null_keys,
                                sorted keys_pre_sorted)
-  : _keys{keys},
-    _keys_pre_sorted{keys_pre_sorted},
-    _include_null_keys{include_null_keys},
-    _is_presorted{keys_pre_sorted == sorted::YES &&
-                  (include_null_keys == null_policy::INCLUDE || !has_nulls(keys))}
+  : _keys{keys}, _keys_pre_sorted{keys_pre_sorted}, _include_null_keys{include_null_keys}
 {
+  // Cannot depend on caller's sorting if the column contains nulls,
+  // and null values are to be excluded.
+  // Hash the keys instead, to filter out nulls more easily.
+  if (keys_pre_sorted == sorted::YES and include_null_keys == null_policy::EXCLUDE and
+      has_nulls(keys)) {
+    _keys_pre_sorted = sorted::NO;
+  }
 }
 
 groupby_helper::~groupby_helper()                                    = default;
@@ -202,7 +173,7 @@ void groupby_helper::build_groups(bool need_grouped_rows,
     _stable = false;
   }
   auto const mr = cudf::get_current_device_resource_ref();
-  if (_keys_pre_sorted == sorted::NO && _keys.num_rows() != 0) {
+  if (_keys_pre_sorted == sorted::NO) {
     _groups = std::make_unique<hash::grouped_keys>(hash::group_keys(
       _keys, _include_null_keys, true, need_grouped_rows, stable_rows, keep_labels, stream, mr));
     if (_groups->grouped_rows) {
@@ -217,9 +188,12 @@ void groupby_helper::build_groups(bool need_grouped_rows,
     return;
   }
 
-  // Sorted keys already form contiguous groups. Null exclusion only needs stable compaction,
-  // after which adjacent equality identifies boundaries without sorting or hashing.
-  auto [rows, size] = included_rows(_keys, _include_null_keys, stream);
+  // Sorted keys already form contiguous groups in input order, so adjacent equality identifies
+  // boundaries without sorting or hashing.
+  auto const policy = rmm::exec_policy_nosync(stream, mr);
+  auto const size   = _keys.num_rows();
+  auto rows         = cuda::device_buffer<size_type>(stream, mr, size, cuda::no_init);
+  thrust::sequence(policy, rows.begin(), rows.end(), size_type{0});
   auto offsets =
     cuda::device_buffer<size_type>(stream, mr, static_cast<std::size_t>(size) + 1, cuda::no_init);
   auto const num_groups =
@@ -227,23 +201,14 @@ void groupby_helper::build_groups(bool need_grouped_rows,
     : cudf::detail::has_nested_columns(_keys)
       ? compute_nested_group_offsets(_keys, rows.data(), size, offsets, stream)
       : compute_group_offsets<false>(_keys, rows.data(), size, offsets, stream);
-  auto const policy = rmm::exec_policy_nosync(stream, mr);
   thrust::fill_n(policy, offsets.data() + num_groups, 1, size);
-  // The first row of each group is its representative input row. Without filtered rows, each
-  // group offset already identifies it.
-  auto key_indices =
-    cuda::device_buffer<size_type>(stream, mr, _is_presorted ? 0 : num_groups, cuda::no_init);
-  if (!_is_presorted) {
-    thrust::gather(
-      policy, offsets.begin(), offsets.begin() + num_groups, rows.begin(), key_indices.begin());
-  }
+  // The first row of each group is its representative input row, which the group offset already
+  // identifies.
   _groups = std::make_unique<hash::grouped_keys>(
-    std::move(key_indices), std::move(offsets), std::move(rows), num_groups);
-  if (_is_presorted) {
-    _groups->key_indices = {_groups->group_offsets->data(), static_cast<std::size_t>(num_groups)};
-  }
-  _num_keys = size;
-  _stable   = true;
+    cuda::device_buffer<size_type>(stream, mr), std::move(offsets), std::move(rows), num_groups);
+  _groups->key_indices = {_groups->group_offsets->data(), static_cast<std::size_t>(num_groups)};
+  _num_keys            = size;
+  _stable              = true;
 }
 
 void groupby_helper::make_stable(bool keep_labels, cuda::stream_ref stream)
@@ -253,11 +218,7 @@ void groupby_helper::make_stable(bool keep_labels, cuda::stream_ref stream)
   // Rows cached by an unordered operation keep their groups and are reordered within them.
   // Scheduling contains spans into the current row buffer and hints derived from its order.
   _reduction_groups.reset();
-  auto const num_groups = static_cast<size_type>(_groups->key_indices.size());
-  if (num_groups == 1) {
-    // A single group is the stable compaction of all included input rows.
-    _groups->grouped_rows = included_rows(_keys, _include_null_keys, stream).first;
-  } else if (num_groups > 1 && num_groups < _num_keys) {
+  if (static_cast<size_type>(_groups->key_indices.size()) < _num_keys) {
     stabilize_rows(*_groups, _num_keys, _group_labels, _keys.num_rows(), keep_labels, stream);
   }
   _stable = true;
@@ -384,7 +345,7 @@ std::unique_ptr<table> groupby_helper::unique_keys(cuda::stream_ref stream,
                                                    rmm::device_async_resource_ref mr)
 {
   std::unique_ptr<hash::grouped_keys> key_groups;
-  if (!_groups && _keys_pre_sorted == sorted::NO && _keys.num_rows() != 0) {
+  if (!_groups && _keys_pre_sorted == sorted::NO) {
     // Empty aggregation requests need only representatives. Keep this metadata local so a
     // later operation can populate the helper with complete grouped rows.
     key_groups = std::make_unique<hash::grouped_keys>(

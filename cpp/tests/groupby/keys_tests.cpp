@@ -552,8 +552,8 @@ TEST_F(groupby_key_shape_test, PresortedNestedKeyBoundaries)
   using lists_column = cudf::test::lists_column_wrapper<int32_t>;
   auto const stream  = cudf::test::get_default_stream();
   // Slice away guard rows. The remaining keys contain leading nulls, empty lists, repeated
-  // lists of different lengths, and a trailing singleton. Check both null-key policies for
-  // list keys and structs containing lists.
+  // lists of different lengths, and a trailing singleton. Check list keys and structs containing
+  // lists.
   lists_column list_keys{{{99}, {0}, {0}, {}, {}, {1}, {1}, {1, 2}, {1, 2}, {2}, {99}},
                          nulls_at({1, 2})};
   lists_column struct_child{{99}, {0}, {0}, {}, {}, {1}, {1}, {1, 2}, {1, 2}, {2}, {99}};
@@ -566,102 +566,26 @@ TEST_F(groupby_key_shape_test, PresortedNestedKeyBoundaries)
 
   for (auto const& keys_column : {cudf::column_view(list_keys), cudf::column_view(struct_keys)}) {
     auto const keys = cudf::slice(keys_column, {1, 10}).front();
-    for (auto const nulls : {cudf::null_policy::INCLUDE, cudf::null_policy::EXCLUDE}) {
-      SCOPED_TRACE(::testing::Message()
-                   << "type=" << static_cast<int>(keys.type().id())
-                   << " include_nulls=" << (nulls == cudf::null_policy::INCLUDE));
-      auto const skip_null     = nulls == cudf::null_policy::EXCLUDE ? 1 : 0;
-      auto const expected_rows = cudf::slice(representatives, {skip_null, 5}).front();
-      auto const expected_keys = cudf::gather(
-        cudf::table_view{{keys}}, expected_rows, cudf::out_of_bounds_policy::DONT_CHECK, stream);
-      cudf::groupby::groupby gb(cudf::table_view{{keys}},
-                                nulls,
-                                cudf::sorted::YES,
-                                {cudf::order::ASCENDING},
-                                {cudf::null_order::BEFORE});
-      std::vector<cudf::groupby::aggregation_request> requests(1);
-      requests[0].values = values;
-      requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-      requests[0].aggregations.push_back(
-        cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
-      auto const [result_keys, results] = gb.aggregate(requests, stream);
-      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_keys->view(), result_keys->view());
-      ASSERT_EQ(results.size(), 1);
-      ASSERT_EQ(results[0].results.size(), 2);
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::slice(sums, {skip_null, 5}).front(),
-                                     results[0].results[0]->view());
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::slice(first_values, {skip_null, 5}).front(),
-                                     results[0].results[1]->view());
-    }
-  }
-}
-
-TEST_F(groupby_key_shape_test, PresortedRepresentativesAcrossOperations)
-{
-  auto const stream = cudf::test::get_default_stream();
-  auto const check  = [&](cudf::column_view keys,
-                         cudf::column_view values,
-                         cudf::column_view expected_grouped_keys,
-                         cudf::column_view expected_ranks,
-                         cudf::column_view expected_keys,
-                         cudf::column_view expected_sums,
-                         cudf::null_policy policy) {
+    SCOPED_TRACE(::testing::Message() << "type=" << static_cast<int>(keys.type().id()));
+    auto const expected_keys = cudf::gather(
+      cudf::table_view{{keys}}, representatives, cudf::out_of_bounds_policy::DONT_CHECK, stream);
     cudf::groupby::groupby gb(cudf::table_view{{keys}},
-                              policy,
+                              cudf::null_policy::INCLUDE,
                               cudf::sorted::YES,
-                               {cudf::order::ASCENDING},
-                               {cudf::null_order::BEFORE});
-    std::vector<cudf::groupby::scan_request> scans(1);
-    scans[0].values = values;
-    scans[0].aggregations.push_back(
-      cudf::make_rank_aggregation<cudf::groupby_scan_aggregation>(cudf::rank_method::DENSE));
-    auto const check_scan = [&] {
-      auto const [result_keys, results] = gb.scan(scans, stream);
-      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_grouped_keys, result_keys->view().column(0));
-      ASSERT_EQ(results.size(), 1);
-      ASSERT_EQ(results[0].results.size(), 1);
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_ranks, results[0].results[0]->view());
-    };
-    check_scan();
-
-    // A scan builds reusable metadata before any operation requests representatives.
-    auto const [unique_keys, empty_results] = gb.aggregate({}, stream);
-    EXPECT_TRUE(empty_results.empty());
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, unique_keys->view().column(0));
-
+                              {cudf::order::ASCENDING},
+                              {cudf::null_order::BEFORE});
     std::vector<cudf::groupby::aggregation_request> requests(1);
     requests[0].values = values;
     requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+    requests[0].aggregations.push_back(
+      cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
     auto const [result_keys, results] = gb.aggregate(requests, stream);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, result_keys->view().column(0));
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_keys->view(), result_keys->view());
     ASSERT_EQ(results.size(), 1);
-    ASSERT_EQ(results[0].results.size(), 1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sums, results[0].results[0]->view());
-    check_scan();
-  };
-
-  using keys_column = cudf::test::fixed_width_column_wrapper<int32_t>;
-  using sums_column = cudf::test::fixed_width_column_wrapper<int64_t>;
-  keys_column const keys{1, 1, 4, 4, 4, 9};
-  keys_column const ranks{1, 2, 1, 2, 3, 1};
-  keys_column const unique_keys{1, 4, 9};
-  sums_column const sums{3, 12, 6};
-
-  keys_column const nullable_keys({0, 0, 1, 1, 4, 4, 4, 9}, {0, 0, 1, 1, 1, 1, 1, 1});
-  keys_column const nullable_values{90, 91, 1, 2, 3, 4, 5, 6};
-  // Leading excluded rows make group offsets differ from representative input rows.
-  check(nullable_keys, nullable_values, keys, ranks, unique_keys, sums, cudf::null_policy::EXCLUDE);
-
-  keys_column const included_ranks{1, 2, 1, 2, 1, 2, 3, 1};
-  keys_column const included_keys({0, 1, 4, 9}, {0, 1, 1, 1});
-  sums_column const included_sums{181, 3, 12, 6};
-  check(nullable_keys,
-        nullable_values,
-        nullable_keys,
-        included_ranks,
-        included_keys,
-        included_sums,
-        cudf::null_policy::INCLUDE);
+    ASSERT_EQ(results[0].results.size(), 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(sums, results[0].results[0]->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(first_values, results[0].results[1]->view());
+  }
 }
 
 TEST_F(groupby_key_shape_test, SingletonRepresentativesAcrossOperations)

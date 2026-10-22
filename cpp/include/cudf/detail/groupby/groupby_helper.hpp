@@ -124,9 +124,9 @@ struct groupby_helper {
   size_type num_groups(cuda::stream_ref stream) { return group_offsets(stream).size() - 1; }
 
   /**
-   * @brief Check whether grouped values can use the input order without filtering or gathering
+   * @brief Check if the groupby keys are presorted
    */
-  [[nodiscard]] bool is_presorted() const { return _is_presorted; }
+  [[nodiscard]] bool is_presorted() const { return _keys_pre_sorted == sorted::YES; }
 
   /**
    * @brief Check whether the cached grouped rows already retain input order within each group
@@ -234,7 +234,6 @@ struct groupby_helper {
   size_type _num_keys{};           ///< Number of grouped rows, set when they are built
   sorted _keys_pre_sorted;         ///< Whether key groups are already contiguous
   null_policy _include_null_keys;  ///< Whether to retain null key rows
-  bool _is_presorted;              ///< Whether grouped values can use the input directly
   bool _stable{false};             ///< Whether rows within each group are in input order
 };
 
