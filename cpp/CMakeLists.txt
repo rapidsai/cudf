@@ -733,18 +733,21 @@ add_library(
   src/filling/fill.cu
   src/filling/repeat.cu
   src/filling/sequence.cu
+  src/groupby/common/group_struct_minmax_scan.cu
   src/groupby/common/m2_var_std.cu
   src/groupby/common/null_mask.cu
   src/groupby/common/utils.cpp
   src/groupby/groupby.cu
-  src/groupby/hash/compute_groupby.cu
+  src/groupby/hash/compute_groupby.cpp
   src/groupby/hash/compute_single_pass_aggs.cpp
   src/groupby/hash/compute_single_pass_aggs.cu
   src/groupby/hash/extract_single_pass_aggs.cpp
+  src/groupby/hash/group_keys.cu
   src/groupby/hash/groupby.cu
   src/groupby/hash/hash_compound_agg_finalizer.cu
   src/groupby/hash/output_utils.cu
   src/groupby/hash/single_pass_argminmax.cu
+  src/groupby/hash/single_pass_fused_minmax_sum.cu
   src/groupby/hash/single_pass_minmax.cu
   src/groupby/hash/single_pass_product.cu
   src/groupby/hash/single_pass_sum_overflow.cu
@@ -787,12 +790,9 @@ add_library(
   src/groupby/streaming_groupby/aggregate.cu
   src/groupby/streaming_groupby/impl.cu
   src/groupby/streaming_groupby/insert.cu
-  src/groupby/streaming_groupby/insert_first.cu
-  src/groupby/streaming_groupby/insert_first_nested.cu
   src/groupby/streaming_groupby/insert_nested.cu
-  src/groupby/streaming_groupby/insert_subsequent.cu
-  src/groupby/streaming_groupby/insert_subsequent_nested.cu
   src/groupby/streaming_groupby/merge.cu
+  src/groupby/streaming_groupby/warp_aggregate.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
