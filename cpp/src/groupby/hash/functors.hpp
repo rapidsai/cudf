@@ -88,7 +88,7 @@ struct store_result_functor {
    * All cached layouts keep the helper's group order with the same group boundaries,
    * so any of them can be used with helper.group_labels() and helper.group_offsets().
    * Only the value order within each group may differ: original input order, sorted
-   * value order, or an unspecified order while the helper's rows are not yet stable.
+   * value order, or an unspecified order when the operation did not request stable rows.
    */
   column_view get_unordered_grouped_values()
   {
