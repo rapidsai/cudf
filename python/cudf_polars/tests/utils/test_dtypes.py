@@ -6,10 +6,11 @@ from __future__ import annotations
 import pytest
 
 import polars as pl
+from polars.testing import assert_frame_equal
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DataFrame, DataType
+from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 from cudf_polars.utils.dtypes import (
     can_cast,
@@ -93,14 +94,38 @@ def test_make_empty_column_dictionary(dtype):
     ]
 
 
-def test_make_all_null_column_dictionary():
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pl.Int8(),
+        pl.String(),
+        pl.List(pl.Int8()),
+        pl.Struct({"a": pl.Int8()}),
+        pl.List(pl.Struct({"a": pl.Int8()})),
+        pl.Struct({"a": pl.List(pl.Int8()), "b": pl.Struct({"c": pl.String()})}),
+    ],
+    ids=repr,
+)
+def test_make_all_null_column(dtype):
     stream = get_cuda_stream()
-    like = DataFrame.from_polars(
-        pl.DataFrame({"a": pl.Series(["x", "y"], dtype=pl.Enum(["y", "x"]))}),
-        stream=stream,
-    ).columns[0]
+    dt = DataType(dtype)
 
-    result = make_all_null_column(like.obj, 3, stream)
+    result = make_all_null_column(dt, 3, stream)
+
+    assert_frame_equal(
+        DataFrame([Column(result, name="a", dtype=dt)], stream=stream).to_polars(),
+        pl.DataFrame({"a": pl.Series([None] * 3, dtype=dtype)}),
+        check_dtypes=True,
+    )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [pl.Enum(["a", "b"]), pl.Categorical()],
+    ids=["enum", "categorical"],
+)
+def test_make_all_null_column_dictionary(dtype):
+    result = make_all_null_column(DataType(dtype), 3, get_cuda_stream())
 
     assert result.type().id() == plc.TypeId.DICTIONARY32
     assert result.size() == 3

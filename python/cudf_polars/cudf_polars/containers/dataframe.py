@@ -81,6 +81,7 @@ class _ObjectWithArrowMetadata:
 
 def _dictionary_indices(column: plc.Column, stream: Stream) -> plc.Column:
     """Return the indices of a dictionary column as a standalone integer column."""
+    assert column.type().id() == plc.TypeId.DICTIONARY32
     if column.num_children() == 0:
         return plc.column_factories.make_empty_column(
             plc.DataType(plc.TypeId.INT32), stream=stream
@@ -99,6 +100,7 @@ def _dictionary_indices(column: plc.Column, stream: Stream) -> plc.Column:
 
 def _dictionary_keys(column: plc.Column, stream: Stream) -> pl.Series:
     """Return the keys of a dictionary column as a polars Series."""
+    assert column.type().id() == plc.TypeId.DICTIONARY32
     keys = (
         column.children()[1]
         if column.num_children() == 2

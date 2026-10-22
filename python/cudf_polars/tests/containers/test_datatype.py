@@ -114,9 +114,3 @@ def test_categorical_dtype_uses_dictionary(dtype):
 def test_nested_categorical_raises(dtype):
     with pytest.raises(NotImplementedError, match="Categorical nested"):
         DataType(dtype)
-
-
-def test_categorical_dtype_keeps_mapping_alive():
-    dtype = DataType(pl.Categorical(pl.Categories("keepalive")))
-
-    assert dtype._categorical_reference.dtype == dtype.polars_type

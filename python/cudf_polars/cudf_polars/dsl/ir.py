@@ -3267,9 +3267,7 @@ class Join(IR):
         if empty:
             return [
                 Column(
-                    plc.column_factories.make_empty_column(
-                        col.dtype.plc_type, stream=stream
-                    ),
+                    dtypes.make_empty_column(col.dtype, stream),
                     col.dtype,
                     name=rename(col.name),
                 )
@@ -4174,7 +4172,11 @@ class HConcat(IR):
 
     @staticmethod
     def _extend_with_nulls(
-        table: plc.Table, *, nrows: int, stream: Stream
+        table: plc.Table,
+        column_dtypes: Sequence[DataType],
+        *,
+        nrows: int,
+        stream: Stream,
     ) -> plc.Table:
         """
         Extend a table with nulls.
@@ -4183,6 +4185,8 @@ class HConcat(IR):
         ----------
         table
             Table to extend
+        column_dtypes
+            DataTypes of the columns of ``table``
         nrows
             Number of additional rows
         stream
@@ -4197,8 +4201,8 @@ class HConcat(IR):
                 table,
                 plc.Table(
                     [
-                        dtypes.make_all_null_column(column, nrows, stream)
-                        for column in table.columns()
+                        dtypes.make_all_null_column(dtype, nrows, stream)
+                        for dtype in column_dtypes
                     ]
                 ),
             ],
@@ -4247,6 +4251,7 @@ class HConcat(IR):
                             else DataFrame.from_table(
                                 cls._extend_with_nulls(
                                     df.table,
+                                    df.dtypes,
                                     nrows=max_rows - df.num_rows,
                                     stream=stream,
                                 ),
@@ -4286,9 +4291,7 @@ class Empty(IR):
         return DataFrame(
             [
                 Column(
-                    plc.column_factories.make_empty_column(
-                        dtype.plc_type, stream=stream
-                    ),
+                    dtypes.make_empty_column(dtype, stream),
                     dtype=dtype,
                     name=name,
                 )

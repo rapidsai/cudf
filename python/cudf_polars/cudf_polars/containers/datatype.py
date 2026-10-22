@@ -279,9 +279,6 @@ class DataType:
         # After conversion, it's guaranteed to be a DataType instance
         self.polars_type = cast("pl.DataType", polars_dtype)
         self.plc_type = _from_polars(self.polars_type)
-        if isinstance(self.polars_type, pl.Categorical):
-            # Polars frees a Categorical mapping once no data references it, invalidating codes.
-            self._categorical_reference = pl.Series([], dtype=self.polars_type)
 
     @property
     def is_categorical(self) -> bool:

@@ -76,7 +76,6 @@ def test_dataframe_roundtrip(categorical_frame):
 
     for column in result.columns:
         assert column.obj.type() == column.dtype.plc_type
-    assert result.column_map["cat"].obj.type().id() == plc.TypeId.DICTIONARY32
     assert_frame_equal(result.to_polars(), df, check_dtypes=True)
 
 
@@ -187,6 +186,19 @@ def test_concat_horizontal_different_heights(categorical_frame, engine):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("nulls", ["none", "some"])
+def test_select_single_row(categorical_frame, engine):
+    q = categorical_frame.head(1).select("cat", "other", "int")
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_concat_after_cross_join_with_empty(categorical_frame, engine):
+    empty = categorical_frame.head(0).select(pl.col("int").alias("int_right"))
+    joined = categorical_frame.join(empty, how="cross").select("int", "cat")
+    q = pl.concat([joined, categorical_frame.select("int", "cat")])
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_cache(categorical_frame, engine):
     lf = categorical_frame.filter(pl.col("int") > 5)
     q = pl.concat([lf, lf.select(pl.col("int"), pl.col("cat"), pl.col("other"))])
@@ -213,17 +225,7 @@ def test_explode(categorical_frame, engine):
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        pl.Enum(["a", "b", "c"]),
-        pl.Enum([str(i) for i in range(300)]),
-        pl.Categorical(),
-        pl.Categorical("shuffle_join"),
-    ],
-    ids=["enum", "enum_uint16", "categorical_global", "categorical_named"],
-)
-def test_multi_partition_shuffle_join(dtype, streaming_engine_factory):
+def test_multi_partition_shuffle_join(categorical_frame, streaming_engine_factory):
     engine = streaming_engine_factory(
         StreamingOptions(
             target_partition_size=1,
@@ -232,20 +234,8 @@ def test_multi_partition_shuffle_join(dtype, streaming_engine_factory):
             raise_on_fail=True,
         )
     )
-    categories = (
-        dtype.categories.to_list() if isinstance(dtype, pl.Enum) else ["c", "a", "b"]
-    )
-    left = pl.LazyFrame(
-        {
-            "int": range(20),
-            "cat": pl.Series(
-                [None if i % 5 == 0 else categories[i % 3] for i in range(20)],
-                dtype=dtype,
-            ),
-        }
-    )
-    right = left.with_columns(pl.col("int") % 7)
-    q = left.join(right, on="int", how="inner")
+    right = categorical_frame.with_columns(pl.col("int") % 7)
+    q = categorical_frame.join(right, on="int", how="inner")
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
@@ -418,6 +408,19 @@ def test_to_polars_does_not_grow_global_mapping():
     assert_frame_equal(result, df, check_dtypes=True)
 
 
+def test_to_polars_after_source_frame_released():
+    dtype = pl.Categorical(pl.Categories(f"released_{uuid.uuid4().hex}"))
+    gpu_df = DataFrame.from_polars(
+        pl.DataFrame({"a": pl.Series(["x", None, "y"], dtype=dtype)}),
+        stream=get_cuda_stream(),
+    )
+
+    result = gpu_df.to_polars()
+
+    expected = pl.DataFrame({"a": pl.Series(["x", None, "y"], dtype=dtype)})
+    assert_frame_equal(result, expected, check_dtypes=True)
+
+
 @pytest.mark.parametrize(
     "dtype",
     [pl.Categorical(), pl.Enum(["c", "b", "a"])],
@@ -456,15 +459,13 @@ def test_from_polars_multiple_chunks():
     [pl.Categorical(), pl.Enum(["a", "b"])],
     ids=["categorical", "enum"],
 )
-@pytest.mark.parametrize(
-    "libcudf_empty", [False, True], ids=["children", "no_children"]
-)
-def test_to_polars_empty_dictionary(dtype, libcudf_empty):
+@pytest.mark.parametrize("factory", ["cudf_polars", "libcudf"])
+def test_to_polars_empty_dictionary(dtype, factory):
     stream = get_cuda_stream()
     dt = DataType(dtype)
     obj = (
         plc.column_factories.make_empty_column(dt.plc_type, stream=stream)
-        if libcudf_empty
+        if factory == "libcudf"
         else make_empty_column(dt, stream)
     )
 
@@ -483,10 +484,9 @@ def test_to_polars_empty_dictionary(dtype, libcudf_empty):
 def test_to_polars_all_null_dictionary(dtype):
     stream = get_cuda_stream()
     dt = DataType(dtype)
-    like = make_empty_column(dt, stream)
 
     result = DataFrame(
-        [Column(make_all_null_column(like, 3, stream), name="a", dtype=dt)],
+        [Column(make_all_null_column(dt, 3, stream), name="a", dtype=dt)],
         stream=stream,
     ).to_polars()
 

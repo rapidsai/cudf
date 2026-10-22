@@ -79,17 +79,19 @@ def make_empty_column(dtype: DataType, stream: Stream) -> plc.Column:
     return plc.column_factories.make_empty_column(dtype.plc_type, stream=stream)
 
 
-def make_all_null_column(like: plc.Column, size: int, stream: Stream) -> plc.Column:
+def make_all_null_column(dtype: DataType, size: int, stream: Stream) -> plc.Column:
     """
-    Create an all-null column with the type of ``like``, including for dictionaries.
+    Create an all-null column, including for nested types and dictionaries.
 
-    ``plc.Column.all_null_like`` rejects DICTIONARY32, so dictionaries are built
-    from all-null indices and an empty keys column.
+    ``plc.Column.all_null_like`` rejects DICTIONARY32 and needs a non-empty
+    template for STRUCT, so those are built by hand under an all-null mask:
+    dictionaries from zeroed indices and an empty keys column, structs from
+    all-null children.
 
     Parameters
     ----------
-    like
-        Column whose type the result takes.
+    dtype
+        The cudf-polars DataType of the result.
     size
         Number of rows of the result.
     stream
@@ -99,26 +101,32 @@ def make_all_null_column(like: plc.Column, size: int, stream: Stream) -> plc.Col
     -------
     An all-null column of ``size`` rows.
     """
-    if like.type().id() != plc.TypeId.DICTIONARY32:
-        return plc.Column.all_null_like(like, size, stream=stream)
-    indices = plc.Column.from_scalar(
-        plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=stream),
-        size,
-        stream=stream,
-    )
-    keys_type = (
-        like.children()[1].type()
-        if like.num_children() == 2
-        else plc.DataType(plc.TypeId.STRING)
-    )
+    if dtype.id() == plc.TypeId.STRUCT:
+        children = [
+            make_all_null_column(child_dtype, size, stream)
+            for child_dtype in dtype.children
+        ]
+    elif dtype.id() == plc.TypeId.DICTIONARY32:
+        children = [
+            plc.Column.from_scalar(
+                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=stream),
+                size,
+                stream=stream,
+            ),
+            make_empty_column(dtype, stream).children()[1],
+        ]
+    else:
+        return plc.Column.all_null_like(
+            make_empty_column(dtype, stream), size, stream=stream
+        )
     return plc.Column(
-        like.type(),
+        dtype.plc_type,
         size,
         None,
         plc.null_mask.create_null_mask(size, plc.MaskState.ALL_NULL, stream=stream),
         size,
         0,
-        [indices, plc.column_factories.make_empty_column(keys_type, stream=stream)],
+        children,
     )
 
 
