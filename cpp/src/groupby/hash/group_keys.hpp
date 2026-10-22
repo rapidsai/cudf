@@ -76,30 +76,4 @@ grouped_keys group_keys(table_view const& keys,
                         cuda::stream_ref stream,
                         cudf::memory_resources mr);
 
-/// Non-owning label and row buffers sorted together by `stable_sort_group_rows`.
-struct group_row_buffers {
-  size_type* labels;
-  size_type* rows;
-};
-
-/**
- * @brief Stably sorts rows by the low `end_bit` bits of their group labels.
- *
- * Both buffer pairs remain owned by the caller. Either pair may hold the sorted labels or rows.
- *
- * @param input Labels and rows to sort
- * @param alternate Storage for `num_rows` labels and rows used while sorting
- * @param num_rows Number of rows to sort
- * @param end_bit One past the most significant label bit to sort by
- * @param stream CUDA stream used for device operations
- * @param mr Memory resources whose temporary resource holds the sort scratch
- * @return The buffers holding the sorted labels and rows
- */
-group_row_buffers stable_sort_group_rows(group_row_buffers input,
-                                         group_row_buffers alternate,
-                                         size_type num_rows,
-                                         int end_bit,
-                                         cuda::stream_ref stream,
-                                         cudf::memory_resources mr);
-
 }  // namespace cudf::groupby::detail::hash
