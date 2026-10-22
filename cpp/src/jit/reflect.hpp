@@ -13,7 +13,6 @@
 #include <span>
 #include <string>
 #include <tuple>
-#include <variant>
 #include <vector>
 
 namespace cudf::jit {
@@ -22,14 +21,16 @@ using transform_reflection =
   std::tuple<std::string, std::string, std::vector<std::string>, std::vector<std::string>>;
 
 /** @brief Reflects input/output accessors and PTX value types. */
-transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
+transform_reflection reflect(bool is_ptx,
                              std::span<transform_input_spec const> inputs,
-                             std::span<transform_output_spec const> outputs);
+                             std::span<transform_output_spec const> outputs,
+                             bool use_physical_types = false);
 
 /** @brief Reflects accessors and PTX value types from column storage. */
-transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
+transform_reflection reflect(bool is_ptx,
                              std::span<transform_input const> inputs,
-                             std::span<output_column const> outputs);
+                             std::span<output_column const> outputs,
+                             bool use_physical_types = false);
 
 /** @brief Derives input type specifications from columns or scalars. */
 std::vector<transform_input_spec> make_input_specs(std::span<transform_input const> inputs);

@@ -7,6 +7,7 @@
 #include <cudf/column/column_child_offsets.hpp>
 #include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/strings/mutable_string_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -91,6 +92,33 @@ inline constexpr bool is_dictionary_encoded = false;
  */
 template <typename IndexType, typename KeyType>
 inline constexpr bool is_dictionary_encoded<dictionary_element<IndexType, KeyType>> = true;
+
+/**
+ * @brief An element interpreted directly as its stored representation.
+ * @tparam T The underlying type used to store the value (e.g., `bool` or `uint8_t`, `char`,
+ * `string_view`, etc.)
+ *
+ */
+template <typename T>
+struct repr_element {
+  using value_type = T;  ///< The underlying type used to store the value
+
+  T value{};  ///< The value for this element
+};
+
+/**
+ * @brief A type trait to determine if a type is a representation element.
+ * @tparam T The type to check
+ */
+template <typename T>
+inline constexpr bool is_repr_element = false;
+
+/**
+ * @brief Specialization of `is_repr_element` for `repr_element<T>`.
+ * @tparam T The underlying type used to store the value
+ */
+template <typename T>
+inline constexpr bool is_repr_element<repr_element<T>> = true;
 
 namespace detail {
 /**
@@ -425,9 +453,9 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   }
 
   /**
-   * @brief Returns a copy of the element at the specified index
+   * @brief Returns a copy of the boolean element at the specified index
    *
-   * Boolean values are normalized: zero is false and any nonzero byte is true.
+   * The boolean value is normalized: zero is false and any nonzero byte is true.
    *
    * If the element at the specified index is NULL, i.e.,
    * `is_null(element_index) == true`, then any attempt to use the result will
@@ -435,24 +463,43 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    *
    * This function accounts for the offset.
    *
-   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
-   * false. Specializations of this function may exist for types `T` where
-   *`is_rep_layout_compatible<T>` is false.
+   * This function does not participate in overload resolution if
+   * `is_same_v<remove_cv_t<T>, bool>` is false.
    *
    * @tparam T The element type
    * @param element_index Position of the desired element
    * @return The element at the specified index
    */
-  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  template <typename T, CUDF_ENABLE_IF(cuda::std::is_same_v<cuda::std::remove_cv_t<T>, bool>)>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
-    if constexpr (cuda::std::is_same_v<cuda::std::remove_cv_t<T>, bool>) {
-      // BOOL8 permits any nonzero byte for true. Read the storage as a byte before converting
-      // to bool, since loading a noncanonical representation as bool is undefined behavior.
-      return data<uint8_t>()[element_index] != 0;
-    } else {
-      return data<T>()[element_index];
-    }
+    // BOOL8 permits any nonzero byte for true. Read the storage as a byte before converting
+    // to bool, since loading a noncanonical representation as bool is undefined behavior.
+    return element<uint8_t>(element_index) != 0;
+  }
+
+  /**
+   * @brief Returns a copy of the element at the specified index
+   *
+   * If the element at the specified index is NULL, i.e.,
+   * `is_null(element_index) == true`, then any attempt to use the result will
+   * lead to undefined behavior.
+   *
+   * This function accounts for the offset.
+   *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T> &&
+   * !is_same_v<remove_cv_t<T>, bool>` is false.
+   *
+   * @tparam T The element type
+   * @param element_index Position of the desired element
+   * @return The element at the specified index
+   */
+  template <typename T,
+            CUDF_ENABLE_IF(is_rep_layout_compatible<T>() &&
+                           !cuda::std::is_same_v<cuda::std::remove_cv_t<T>, bool>)>
+  [[nodiscard]] __device__ T const& element(size_type element_index) const noexcept
+  {
+    return data<T>()[element_index];
   }
 
   /**
@@ -466,7 +513,8 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    * @param element_index Position of the desired string element
    * @return string_view instance representing this element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(cuda::std::is_same_v<T, string_view>)>
+  template <typename T,
+            CUDF_ENABLE_IF(cuda::std::is_same_v<cuda::std::remove_cv_t<T>, string_view>)>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
     size_type index       = element_index + offset();  // account for this view's _offset
@@ -498,7 +546,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   }
 
   /**
-   * @brief Returns a decoded copy of the element at the specified index.
+   * @brief Returns a decoded element at the specified index.
    *
    * If the element at the specified index is NULL, i.e.,
    * `is_null(element_index) == true`, then any attempt to use the result will
@@ -525,19 +573,34 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   }
 
   /**
+   * @brief Reads a raw child value.
+   *
+   * The child must be valid. Use nullable_element<T>() to check child validity.
+   * @tparam T The raw child type, satisfying `is_repr_element<T>`
+   * @param element_index Position of the desired element in `[0, size())`
+   * @return The child value
+   */
+  template <typename T, CUDF_ENABLE_IF(is_repr_element<T>)>
+  [[nodiscard]] __device__ typename T::value_type const& element(
+    size_type element_index) const noexcept
+  {
+    return static_cast<typename T::value_type const*>(_data)[_offset + element_index];
+  }
+
+  /**
    * @brief Returns a nullable element at the specified index. If the element is null, returns
    * `nullopt`.
    *
    * @param element_index Position of the desired element
-   * @return `optional` containing the element at the specified index, or `nullopt` if the element
-   * is null
+   * @return `optional` containing the decoded value returned by `element<T>()`, or `nullopt`
+   * if the element is null. For dictionary tags, the optional contains the decoded key type.
    */
   template <typename T>
-  [[nodiscard]] __device__ cuda::std::optional<T> nullable_element(
-    size_type element_index) const noexcept
+  [[nodiscard]] __device__ auto nullable_element(size_type element_index) const noexcept
   {
-    if (is_null(element_index)) { return cuda::std::nullopt; }
-    return element<T>(element_index);
+    using value_type = cuda::std::remove_cvref_t<decltype(element<T>(element_index))>;
+    if (is_null(element_index)) { return cuda::std::optional<value_type>{}; }
+    return cuda::std::optional<value_type>{element<T>(element_index)};
   }
 
   /**
@@ -699,7 +762,8 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    * @param element_index Position of the desired string element
    * @return string_view instance representing this element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(cuda::std::is_same_v<T, string_view>)>
+  template <typename T,
+            CUDF_ENABLE_IF(cuda::std::is_same_v<cuda::std::remove_cv_t<T>, string_view>)>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
     size_type index       = element_index + offset();  // account for this view's _offset
@@ -730,6 +794,68 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
   }
 
   /**
+   * @brief Returns a mutable view into the existing string character buffer.
+   *
+   * The column offset is applied. The element must be valid, and mutations must stay
+   * within the existing string's byte range.
+   * @tparam T `mutable_string_view`
+   * @param element_index Position of the desired string element
+   * @return A mutable view of the string's preallocated character storage
+   */
+  template <typename T,
+            CUDF_ENABLE_IF(cuda::std::is_same_v<cuda::std::remove_cv_t<T>, mutable_string_view>)>
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
+  {
+    auto const index   = element_index + offset();
+    auto const offsets = child(offsets_column_index);
+    auto const itr     = detail::input_offsetalator(offsets.head(), offsets.type());
+    auto const begin   = itr[index];
+    auto const end     = itr[index + 1];
+    return T{head<char>() + begin, static_cast<size_type>(end - begin)};
+  }
+
+  /**
+   * @brief Returns a decoded element at the specified index.
+   *
+   * If the element at the specified index is NULL, i.e.,
+   * `is_null(element_index) == true`, then any attempt to use the result will
+   * lead to undefined behavior.
+   *
+   * This function accounts for the offset.
+   *
+   * This function does not participate in overload resolution if `is_dictionary_encoded<T>` is
+   * false.
+   *
+   * @tparam T The element type, e.g., `dictionary_element<int32_t, float>` for a dictionary column
+   * with `int32_t` indices and `float` keys
+   * @param element_index Position of the desired element
+   * @return The element at the specified index
+   */
+  template <typename T, CUDF_ENABLE_IF(is_dictionary_encoded<T>)>
+  [[nodiscard]] __device__ decltype(auto) element(size_type element_index) const noexcept
+  {
+    auto const& indices = child(dictionary_indices_column_index);
+    auto const& keys    = child(dictionary_keys_column_index);
+    auto const index    = indices.template element<typename T::index_type>(
+      element_index + offset());  // account for this view's _offset
+    return keys.template element<typename T::key_type>(index);
+  }
+
+  /**
+   * @brief Reads a raw child value.
+   *
+   * The child must be valid. Use nullable_element<T>() to check child validity.
+   * @tparam T The raw child type, satisfying `is_repr_element<T>`
+   * @param element_index Position of the desired element in `[0, size())`
+   * @return The child value
+   */
+  template <typename T, CUDF_ENABLE_IF(is_repr_element<T>)>
+  [[nodiscard]] __device__ typename T::value_type& element(size_type element_index) const noexcept
+  {
+    return static_cast<typename T::value_type*>(const_cast<void*>(_data))[_offset + element_index];
+  }
+
+  /**
    * @brief Returns a nullable element at the specified index. If the element is null, returns
    * `nullopt`.
    *
@@ -738,11 +864,11 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    * is null
    */
   template <typename T>
-  [[nodiscard]] __device__ cuda::std::optional<T> nullable_element(
-    size_type element_index) const noexcept
+  [[nodiscard]] __device__ auto nullable_element(size_type element_index) const noexcept
   {
-    if (is_null(element_index)) { return cuda::std::nullopt; }
-    return element<T>(element_index);
+    using value_type = cuda::std::remove_cvref_t<decltype(element<T>(element_index))>;
+    if (is_null(element_index)) { return cuda::std::optional<value_type>{}; }
+    return cuda::std::optional<value_type>{element<T>(element_index)};
   }
 
   /**
@@ -773,6 +899,34 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
     using namespace numeric;
     using rep                  = typename T::rep;
     data<rep>()[element_index] = value.value();
+  }
+
+  /**
+   * @brief Assigns `value` to the element at `element_index`.
+   * This is a no-op for mutable string elements.
+   *
+   * @tparam T The element type
+   * @param element_index Position of the desired element
+   * @param value The value to assign
+   */
+  template <typename T,
+            CUDF_ENABLE_IF(cuda::std::is_same_v<cuda::std::remove_cv_t<T>, mutable_string_view>)>
+  __device__ void assign(size_type element_index, T value) const noexcept
+  {
+    // no-op for mutable string elements
+  }
+
+  /**
+   * @brief Assigns `value` to the element at `element_index`
+   *
+   * @tparam T The element type
+   * @param element_index Position of the desired element
+   * @param value The value to assign
+   */
+  template <typename T, CUDF_ENABLE_IF(is_repr_element<T>)>
+  __device__ void assign(size_type element_index, typename T::value_type value) const noexcept
+  {
+    static_cast<typename T::value_type*>(const_cast<void*>(_data))[_offset + element_index] = value;
   }
 
   /**

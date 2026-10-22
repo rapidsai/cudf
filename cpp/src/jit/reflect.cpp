@@ -22,14 +22,15 @@
 #include <utility>
 
 namespace cudf::jit {
+
 namespace {
 
-std::string get_element_type_name(transform_input_spec const& spec, bool use_physical_type);
+std::string reflect_input_element(transform_input_spec const& spec, bool use_physical_type);
 
-struct element_type_name_fn {
+struct reflect_input_element_fn {
   template <typename T>
   std::string operator()(transform_input_spec const& spec, bool use_physical_type) const
-    requires(is_fixed_width<T>() || std::same_as<T, cudf::string_view>)
+    requires(is_fixed_width<T>() || std::same_as<T, string_view>)
   {
     auto type = data_type{spec.type};
     return type_to_name(use_physical_type ? jit::physical_type_of(type) : type);
@@ -37,86 +38,153 @@ struct element_type_name_fn {
 
   template <typename T>
   std::string operator()(transform_input_spec const& spec, bool use_physical_type) const
-    requires(std::same_as<T, cudf::dictionary32>)
+    requires(std::same_as<T, dictionary32>)
   {
     return std::format(
       "cudf::dictionary_element<{}, {}>",
-      get_element_type_name(spec.children.at(dictionary_indices_column_index), use_physical_type),
-      get_element_type_name(spec.children.at(dictionary_keys_column_index), use_physical_type));
+      reflect_input_element(spec.children.at(dictionary_indices_column_index), use_physical_type),
+      reflect_input_element(spec.children.at(dictionary_keys_column_index), use_physical_type));
   }
 
   template <typename T>
   std::string operator()(transform_input_spec const& spec, bool) const
-    requires(!is_fixed_width<T>() && !std::same_as<T, cudf::string_view> &&
-             !std::same_as<T, cudf::dictionary32>)
+    requires(!is_fixed_width<T>() && !std::same_as<T, string_view> &&
+             !std::same_as<T, dictionary32>)
   {
-    CUDF_FAIL("Unsupported type for JIT compilation: " + type_to_name(data_type{spec.type}));
+    CUDF_FAIL(std::format("Unsupported input element type for JIT input: {}",
+                          type_to_name(data_type{spec.type})),
+              std::invalid_argument);
   }
 };
 
-std::string get_element_type_name(transform_input_spec const& spec, bool use_physical_type)
-{
-  return cudf::type_dispatcher(
-    data_type{spec.type}, element_type_name_fn{}, spec, use_physical_type);
-}
+std::string reflect_output_element(transform_output_spec const& spec, bool use_physical_type);
+
+struct reflect_output_element_fn {
+  template <typename T>
+  std::string operator()(transform_output_spec const& spec, bool use_physical_type) const
+    requires(is_fixed_width<T>())
+  {
+    auto type = data_type{spec.type};
+    return type_to_name(use_physical_type ? jit::physical_type_of(type) : type);
+  }
+
+  template <typename T>
+  std::string operator()(transform_output_spec const& spec, bool use_physical_type) const
+    requires(std::same_as<T, string_view>)
+  {
+    return spec.has_string_offsets ? "cudf::mutable_string_view"
+                                   : "cudf::repr_element<cudf::string_view>";
+  }
+
+  template <typename T>
+  std::string operator()(transform_output_spec const& spec, bool use_physical_type) const
+    requires(std::same_as<T, dictionary32>)
+  {
+    return std::format(
+      "cudf::dictionary_element<{}, {}>",
+      reflect_output_element(spec.children.at(dictionary_indices_column_index), use_physical_type),
+      reflect_output_element(spec.children.at(dictionary_keys_column_index), use_physical_type));
+  }
+
+  template <typename T>
+  std::string operator()(transform_output_spec const& spec, bool) const
+    requires(!is_fixed_width<T>() && !std::same_as<T, string_view> &&
+             !std::same_as<T, dictionary32>)
+  {
+    CUDF_FAIL(std::format("Unsupported output element type for JIT output: {}",
+                          type_to_name(data_type{spec.type})),
+              std::invalid_argument);
+  }
+};
+
+struct reflect_input_value_fn {
+  template <typename T>
+  std::string operator()(transform_input_spec const& spec, bool use_physical_type) const
+    requires(is_fixed_width<T>() || std::same_as<T, string_view>)
+  {
+    auto type = data_type{spec.type};
+    return type_to_name(use_physical_type ? jit::physical_type_of(type) : type);
+  }
+
+  template <typename T>
+  std::string operator()(transform_input_spec const& spec, bool use_physical_type) const
+    requires(std::same_as<T, dictionary32>)
+  {
+    return reflect_input_element(spec.children.at(dictionary_keys_column_index), use_physical_type);
+  }
+
+  template <typename T>
+  std::string operator()(transform_input_spec const& spec, bool) const
+    requires(!is_fixed_width<T>() && !std::same_as<T, string_view> &&
+             !std::same_as<T, dictionary32>)
+  {
+    CUDF_FAIL(std::format("Unsupported input value type for JIT input: {}",
+                          type_to_name(data_type{spec.type})),
+              std::invalid_argument);
+  }
+};
+
+struct reflect_output_value_fn {
+  template <typename T>
+  std::string operator()(transform_output_spec const& spec, bool use_physical_type) const
+    requires(is_fixed_width<T>())
+  {
+    auto type = data_type{spec.type};
+    return type_to_name(use_physical_type ? jit::physical_type_of(type) : type);
+  }
+
+  template <typename T>
+  std::string operator()(transform_output_spec const& spec, bool use_physical_type) const
+    requires(std::same_as<T, string_view>)
+  {
+    return spec.has_string_offsets ? "cudf::mutable_string_view" : "cudf::string_view";
+  }
+
+  template <typename T>
+  std::string operator()(transform_output_spec const& spec, bool) const
+    requires(!is_fixed_width<T>() && !std::same_as<T, string_view>)
+  {
+    CUDF_FAIL(std::format("Unsupported output value type for JIT output: {}",
+                          type_to_name(data_type{spec.type})),
+              std::invalid_argument);
+  }
+};
 
 std::string reflect_input_element(transform_input_spec const& spec, bool use_physical_type)
 {
-  return get_element_type_name(spec, use_physical_type);
+  return type_dispatcher(data_type{spec.type}, reflect_input_element_fn{}, spec, use_physical_type);
 }
 
 std::string reflect_output_element(transform_output_spec const& spec, bool use_physical_type)
 {
-  if (spec.type == type_id::STRING) {
-    return spec.has_string_offsets ? "cuda::std::span<char>" : "cudf::string_view";
-  }
-  return get_element_type_name(transform_input_spec{.type = spec.type}, use_physical_type);
+  return type_dispatcher(
+    data_type{spec.type}, reflect_output_element_fn{}, spec, use_physical_type);
 }
 
 std::string reflect_input_value_type(transform_input_spec const& spec, bool use_physical_type)
 {
-  if (spec.type == type_id::DICTIONARY32) {
-    return reflect_input_value_type(spec.children.at(dictionary_keys_column_index),
-                                    use_physical_type);
-  }
-  return reflect_input_element(spec, use_physical_type);
+  return type_dispatcher(data_type{spec.type}, reflect_input_value_fn{}, spec, use_physical_type);
 }
 
 std::string reflect_output_value_type(transform_output_spec const& spec, bool use_physical_type)
 {
-  return reflect_output_element(spec, use_physical_type);
-}
-
-std::string reflect_input_column(transform_input_spec const&)
-{
-  return "cudf::column_device_view_core";
-}
-
-std::string reflect_output_column(transform_output_spec const& spec)
-{
-  if (spec.type == type_id::STRING) {
-    return spec.has_string_offsets ? "cudf::jit::mutable_strings_column_device_view"
-                                   : "cudf::jit::mutable_vector_device_view";
-  }
-  return "cudf::mutable_column_device_view_core";
+  return type_dispatcher(data_type{spec.type}, reflect_output_value_fn{}, spec, use_physical_type);
 }
 
 }  // namespace
 
-transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
+transform_reflection reflect(bool is_ptx,
                              std::span<transform_input_spec const> inputs,
-                             std::span<transform_output_spec const> outputs)
+                             std::span<transform_output_spec const> outputs,
+                             bool use_physical_types)
 {
   std::vector<std::string> in_types;
-  bool use_physical_types = std::holds_alternative<lto_binary_type>(source_type);
   for (size_t i = 0; i < inputs.size(); i++) {
     auto& in       = inputs[i];
-    auto column    = reflect_input_column(in);
     auto element   = reflect_input_element(in, use_physical_types);
     bool as_scalar = in.is_scalar;
     auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
                                            rtcx::reflect(i),
-                                           column,
                                            element,
                                            rtcx::reflect(as_scalar),
                                            rtcx::reflect(0));
@@ -126,12 +194,10 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
   std::vector<std::string> out_types;
   for (size_t i = 0; i < outputs.size(); i++) {
     auto& out      = outputs[i];
-    auto column    = reflect_output_column(out);
     auto element   = reflect_output_element(out, use_physical_types);
     bool as_scalar = false;  // never scalar
     auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
                                            rtcx::reflect(i),
-                                           column,
                                            element,
                                            rtcx::reflect(as_scalar),
                                            rtcx::reflect(0));
@@ -144,8 +210,7 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
 
   std::vector<std::string> ptx_in_types;
   std::vector<std::string> ptx_out_types;
-  if (std::holds_alternative<udf_source_type>(source_type) &&
-      std::get<udf_source_type>(source_type) == udf_source_type::PTX) {
+  if (is_ptx) {
     for (auto& in : inputs) {
       ptx_in_types.push_back(reflect_input_value_type(in, use_physical_types));
     }
@@ -161,6 +226,7 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
 namespace {
 
 column_view as_column_view(scalar_column_view const& scalar) { return scalar.as_column_view(); }
+
 column_view as_column_view(column_view const& column) { return column; }
 
 transform_input_spec make_input_spec(column_view const& column, bool is_scalar)
@@ -235,27 +301,31 @@ std::vector<transform_output_spec> make_output_specs(
   std::span<std::unique_ptr<column> const> string_offsets)
 {
   CUDF_EXPECTS(string_offsets.empty() || string_offsets.size() == outputs.size(),
-               "Number of string offsets must be empty or match the number of outputs",
+               "Number of output offsets must be empty or match the number of outputs",
                std::invalid_argument);
+
   std::vector<transform_output_spec> result;
   for (size_t i = 0; i < outputs.size(); ++i) {
     auto has_string_offsets = !string_offsets.empty() && string_offsets[i] != nullptr;
     transform_output_spec spec{.type               = outputs[i].type.id(),
                                .nullability        = outputs[i].nullability,
                                .has_string_offsets = has_string_offsets};
-    if (has_string_offsets) { spec.children.push_back({.type = string_offsets[i]->type().id()}); }
+    if (spec.type == type_id::STRING && spec.has_string_offsets) {
+      spec.children.push_back({.type = string_offsets[i]->type().id()});
+    }
     result.push_back(std::move(spec));
   }
   return result;
 }
 
-transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
+transform_reflection reflect(bool is_ptx,
                              std::span<transform_input const> inputs,
-                             std::span<output_column const> outputs)
+                             std::span<output_column const> outputs,
+                             bool use_physical_types)
 {
   auto input_specs  = make_input_specs(inputs);
   auto output_specs = make_output_specs(outputs);
-  return reflect(source_type, input_specs, output_specs);
+  return reflect(is_ptx, input_specs, output_specs, use_physical_types);
 }
 
 std::string reflect_udf_signature(bool is_null_aware,
@@ -266,15 +336,15 @@ std::string reflect_udf_signature(bool is_null_aware,
 {
   std::vector<std::string> in_types;
 
-  for (size_t i = 0; i < inputs.size(); i++) {
-    auto element = reflect_input_element(inputs[i], use_physical_types);
+  for (auto const& input : inputs) {
+    auto element = reflect_input_value_type(input, use_physical_types);
     in_types.push_back(is_null_aware ? std::format("cuda::std::optional<{}>", element) : element);
   }
 
   std::vector<std::string> out_types;
 
-  for (size_t i = 0; i < outputs.size(); i++) {
-    auto element = reflect_output_element(outputs[i], use_physical_types);
+  for (auto const& output : outputs) {
+    auto element = reflect_output_value_type(output, use_physical_types);
     out_types.push_back(is_null_aware ? std::format("cuda::std::optional<{}> *", element)
                                       : std::format("{} *", element));
   }
@@ -297,6 +367,7 @@ std::string reflect_udf_signature(bool is_null_aware,
 
   return std::format("int({})", joined);
 }
+
 std::string reflect_udf_signature(bool is_null_aware,
                                   bool has_user_data,
                                   std::span<transform_input const> inputs,

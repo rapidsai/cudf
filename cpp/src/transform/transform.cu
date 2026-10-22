@@ -6,6 +6,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -20,9 +21,14 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/exec_policy.hpp>
+
 #include <cuda/buffer>
 #include <cuda/iterator>
+#include <cuda/std/span>
 #include <cuda/stream>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/logical.h>
 
 #include <cudf_fragments.hpp>
 #include <jit/cache.hpp>
@@ -35,6 +41,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <span>
 #include <variant>
 
@@ -51,9 +58,10 @@ using jit::output_column;
 using jit::string_views_column;
 
 using input_column_view = transform_input;
-using handle            = std::variant<
-             std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>,
-             std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>>;
+
+using handle = std::variant<
+  std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>,
+  std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>>;
 
 namespace jit_transform {
 
@@ -172,7 +180,7 @@ kernel get_kernel(bool is_null_aware,
                   udf_source_type source_type)
 {
   auto [in_types, out_types, ptx_in_types, ptx_out_types] =
-    jit::reflect(source_type, inputs, outputs);
+    jit::reflect(source_type == udf_source_type::PTX, inputs, outputs);
   return instantiate(is_null_aware,
                      has_user_data,
                      in_types,
@@ -191,7 +199,7 @@ kernel get_kernel(bool is_null_aware,
                   udf_source_type source_type)
 {
   auto [in_types, out_types, ptx_in_types, ptx_out_types] =
-    jit::reflect(source_type, inputs, outputs);
+    jit::reflect(source_type == udf_source_type::PTX, inputs, outputs);
   return instantiate(is_null_aware,
                      has_user_data,
                      in_types,
@@ -247,6 +255,7 @@ rtcx::binary_type as_rtcx_binary_type(lto_binary_type type)
   switch (type) {
     case lto_binary_type::LTO_IR: return rtcx::binary_type::LTO_IR;
     case lto_binary_type::FATBIN: return rtcx::binary_type::FATBIN;
+    case lto_binary_type::PTX: return rtcx::binary_type::PTX;
     default:
       CUDF_FAIL(
         std::format("Unrecognized LTO binary type {} for LTO transform", static_cast<int>(type)),
@@ -270,7 +279,7 @@ void run_lto(std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type,
              rmm::device_async_resource_ref mr)
 {
   auto [in_types, out_types, ptx_in_types, ptx_out_types] =
-    jit::reflect(source_type, inputs, outputs);
+    jit::reflect(false, inputs, outputs, /*use_physical_types=*/true);
 
   std::span<uint8_t const> kernel_fragment;
   lto_binary_type kernel_fragment_binary_type = lto_binary_type::FATBIN;
@@ -336,9 +345,13 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
   if (!is_nullable) { return 0; }
 
+  auto init_mask = [&](bool valid) {
+    CUDF_CUDA_TRY(cudaMemsetAsync(
+      null_mask, valid ? 0xff : 0, bitmask_allocation_size_bytes(row_size), stream.get()));
+  };
   if (inputs.empty()) {
     // no input, set all to valid
-    set_null_mask(null_mask, 0, row_size, true, stream);
+    init_mask(true);
     return 0;
   }
 
@@ -354,7 +367,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
     if (scalar_is_null) {
       // scalar is null, all rows will be null
-      set_null_mask(null_mask, 0, row_size, false, stream);
+      init_mask(false);
       return row_size;
     }
   }
@@ -364,7 +377,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
   if (!has_cols) {
     // no non-scalar columns, so all rows are valid
-    set_null_mask(null_mask, 0, row_size, true, stream);
+    init_mask(true);
     return 0;
   }
 
@@ -385,7 +398,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
   if (nullable_masks.empty()) {
     // we only have non-nullable columns, so all rows are valid
-    set_null_mask(null_mask, 0, row_size, true, stream);
+    init_mask(true);
     return 0;
   }
 
@@ -967,7 +980,7 @@ dispatch_lto_kernel_fragment(bool is_null_aware,
   // the contract here is that CMake and this dispatch function agree on symbol mangling of the
   // reflected kernel name.
   auto [in_types, out_types, ptx_in_types, ptx_out_types] =
-    jit::reflect(lto_binary_type::FATBIN, inputs, outputs);
+    jit::reflect(false, inputs, outputs, /*use_physical_types=*/true);
   auto target = strip_whitespace(rtcx::reflect_template("cudf::jit::transform_kernel",
                                                         rtcx::reflect(is_null_aware),
                                                         rtcx::reflect(has_user_data),
@@ -1055,7 +1068,8 @@ struct transform_program::impl {
   {
     auto actual_input_specs  = jit::make_input_specs(actual_inputs);
     auto actual_output_specs = jit::make_output_specs(actual_outputs, string_offsets);
-    auto actual_reflection   = jit::reflect(source_type, actual_input_specs, actual_output_specs);
+    auto actual_reflection =
+      jit::reflect(source_type == udf_source_type::PTX, actual_input_specs, actual_output_specs);
     CUDF_EXPECTS(reflection_ == actual_reflection,
                  "Transform program specifications do not match the provided inputs and outputs",
                  std::invalid_argument);
@@ -1067,7 +1081,7 @@ struct transform_program::impl {
        std::optional<void*> user_data,
        std::vector<transform_input_spec> inputs,
        std::vector<transform_output_spec> outputs)
-    : reflection_{jit::reflect(source_type, inputs, outputs)},
+    : reflection_{jit::reflect(source_type == udf_source_type::PTX, inputs, outputs)},
       source_type_{source_type},
       is_null_aware_{is_null_aware},
       user_data_{user_data},
