@@ -424,31 +424,6 @@ def test_streaming_executor_normalizes_kvikio_enum_strings() -> None:
     assert executor.kvikio_remote_io_backend == kvikio.RemoteIOBackend.EASY_THREADPOOL
 
 
-def test_kvikio_reactor_dispatch_default_no_warning(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # The "error" warning filter turns any warning on the default path into a failure.
-    monkeypatch.delenv("CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_DISPATCH", raising=False)
-    executor = StreamingExecutor(cluster=Cluster.DEFAULT_SINGLETON)
-    assert executor.kvikio_reactor_dispatch is None
-
-
-@pytest.mark.parametrize("from_env", [False, True])
-def test_kvikio_reactor_dispatch_deprecated(
-    monkeypatch: pytest.MonkeyPatch, *, from_env: bool
-) -> None:
-    kwargs: dict[str, Any] = {}
-    if from_env:
-        monkeypatch.setenv(
-            "CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_DISPATCH", "PER_PREAD"
-        )
-    else:
-        kwargs["kvikio_reactor_dispatch"] = "PER_PREAD"
-    with pytest.warns(FutureWarning, match="kvikio_reactor_dispatch"):
-        executor = StreamingExecutor(cluster=Cluster.DEFAULT_SINGLETON, **kwargs)
-    assert executor.kvikio_reactor_dispatch is None
-
-
 def test_executor_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     with monkeypatch.context() as m:
         m.setenv("CUDF_POLARS__EXECUTOR", "in-memory")

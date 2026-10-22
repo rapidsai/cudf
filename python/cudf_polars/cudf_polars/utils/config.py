@@ -27,7 +27,6 @@ import functools
 import importlib.util
 import json
 import os
-import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -1198,12 +1197,6 @@ class StreamingExecutor:
         - ``executor_options`` passed to ``polars.GPUEngine``
         - the ``CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_COUNT`` environment variable
         - the ``KVIKIO_REMOTE_IO_NUM_REACTORS`` environment variable (lower precedence)
-    kvikio_reactor_dispatch
-        **Deprecated**: Has no effect. KvikIO no longer makes the ``MULTI_POLL``
-        reactor dispatch configurable. Its reactors always take sub-ranges from
-        one shared queue. Setting this option, either through ``executor_options``
-        or the ``CUDF_POLARS__EXECUTOR__KVIKIO_REACTOR_DISPATCH`` environment
-        variable, emits a ``FutureWarning``.
     kvikio_request_ceiling
         Maximum number of concurrent in-flight requests across all reactor
         threads under the ``MULTI_POLL`` remote I/O backend. 0 means unlimited.
@@ -1318,12 +1311,6 @@ class StreamingExecutor:
     )
     kvikio_reactor_count: int = dataclasses.field(
         default_factory=lambda: resolve_kvikio_reactor_count({})
-    )
-    # Deprecated and ignored. `__post_init__` warns if a user passes it.
-    kvikio_reactor_dispatch: Any = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__KVIKIO_REACTOR_DISPATCH", str, default=None
-        )
     )
     kvikio_request_ceiling: int = dataclasses.field(
         default_factory=lambda: resolve_kvikio_request_ceiling({})
@@ -1460,15 +1447,6 @@ class StreamingExecutor:
             raise TypeError("kvikio_reactor_count must be an int")
         if self.kvikio_reactor_count <= 0:
             raise ValueError("kvikio_reactor_count must be positive")
-        if self.kvikio_reactor_dispatch is not None:
-            warnings.warn(
-                "The 'kvikio_reactor_dispatch' option is deprecated and has no "
-                "effect. KvikIO's MULTI_POLL reactors always take sub-ranges from "
-                "one shared queue.",
-                FutureWarning,
-                stacklevel=2,
-            )
-            object.__setattr__(self, "kvikio_reactor_dispatch", None)
         if not isinstance(self.kvikio_request_ceiling, int):
             raise TypeError("kvikio_request_ceiling must be an int")
         if self.kvikio_request_ceiling < 0:
