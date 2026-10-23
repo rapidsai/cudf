@@ -34,6 +34,8 @@ from pyiceberg.transforms import IdentityTransform  # noqa: E402
 from pyiceberg.types import (  # noqa: E402
     DecimalType,
     DoubleType,
+    FloatType,
+    IntegerType,
     ListType,
     LongType,
     MapType,
@@ -58,7 +60,11 @@ def iceberg_catalog(tmp_path: Path) -> Iterator[SqlCatalog]:
 def flat_iceberg(iceberg_catalog: SqlCatalog) -> str:
     first = pl.LazyFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
     tbl = iceberg_catalog.create_table(
-        "ns.flat", schema=first.collect_schema().to_arrow()
+        "ns.flat",
+        schema=pyiceberg.schema.Schema(
+            NestedField(1, "a", LongType(), required=False),
+            NestedField(2, "b", StringType(), required=False),
+        ),
     )
     first.sink_iceberg(tbl, mode="append")
     pl.LazyFrame({"a": [4, 5], "b": ["p", "q"]}).sink_iceberg(tbl, mode="append")
@@ -71,7 +77,11 @@ def evolved_iceberg(iceberg_catalog: SqlCatalog) -> str:
         {"a": pl.Series([1, 2, 3], dtype=pl.Int32), "b": ["x", "y", "z"]}
     )
     tbl = iceberg_catalog.create_table(
-        "ns.evolved", schema=first.collect_schema().to_arrow()
+        "ns.evolved",
+        schema=pyiceberg.schema.Schema(
+            NestedField(1, "a", IntegerType(), required=False),
+            NestedField(2, "b", StringType(), required=False),
+        ),
     )
     first.sink_iceberg(tbl, mode="append")
 
@@ -93,7 +103,11 @@ def evolved_iceberg(iceberg_catalog: SqlCatalog) -> str:
 def renamed_iceberg(iceberg_catalog: SqlCatalog) -> str:
     first = pl.LazyFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
     tbl = iceberg_catalog.create_table(
-        "ns.renamed", schema=first.collect_schema().to_arrow()
+        "ns.renamed",
+        schema=pyiceberg.schema.Schema(
+            NestedField(1, "a", LongType(), required=False),
+            NestedField(2, "b", StringType(), required=False),
+        ),
     )
     first.sink_iceberg(tbl, mode="append")
 
@@ -117,7 +131,12 @@ def promoted_iceberg(iceberg_catalog: SqlCatalog) -> str:
         }
     )
     tbl = iceberg_catalog.create_table(
-        "ns.promoted", schema=first.collect_schema().to_arrow()
+        "ns.promoted",
+        schema=pyiceberg.schema.Schema(
+            NestedField(1, "a", IntegerType(), required=False),
+            NestedField(2, "b", StringType(), required=False),
+            NestedField(3, "c", FloatType(), required=False),
+        ),
     )
     first.sink_iceberg(tbl, mode="append")
 
