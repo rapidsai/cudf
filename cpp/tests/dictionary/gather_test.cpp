@@ -44,6 +44,7 @@ TEST_F(DictionaryGatherTest, EmptyGatherMap)
   EXPECT_EQ(result.size(), 0);
   ASSERT_EQ(result.parent().num_children(), 2);
   EXPECT_EQ(result.keys().type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(result.keys_type().id(), cudf::type_id::STRING);
 }
 
 TEST_F(DictionaryGatherTest, GatherWithNulls)

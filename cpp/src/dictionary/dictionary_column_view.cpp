@@ -37,7 +37,7 @@ size_type dictionary_column_view::keys_size() const noexcept
 
 data_type dictionary_column_view::keys_type() const noexcept
 {
-  return (size() == 0) ? data_type{type_id::EMPTY} : keys().type();
+  return (num_children() < 2) ? data_type{type_id::EMPTY} : keys().type();
 }
 
 }  // namespace cudf

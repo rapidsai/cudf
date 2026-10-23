@@ -361,6 +361,23 @@ TEST_F(ToArrowHostDeviceTest, EmptyDictionaryWithKeys)
   EXPECT_EQ(after.keys().type().id(), cudf::type_id::STRING);
 }
 
+TEST_F(ToArrowHostDeviceTest, EmptySlicedDictionary)
+{
+  cudf::test::dictionary_column_wrapper<std::string> input({"a", "b", "c"});
+  auto const tv = cudf::table_view({cudf::slice(input, {1, 1}).front()});
+
+  auto arrow = cudf::to_arrow_host(tv);
+  ASSERT_NE(arrow->array.children[0]->dictionary, nullptr);
+  EXPECT_EQ(arrow->array.children[0]->length, 0);
+  EXPECT_EQ(arrow->array.children[0]->dictionary->length, 0);
+
+  auto schema       = cudf::to_arrow_schema(tv, cudf::interop::get_table_metadata(tv));
+  auto roundtripped = cudf::from_arrow_host(schema.get(), arrow.get());
+  auto const after  = cudf::dictionary_column_view(roundtripped->view().column(0));
+  EXPECT_EQ(after.size(), 0);
+  EXPECT_EQ(after.keys().type().id(), cudf::type_id::STRING);
+}
+
 TEST_F(ToArrowHostDeviceTest, DateTimeTable)
 {
   auto data = std::initializer_list<int64_t>{1, 2, 3, 4, 5, 6};
