@@ -185,7 +185,7 @@ int dispatch_to_arrow_type::operator()<cudf::dictionary32>(column_view input,
                                                            ArrowSchema* out)
 {
   cudf::dictionary_column_view const dview{input};
-  auto const has_children = input.num_children() > 0;
+  auto const has_children = input.num_children() == 2;
 
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(
     out, has_children ? id_to_arrow_type(dview.indices().type().id()) : NANOARROW_TYPE_INT32));

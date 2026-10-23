@@ -274,7 +274,7 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column&& colu
   nanoarrow::UniqueArray tmp;
 
   cudf::dictionary_column_view const dview{column.view()};
-  auto const has_children = column.num_children() > 0;
+  auto const has_children = column.num_children() == 2;
 
   NANOARROW_RETURN_NOT_OK(initialize_array(
     tmp.get(),
@@ -466,7 +466,7 @@ int dispatch_to_arrow_device_view::operator()<cudf::dictionary32>(ArrowArray* ou
   nanoarrow::UniqueArray tmp;
 
   auto const dcv          = cudf::dictionary_column_view(column);
-  auto const has_children = column.num_children() > 0;
+  auto const has_children = column.num_children() == 2;
   auto const indices      = has_children ? dcv.get_indices_annotated()
                                          : cudf::make_empty_column(cudf::type_id::INT32)->view();
   auto const keys =
