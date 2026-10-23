@@ -124,7 +124,7 @@ auto dispatch_tasks(std::size_t num_tasks, Task task)
  * @copydoc cudf::io::parquet::fetch_footers_to_host
  */
 std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host_impl(
-  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources)
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources)
 {
   // Look up runtime configuration once, as late as possible.
   auto const metadata_size_hint = cudf::io::parquet::metadata_size_hint();
@@ -189,8 +189,8 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
  * @copydoc cudf::io::parquet::fetch_page_indexes_to_host
  */
 std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host_impl(
-  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  std::span<cudf::io::text::byte_range_info const> page_index_bytes_per_source)
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<cudf::io::text::byte_range_info const> page_index_bytes_per_source)
 {
   CUDF_EXPECTS(datasources.size() == page_index_bytes_per_source.size(),
                "Encountered mismatch in number of datasources and page index byte ranges");
@@ -228,13 +228,14 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to
  * @param dst Host buffer that receives the read data
  */
 template <typename SourceIndexIterator, typename OffsetIterator, typename SizeIterator>
-void read_ranges_to_host(std::span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-                         SourceIndexIterator source_indices,
-                         OffsetIterator offsets,
-                         SizeIterator sizes,
-                         std::size_t count,
-                         std::span<uint8_t> dst,
-                         bool serialize_submissions)
+void read_ranges_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  SourceIndexIterator source_indices,
+  OffsetIterator offsets,
+  SizeIterator sizes,
+  std::size_t count,
+  cudf::host_span<uint8_t> dst,
+  bool serialize_submissions)
 {
   std::vector<std::future<std::size_t>> host_read_tasks;
   std::vector<std::size_t> expected_sizes;
@@ -283,8 +284,9 @@ std::tuple<std::vector<rmm::device_buffer>,
            std::vector<device_spans_per_source_type>,
            std::future<void>>
 fetch_byte_ranges_to_device_async_impl(
-  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  std::span<std::span<cudf::io::text::byte_range_info const> const> byte_ranges_per_source,
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<cudf::host_span<cudf::io::text::byte_range_info const> const>
+    byte_ranges_per_source,
   bool serialize_submissions,
   cuda::stream_ref stream,
   rmm::device_async_resource_ref mr)
@@ -479,8 +481,8 @@ fetch_byte_ranges_to_device_async_impl(
 
 std::pair<std::vector<cuda::device_buffer<uint8_t>>, std::vector<device_spans_per_source_type>>
 fetch_bloom_filters_to_device_impl(
-  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  std::span<std::span<cudf::io::text::byte_range_info const> const>
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<cudf::host_span<cudf::io::text::byte_range_info const> const>
     bloom_filter_byte_ranges_per_source,
   bool serialize_submissions,
   cuda::stream_ref stream,
@@ -723,8 +725,8 @@ fetch_byte_ranges_to_device_async(cudf::io::datasource& datasource,
 
   // Wrap the inputs into arrays and delegate to the multi-source implementation
   std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
-  std::array<std::span<cudf::io::text::byte_range_info const>, 1> byte_ranges_per_source{
-    byte_ranges};
+  std::array<cudf::host_span<cudf::io::text::byte_range_info const>, 1> byte_ranges_per_source{
+    cudf::host_span<cudf::io::text::byte_range_info const>{byte_ranges.data(), byte_ranges.size()}};
 
   auto [buffers, fetched_byte_ranges, fut] = fetch_byte_ranges_to_device_async_impl(
     {datasources.data(), datasources.size()},
@@ -748,8 +750,8 @@ fetch_byte_ranges_to_device_async(
 {
   CUDF_FUNC_RANGE();
 
-  // Convert input vectors into spans for the implementation
-  std::vector<std::span<cudf::io::text::byte_range_info const>> byte_range_spans_per_source;
+  // Convert input vectors into host spans for the implementation
+  std::vector<cudf::host_span<cudf::io::text::byte_range_info const>> byte_range_spans_per_source;
   byte_range_spans_per_source.reserve(byte_ranges_per_source.size());
   for (auto const& ranges : byte_ranges_per_source) {
     byte_range_spans_per_source.emplace_back(ranges);
@@ -774,7 +776,7 @@ fetch_bloom_filters_to_device(
 
   // Wrap the inputs into arrays and delegate to the multi-source implementation
   std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
-  std::array<std::span<cudf::io::text::byte_range_info const>, 1>
+  std::array<cudf::host_span<cudf::io::text::byte_range_info const>, 1>
     bloom_filter_byte_ranges_per_source{bloom_filter_byte_ranges};
 
   auto [buffers, fetched_byte_ranges] = fetch_bloom_filters_to_device_impl(
@@ -799,8 +801,8 @@ fetch_bloom_filters_to_device(
 {
   CUDF_FUNC_RANGE();
 
-  // Convert input vectors into spans for the implementation
-  std::vector<std::span<cudf::io::text::byte_range_info const>>
+  // Convert input vectors into host spans for the implementation
+  std::vector<cudf::host_span<cudf::io::text::byte_range_info const>>
     bloom_filter_byte_range_spans_per_source;
   bloom_filter_byte_range_spans_per_source.reserve(bloom_filter_byte_ranges_per_source.size());
   for (auto const& ranges : bloom_filter_byte_ranges_per_source) {
