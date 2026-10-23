@@ -223,7 +223,6 @@ struct cast_numeric_scalar_fn {
   std::unique_ptr<scalar> operator()(numeric_scalar<InputType>*,
                                      cuda::stream_ref,
                                      rmm::device_async_resource_ref)
-    requires(not is_supported<ResultType>())
   {
     CUDF_FAIL("input data type is not convertible to output data type");
   }

@@ -103,8 +103,6 @@ class arg_minmax_dispatcher {
   // directly, so no decoding is required and no assumption is made that the keys are sorted.
   template <typename ElementType>
   [[nodiscard]] size_type find_arg_minmax(column_view const& input, cuda::stream_ref stream) const
-    requires(not cudf::concepts::nested<ElementType> and
-             not cudf::concepts::arithmetic<ElementType>)
   {
     // Nulls are considered "greater" (ARGMIN), or "less" (ARGMAX) than non-null values.
     auto const null_orders =
@@ -175,7 +173,6 @@ class arg_minmax_dispatcher {
   std::unique_ptr<scalar> operator()(column_view const&,
                                      cuda::stream_ref,
                                      rmm::device_async_resource_ref) const
-    requires(not is_supported<ElementType>())
   {
     CUDF_FAIL("ARGMIN/ARGMAX is not supported for this type");
   }

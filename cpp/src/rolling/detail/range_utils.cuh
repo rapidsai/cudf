@@ -896,7 +896,6 @@ struct range_window_clamper {
   }
 
   template <typename OrderbyT>
-    requires(!is_supported<OrderbyT>())
   std::unique_ptr<column> operator()(column_view const&,
                                      direction,
                                      order,

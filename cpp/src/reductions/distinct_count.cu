@@ -119,7 +119,6 @@ struct has_nans {
    */
   template <typename T>
   bool operator()(column_view const&, cuda::stream_ref)
-    requires(not cuda::std::floating_point<T>)
   {
     return false;
   }

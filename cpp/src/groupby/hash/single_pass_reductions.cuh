@@ -425,7 +425,6 @@ struct grouped_reductions_fn {
   }
 
   template <typename T>
-    requires(!is_reduction_supported<T>(K))
   std::vector<std::unique_ptr<column>> operator()(host_span<reduction_context const>,
                                                   std::span<int8_t const>,
                                                   cuda::stream_ref,

@@ -37,7 +37,6 @@ struct check_nan {
   }
   template <typename T>
   __device__ inline bool operator()(column_device_view const&, size_type)
-    requires(not cuda::std::floating_point<T>)
   {
     return false;
   }

@@ -65,7 +65,6 @@ struct DeviceRolling {
 
   // operations we don't support
   template <typename T = InputType, aggregation::Kind O = op>
-    requires(not is_supported<T, O>())
   explicit DeviceRolling(size_type min_periods) : min_periods(min_periods)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
@@ -537,9 +536,7 @@ struct DeviceRollingLead {
   }
 
   template <typename T = InputType>
-  DeviceRollingLead(size_type _row_offset)
-    requires(!is_supported<T>())
-    : row_offset(_row_offset)
+  DeviceRollingLead(size_type _row_offset) : row_offset(_row_offset)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
   }
@@ -602,9 +599,7 @@ struct DeviceRollingLag {
   }
 
   template <typename T = InputType>
-  DeviceRollingLag(size_type _row_offset)
-    requires(!is_supported<T>())
-    : row_offset(_row_offset)
+  DeviceRollingLag(size_type _row_offset) : row_offset(_row_offset)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
   }

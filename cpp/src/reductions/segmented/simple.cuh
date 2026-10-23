@@ -340,7 +340,6 @@ struct same_column_type_dispatcher {
   }
 
   template <typename ElementType>
-    requires(!is_supported<ElementType>())
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      null_policy,

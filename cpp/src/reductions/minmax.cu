@@ -220,7 +220,6 @@ struct minmax_dictionary_functor {
   template <typename T>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     column_view const&, cuda::stream_ref, rmm::device_async_resource_ref)
-    requires(!is_supported<T>())
   {
     CUDF_FAIL("dictionary key type not supported for minmax() operation");
   }
@@ -305,7 +304,6 @@ struct minmax_functor {
   template <typename T>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const&, cuda::stream_ref, rmm::device_async_resource_ref)
-    requires(!is_supported<T>())
   {
     CUDF_FAIL("type not supported for minmax() operation");
   }
