@@ -129,8 +129,8 @@ struct list_child_constructor {
    */
   template <typename T>
   struct is_supported_child_type {
-    static bool const value = cudf::is_fixed_width<T>() || std::is_same_v<T, string_view> ||
-                              std::is_same_v<T, list_view> || std::is_same_v<T, struct_view>;
+    static bool const value =
+      cudf::concepts::fixed_width<T> || cudf::concepts::string_view<T> || cudf::concepts::nested<T>;
   };
 
  public:
