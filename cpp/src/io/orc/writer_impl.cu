@@ -1408,7 +1408,7 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
 
   // Empty when writing UTC, which leaves the input instants on the wall clock already
   auto const transitions  = timezone.ut_offsets(stream);
-  auto const d_ut_offsets = (transitions.num_rows() == 0)
+  auto const d_ut_offsets = timezone.is_utc(stream)
                               ? ut_offset_table{}
                               : ut_offset_table{transitions.column(0).data<timestamp_s>(),
                                                 transitions.column(1).data<duration_s>(),
@@ -1495,7 +1495,7 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
     if (not is_granularity_rowgroup) { return {}; }
 
     cudf::detail::hostdevice_vector<uint8_t> blobs = allocate_and_encode_blobs(
-      rowgroup_merge, rowgroup_chunks, num_rowgroup_blobs, transitions.num_rows() == 0, stream);
+      rowgroup_merge, rowgroup_chunks, num_rowgroup_blobs, timezone.is_utc(stream), stream);
 
     std::vector<col_stats_blob> rowgroup_blobs(num_rowgroup_blobs);
     for (size_t i = 0; i < num_rowgroup_blobs; i++) {
@@ -1527,7 +1527,7 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
                                                  writer_timezone const& timezone,
                                                  cuda::stream_ref stream)
 {
-  auto const write_legacy_timestamp_bounds = timezone.ut_offsets(stream).num_rows() == 0;
+  auto const write_legacy_timestamp_bounds = timezone.is_utc(stream);
 
   auto stripe_size_iter = cuda::transform_iterator(per_chunk_stats.stripe_stat_merge.begin(),
                                                    [](auto const& s) { return s.size(); });
@@ -2745,6 +2745,11 @@ table_view writer_timezone::ut_offsets(cuda::stream_ref stream) const
   }
 
   return transitions->view();
+}
+
+bool writer_timezone::is_utc(cuda::stream_ref stream) const
+{
+  return ut_offsets(stream).num_rows() == 0;
 }
 
 writer_timezone::writer_timezone(std::string timezone)

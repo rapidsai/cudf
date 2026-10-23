@@ -969,7 +969,7 @@ TEST_F(OrcChunkedWriterTest, WriterTimezone)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(table_view({expected}), read_orc_buffer(buffer).tbl->view());
 
   // The file statistics merge the per-stripe chunks each write produced, and the writes share one
-  // transition table, cached when the writer was constructed
+  // transition table, loaded on the first write
   auto const stats = timestamp_stats(buffer);
   EXPECT_EQ(stats.minimum_utc, (-3000 + shanghai_offset) * 1000);
   EXPECT_EQ(stats.maximum_utc, (1421323200 + shanghai_offset) * 1000);

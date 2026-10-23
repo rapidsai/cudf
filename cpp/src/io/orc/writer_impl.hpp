@@ -226,6 +226,16 @@ struct writer_timezone {
   table_view ut_offsets(cuda::stream_ref stream) const;
 
   /**
+   * @brief Returns whether this timezone's wall clock coincides with the instants it is given.
+   *
+   * True for UTC and for aliases whose offset from UT is zero throughout, which have no transition
+   * to apply.
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  [[nodiscard]] bool is_utc(cuda::stream_ref stream) const;
+
+  /**
    * @brief Resolves a timezone name into the epoch that timestamps are encoded relative to.
    *
    * Uses `base_epoch_in_timezone`, so the writer and the reader resolve the epoch the same way.

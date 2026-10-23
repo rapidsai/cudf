@@ -202,9 +202,8 @@ __device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, void const* r
 }
 
 // Splits a nanosecond timestamp into the milliseconds and the sub-millisecond remainder ORC writes
-// a timestamp bound as. The milliseconds are narrowed to the int64_t that field holds, which covers
-// any input within ±292 million years of the epoch.
-__device__ cuda::std::pair<int64_t, int32_t> split_nanosecond_timestamp(__int128_t nano_count)
+// a timestamp bound as
+__device__ cuda::std::pair<__int128_t, int32_t> split_nanosecond_timestamp(__int128_t nano_count)
 {
   auto constexpr ns_per_ms = __int128_t{1'000'000};
   auto ms                  = nano_count / ns_per_ms;
@@ -215,7 +214,13 @@ __device__ cuda::std::pair<int64_t, int32_t> split_nanosecond_timestamp(__int128
     ns_remainder += 1'000'000;
   }
 
-  return {static_cast<int64_t>(ms), ns_remainder};
+  return {ms, ns_remainder};
+}
+
+__device__ bool fits_int64(__int128_t value)
+{
+  return value >= cuda::std::numeric_limits<int64_t>::min() and
+         value <= cuda::std::numeric_limits<int64_t>::max();
 }
 
 /**
@@ -421,24 +426,29 @@ CUDF_KERNEL void __launch_bounds__(encode_threads_per_block)
             auto const [max_ms, max_ns_remainder] =
               split_nanosecond_timestamp(s->chunk.max_value.d128_val);
 
-            // The values are on the writer's wall clock, as Apache's are. The legacy pair holds
-            // instants, which readers convert to the wall clock, so it only equals the UTC pair
-            // when writing UTC. Apache writes only the UTC pair, and readers prefer it.
-            if (write_legacy_timestamp_bounds) {
-              cur = pb_put_int(cur, 1, min_ms);  // minimum
-              cur = pb_put_int(cur, 2, max_ms);  // maximum
-            }
-            cur = pb_put_int(cur, 3, min_ms);  // minimumUtc
-            cur = pb_put_int(cur, 4, max_ms);  // maximumUtc
-
-            if constexpr (enable_nanosecond_statistics) {
-              if (min_ns_remainder != DEFAULT_MIN_NANOS) {
-                // using uint because positive values are not zigzag encoded
-                cur = pb_put_uint(cur, 5, min_ns_remainder + 1);  // minimumNanos
+            // The bounds are milliseconds in an int64 field, which a timestamp more than about 292
+            // million years from the epoch exceeds. Both are then left out, so that a reader takes
+            // the range as unknown rather than pruning on a bound that wrapped.
+            if (fits_int64(min_ms) and fits_int64(max_ms)) {
+              // The values are on the writer's wall clock, as Apache's are. The legacy pair holds
+              // instants, which readers convert to the wall clock, so it only equals the UTC pair
+              // when writing UTC. Apache writes only the UTC pair, and readers prefer it.
+              if (write_legacy_timestamp_bounds) {
+                cur = pb_put_int(cur, 1, static_cast<int64_t>(min_ms));  // minimum
+                cur = pb_put_int(cur, 2, static_cast<int64_t>(max_ms));  // maximum
               }
-              if (max_ns_remainder != DEFAULT_MAX_NANOS) {
-                // using uint because positive values are not zigzag encoded
-                cur = pb_put_uint(cur, 6, max_ns_remainder + 1);  // maximumNanos
+              cur = pb_put_int(cur, 3, static_cast<int64_t>(min_ms));  // minimumUtc
+              cur = pb_put_int(cur, 4, static_cast<int64_t>(max_ms));  // maximumUtc
+
+              if constexpr (enable_nanosecond_statistics) {
+                if (min_ns_remainder != DEFAULT_MIN_NANOS) {
+                  // using uint because positive values are not zigzag encoded
+                  cur = pb_put_uint(cur, 5, min_ns_remainder + 1);  // minimumNanos
+                }
+                if (max_ns_remainder != DEFAULT_MAX_NANOS) {
+                  // using uint because positive values are not zigzag encoded
+                  cur = pb_put_uint(cur, 6, max_ns_remainder + 1);  // maximumNanos
+                }
               }
             }
           }
