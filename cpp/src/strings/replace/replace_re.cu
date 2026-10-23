@@ -249,6 +249,7 @@ std::unique_ptr<column> replace_re_fn(strings_column_view const& input,
     cudf::detail::grid_1d grid{static_cast<int64_t>(strings_count) * cudf::detail::warp_size, 256};
     write_output_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
       d_strings, d_repl, matches.data(), slots, counts.data(), d_offsets, chars.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     // run the regex again to write the rows whose matches did not fit
     auto overflow_rows =
