@@ -6,9 +6,11 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_GE_310
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 
@@ -34,9 +36,17 @@ def test_reset_index(level, drop, inplace, original_name, name):
     ps = pd.Series(range(4), index=midx, name=original_name)
     gs = cudf.from_pandas(ps)
 
-    expect = ps.reset_index(level=level, drop=drop, name=name, inplace=inplace)
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expect = ps.reset_index(
+            level=level, drop=drop, name=name, inplace=inplace
+        )
 
-    got = gs.reset_index(level=level, drop=drop, name=name, inplace=inplace)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        got = gs.reset_index(
+            level=level, drop=drop, name=name, inplace=inplace
+        )
     if inplace:
         expect = ps
         got = gs
@@ -62,8 +72,16 @@ def test_reset_index_dup_level_name(level, drop, inplace, original_name, name):
     ps = pd.Series(range(4), index=midx, name=original_name)
     gs = cudf.from_pandas(ps)
 
-    expect = ps.reset_index(level=level, drop=drop, inplace=inplace, name=name)
-    got = gs.reset_index(level=level, drop=drop, inplace=inplace, name=name)
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expect = ps.reset_index(
+            level=level, drop=drop, inplace=inplace, name=name
+        )
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        got = gs.reset_index(
+            level=level, drop=drop, inplace=inplace, name=name
+        )
     if inplace:
         expect = ps
         got = gs
@@ -90,8 +108,12 @@ def test_reset_index_named(drop, inplace, original_name, name):
     ps.index.name = "cudf"
     gs.index.name = "cudf"
 
-    expect = ps.reset_index(drop=drop, inplace=inplace, name=name)
-    got = gs.reset_index(drop=drop, inplace=inplace, name=name)
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expect = ps.reset_index(drop=drop, inplace=inplace, name=name)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        got = gs.reset_index(drop=drop, inplace=inplace, name=name)
 
     if inplace:
         expect = ps
@@ -124,32 +146,14 @@ def test_reset_index_dup_level_name_exceptions():
     )
 
     # Cannot use drop=False and inplace=True to turn a series into dataframe.
-    assert_exceptions_equal(
-        lfunc=ps.reset_index,
-        rfunc=gs.reset_index,
-        lfunc_args_and_kwargs=(
-            [],
-            {"drop": False, "inplace": True},
-        ),
-        rfunc_args_and_kwargs=(
-            [],
-            {"drop": False, "inplace": True},
-        ),
-    )
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        with pytest.raises(TypeError, match="Cannot reset_index inplace"):
+            gs.reset_index(drop=False, inplace=True)
 
     # Pandas raises the above exception should these two inputs crosses.
-    assert_exceptions_equal(
-        lfunc=ps.reset_index,
-        rfunc=gs.reset_index,
-        lfunc_args_and_kwargs=(
-            [],
-            {"level": [None], "drop": False, "inplace": True},
-        ),
-        rfunc_args_and_kwargs=(
-            [],
-            {"level": [None], "drop": False, "inplace": True},
-        ),
-    )
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        with pytest.raises(TypeError, match="Cannot reset_index inplace"):
+            gs.reset_index(level=[None], drop=False, inplace=True)
 
 
 @pytest.mark.parametrize("level", [-1, -2, [-1], [0, -1]])

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -6,9 +6,11 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_310
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 
@@ -32,8 +34,12 @@ def test_series_drop_labels(ps, labels, inplace):
     ps = ps.copy()
     gs = cudf.from_pandas(ps)
 
-    expected = ps.drop(labels=labels, axis=0, inplace=inplace)
-    actual = gs.drop(labels=labels, axis=0, inplace=inplace)
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expected = ps.drop(labels=labels, axis=0, inplace=inplace)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        actual = gs.drop(labels=labels, axis=0, inplace=inplace)
 
     if inplace:
         expected = ps
@@ -48,8 +54,12 @@ def test_series_drop_index(data, index, inplace):
     ps = pd.Series(data, index=range(0, 20), name="a")
     gs = cudf.from_pandas(ps)
 
-    expected = ps.drop(index=index, inplace=inplace)
-    actual = gs.drop(index=index, inplace=inplace)
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expected = ps.drop(index=index, inplace=inplace)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        actual = gs.drop(index=index, inplace=inplace)
 
     if inplace:
         expected = ps
@@ -98,8 +108,12 @@ def test_series_drop_multiindex(index, level, inplace):
     )
     gs = cudf.from_pandas(ps)
 
-    expected = ps.drop(index=index, inplace=inplace, level=level)
-    actual = gs.drop(index=index, inplace=inplace, level=level)
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expected = ps.drop(index=index, inplace=inplace, level=level)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        actual = gs.drop(index=index, inplace=inplace, level=level)
 
     if inplace:
         expected = ps

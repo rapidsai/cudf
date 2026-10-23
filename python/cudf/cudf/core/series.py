@@ -6,6 +6,7 @@ from __future__ import annotations
 import functools
 import inspect
 import textwrap
+import warnings
 from collections.abc import Mapping
 from copy import deepcopy
 from shutil import get_terminal_size
@@ -85,6 +86,7 @@ if TYPE_CHECKING:
         Axis,
         DataFrameOrSeries,
         Dtype,
+        NoDefault,
         ScalarLike,
     )
     from cudf.core.dataframe import DataFrame
@@ -811,7 +813,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         index=None,
         columns=None,
         level=None,
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         errors: Literal["ignore", "raise"] = "raise",
     ) -> Self | None:
         if axis == 1:
@@ -1086,9 +1088,18 @@ class Series(SingleColumnFrame, IndexedFrame):
         level=None,
         drop: bool = False,
         name=no_default,
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         allow_duplicates: bool = False,
     ) -> Self | None:
+        if inplace is not no_default:
+            warnings.warn(
+                "The inplace keyword in Series.reset_index is deprecated and "
+                "will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         if not drop and inplace:
             raise TypeError(
                 "Cannot reset_index inplace on a Series to create a DataFrame"
@@ -1713,7 +1724,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     def dropna(
         self,
         axis: Axis = 0,
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         how: Literal["any", "all"] | None = None,
         ignore_index: bool = False,
     ) -> Self | None:
@@ -1726,6 +1737,8 @@ class Series(SingleColumnFrame, IndexedFrame):
             There is only one axis to drop values from.
         inplace : bool, default False
             If True, do operation inplace and return None.
+
+            .. deprecated:: 26.12
         how : str, optional
             Not in use. Kept for compatibility.
         ignore_index : bool, default ``False``
@@ -1766,14 +1779,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         1    2
         dtype: int64
 
-        Keep the Series with valid entries in the same variable.
-
-        >>> ser.dropna(inplace=True)
-        >>> ser
-        0    1
-        1    2
-        dtype: int64
-
         Empty strings are not considered null values.
         `None` is considered a null value.
 
@@ -1788,6 +1793,15 @@ class Series(SingleColumnFrame, IndexedFrame):
         2    abc
         dtype: str
         """
+        if inplace is not no_default:
+            warnings.warn(
+                "The inplace keyword in Series.dropna is deprecated and "
+                "will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         if axis not in (0, "index"):
             raise ValueError(
                 "Series.dropna supports only one axis to drop values from"
@@ -1804,7 +1818,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     def drop_duplicates(
         self,
         keep: Literal["first", "last", False] = "first",
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         ignore_index: bool = False,
     ) -> Self | None:
         """
@@ -1821,6 +1835,8 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         inplace : bool, default ``False``
             If ``True``, performs operation inplace and returns None.
+
+            .. deprecated:: 26.12
 
         Returns
         -------
@@ -1865,16 +1881,23 @@ class Series(SingleColumnFrame, IndexedFrame):
         Name: animal, dtype: str
 
         The value `False` for parameter `keep` discards all sets
-        of duplicated entries. Setting the value of 'inplace' to
-        `True` performs the operation inplace and returns `None`.
+        of duplicated entries.
 
-        >>> s.drop_duplicates(keep=False, inplace=True)
-        >>> s
+        >>> s.drop_duplicates(keep=False)
         1       cow
         3    beetle
         5     hippo
         Name: animal, dtype: str
         """
+        if inplace is not no_default:
+            warnings.warn(
+                "The inplace keyword in Series.drop_duplicates is deprecated "
+                "and will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         result = super().drop_duplicates(keep=keep, ignore_index=ignore_index)
 
         return self._mimic_inplace(result, inplace=inplace)
@@ -2222,7 +2245,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         axis: Axis = 0,
         level=None,
         ascending: bool | Iterable[bool] = True,
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         kind: str = "quicksort",  # type: ignore[valid-type]
         na_position: Literal["first", "last"] = "last",
         sort_remaining: bool = True,
@@ -2231,11 +2254,11 @@ class Series(SingleColumnFrame, IndexedFrame):
     ) -> Self | None:
         if axis not in (0, "index"):
             raise ValueError("Only axis=0 is valid for Series.")
-        return super().sort_index(  # type: ignore[call-overload]
+        return super().sort_index(
             axis=axis,
             level=level,
             ascending=ascending,
-            inplace=inplace,
+            inplace=inplace,  # type: ignore[arg-type]
             kind=kind,
             na_position=na_position,
             sort_remaining=sort_remaining,
@@ -2248,7 +2271,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         self,
         axis: Axis = 0,
         ascending: bool | Iterable[bool] = True,
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         kind: str = "quicksort",  # type: ignore[valid-type]
         na_position: Literal["first", "last"] = "last",
         ignore_index: bool = False,
@@ -3733,7 +3756,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         index=None,
         axis=None,
         copy: bool = True,
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         level=None,
         errors: Literal["ignore", "raise"] = "ignore",
     ):
@@ -3753,6 +3776,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         inplace : bool, default False
             Whether to return a new Series. If True the value of copy is ignored.
             Currently not supported.
+
+            .. deprecated:: 26.12
         level : int or level name, default None
             In case of MultiIndex, only rename labels in the specified level.
             Currently not supported.
@@ -3790,6 +3815,15 @@ class Series(SingleColumnFrame, IndexedFrame):
 
             - Supports scalar values only for changing name attribute
         """
+        if inplace is not no_default:
+            warnings.warn(
+                "The inplace keyword in Series.rename is deprecated and "
+                "will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         if inplace is not False:
             raise NotImplementedError("inplace is currently not supported.")
         if level is not None:

@@ -7,7 +7,9 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_310
 from cudf.testing import assert_eq
+from cudf.testing._utils import expect_warning_if
 
 
 def test_dataframe_empty_sort_index():
@@ -45,20 +47,24 @@ def test_dataframe_sort_index(
     )
     gdf = cudf.DataFrame(pdf)
 
-    expected = pdf.sort_index(
-        axis=axis,
-        ascending=ascending,
-        ignore_index=ignore_index,
-        inplace=inplace,
-        na_position=na_position,
-    )
-    got = gdf.sort_index(
-        axis=axis,
-        ascending=ascending,
-        ignore_index=ignore_index,
-        inplace=inplace,
-        na_position=na_position,
-    )
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expected = pdf.sort_index(
+            axis=axis,
+            ascending=ascending,
+            ignore_index=ignore_index,
+            inplace=inplace,
+            na_position=na_position,
+        )
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        got = gdf.sort_index(
+            axis=axis,
+            ascending=ascending,
+            ignore_index=ignore_index,
+            inplace=inplace,
+            na_position=na_position,
+        )
     # As of pandas 3.0, pandas sometimes returns a RangeIndex
     # instead of an Index[int64]
     if inplace is True:
@@ -81,22 +87,26 @@ def _assert_dataframe_multiindex_sort_index(
     ).set_index(["b", "a", 1])
     gdf = cudf.DataFrame(pdf)
 
-    expected = pdf.sort_index(
-        axis=axis,
-        level=level,
-        ascending=ascending,
-        inplace=inplace,
-        na_position=na_position,
-        ignore_index=ignore_index,
-    )
-    got = gdf.sort_index(
-        axis=axis,
-        level=level,
-        ascending=ascending,
-        ignore_index=ignore_index,
-        inplace=inplace,
-        na_position=na_position,
-    )
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expected = pdf.sort_index(
+            axis=axis,
+            level=level,
+            ascending=ascending,
+            inplace=inplace,
+            na_position=na_position,
+            ignore_index=ignore_index,
+        )
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        got = gdf.sort_index(
+            axis=axis,
+            level=level,
+            ascending=ascending,
+            ignore_index=ignore_index,
+            inplace=inplace,
+            na_position=na_position,
+        )
 
     if inplace is True:
         assert expected is None

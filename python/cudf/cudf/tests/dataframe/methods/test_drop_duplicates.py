@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -51,10 +51,8 @@ def test_drop_duplicates():
     )
     gdf = cudf.DataFrame(pdf)
     # single column
-    result = gdf.copy()
-    result.drop_duplicates("AAA", inplace=True)
-    expected = pdf.copy()
-    expected.drop_duplicates("AAA", inplace=True)
+    result = gdf.drop_duplicates("AAA")
+    expected = pdf.drop_duplicates("AAA")
     assert_eq(result, expected)
 
     result = gdf.drop_duplicates("AAA", keep="last")
@@ -225,7 +223,8 @@ def test_drop_duplicates_empty(df):
     assert_eq(result, df)
 
     result = df.copy()
-    result.drop_duplicates(inplace=True)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        result.drop_duplicates(inplace=True)
     assert_eq(result, df)
 
 
@@ -291,7 +290,8 @@ def test_dataframe_drop_duplicates_method():
         .reset_index(drop=True),
         pdf.drop_duplicates("s1", keep="last")["s1"].reset_index(drop=True),
     )
-    assert gdf.drop_duplicates("s1", inplace=True) is None
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        assert gdf.drop_duplicates("s1", inplace=True) is None
 
     gdf = cudf.DataFrame(pdf)
     assert_eq(gdf.drop_duplicates("n1"), pdf.drop_duplicates("n1"))
@@ -475,19 +475,22 @@ def test_drop_duplicates_inplace():
     orig = cudf.DataFrame(orig)
     # single column
     df = orig.copy()
-    df.drop_duplicates("A", inplace=True)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        df.drop_duplicates("A", inplace=True)
     expected = orig[:2]
     result = df
     assert_eq(result, expected)
 
     df = orig.copy()
-    df.drop_duplicates("A", keep="last", inplace=True)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        df.drop_duplicates("A", keep="last", inplace=True)
     expected = orig.loc[[6, 7]]
     result = df
     assert_eq(result, expected)
 
     df = orig.copy()
-    df.drop_duplicates("A", keep=False, inplace=True)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        df.drop_duplicates("A", keep=False, inplace=True)
     expected = orig.loc[[]]
     result = df
     assert_eq(result, expected)
@@ -495,19 +498,22 @@ def test_drop_duplicates_inplace():
 
     # multi column
     df = orig.copy()
-    df.drop_duplicates(["A", "B"], inplace=True)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        df.drop_duplicates(["A", "B"], inplace=True)
     expected = orig.loc[[0, 1, 2, 3]]
     result = df
     assert_eq(result, expected)
 
     df = orig.copy()
-    df.drop_duplicates(["A", "B"], keep="last", inplace=True)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        df.drop_duplicates(["A", "B"], keep="last", inplace=True)
     expected = orig.loc[[0, 5, 6, 7]]
     result = df
     assert_eq(result, expected)
 
     df = orig.copy()
-    df.drop_duplicates(["A", "B"], keep=False, inplace=True)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        df.drop_duplicates(["A", "B"], keep=False, inplace=True)
     expected = orig.loc[[0]]
     result = df
     assert_eq(result, expected)
@@ -516,20 +522,23 @@ def test_drop_duplicates_inplace():
     orig2 = orig.loc[:, ["A", "B", "C"]].copy()
 
     df2 = orig2.copy()
-    df2.drop_duplicates(inplace=True)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        df2.drop_duplicates(inplace=True)
     # in this case only
     expected = orig2.drop_duplicates(["A", "B"])
     result = df2
     assert_eq(result, expected)
 
     df2 = orig2.copy()
-    df2.drop_duplicates(keep="last", inplace=True)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        df2.drop_duplicates(keep="last", inplace=True)
     expected = orig2.drop_duplicates(["A", "B"], keep="last")
     result = df2
     assert_eq(result, expected)
 
     df2 = orig2.copy()
-    df2.drop_duplicates(keep=False, inplace=True)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        df2.drop_duplicates(keep=False, inplace=True)
     expected = orig2.drop_duplicates(["A", "B"], keep=False)
     result = df2
     assert_eq(result, expected)

@@ -7,8 +7,9 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_310
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @pytest.mark.parametrize("level", [None, 0, "l0", 1, ["l0", 1]])
@@ -32,20 +33,24 @@ def test_reset_index(level, drop, column_names, inplace, col_level, col_fill):
     )
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.reset_index(
-        level=level,
-        drop=drop,
-        inplace=inplace,
-        col_level=col_level,
-        col_fill=col_fill,
-    )
-    got = gdf.reset_index(
-        level=level,
-        drop=drop,
-        inplace=inplace,
-        col_level=col_level,
-        col_fill=col_fill,
-    )
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expect = pdf.reset_index(
+            level=level,
+            drop=drop,
+            inplace=inplace,
+            col_level=col_level,
+            col_fill=col_fill,
+        )
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        got = gdf.reset_index(
+            level=level,
+            drop=drop,
+            inplace=inplace,
+            col_level=col_level,
+            col_fill=col_fill,
+        )
     if inplace:
         expect = pdf
         got = gdf
@@ -67,29 +72,33 @@ def test_reset_index_dup_level_name(level, drop, inplace, col_level, col_fill):
             rfunc=gdf.reset_index,
             lfunc_args_and_kwargs=(
                 [],
-                {"level": level, "drop": drop, "inplace": inplace},
+                {"level": level, "drop": drop},
             ),
             rfunc_args_and_kwargs=(
                 [],
-                {"level": level, "drop": drop, "inplace": inplace},
+                {"level": level, "drop": drop},
             ),
         )
         return
 
-    expect = pdf.reset_index(
-        level=level,
-        drop=drop,
-        inplace=inplace,
-        col_level=col_level,
-        col_fill=col_fill,
-    )
-    got = gdf.reset_index(
-        level=level,
-        drop=drop,
-        inplace=inplace,
-        col_level=col_level,
-        col_fill=col_fill,
-    )
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expect = pdf.reset_index(
+            level=level,
+            drop=drop,
+            inplace=inplace,
+            col_level=col_level,
+            col_fill=col_fill,
+        )
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        got = gdf.reset_index(
+            level=level,
+            drop=drop,
+            inplace=inplace,
+            col_level=col_level,
+            col_fill=col_fill,
+        )
     if inplace:
         expect = pdf
         got = gdf
@@ -105,12 +114,16 @@ def test_reset_index_named(drop, inplace, col_level, col_fill):
     pdf.index.name = "cudf"
     gdf.index.name = "cudf"
 
-    expect = pdf.reset_index(
-        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
-    )
-    got = gdf.reset_index(
-        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
-    )
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expect = pdf.reset_index(
+            drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
+        )
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        got = gdf.reset_index(
+            drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
+        )
     if inplace:
         expect = pdf
         got = gdf
@@ -126,12 +139,16 @@ def test_reset_index_unnamed(drop, inplace, column_names, col_level, col_fill):
     pdf.columns = column_names
     gdf.columns = column_names
 
-    expect = pdf.reset_index(
-        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
-    )
-    got = gdf.reset_index(
-        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
-    )
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expect = pdf.reset_index(
+            drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
+        )
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        got = gdf.reset_index(
+            drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
+        )
     if inplace:
         expect = pdf
         got = gdf

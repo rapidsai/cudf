@@ -2076,11 +2076,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
                 # remove columns not present in all objs
                 for obj in objs:
-                    obj.drop(
-                        columns=non_intersecting_columns,
-                        inplace=True,
-                        errors="ignore",
-                    )
+                    for label in non_intersecting_columns:
+                        obj._drop_column(label, errors="ignore")
         elif join == "outer":
             # Get a list of the unique table column names
             names = [name for f in objs for name in f._column_names]
@@ -3497,7 +3494,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         keys,
         drop: bool = True,
         append: bool = False,
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         verify_integrity: bool = False,
     ) -> Self | None:
         """Return a new DataFrame with a new index
@@ -3516,6 +3513,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             resulting in a MultiIndex.
         inplace : boolean, default False
             Modify the DataFrame in place (do not create a new object).
+
+            .. deprecated:: 26.12
         verify_integrity : boolean, default False
             Check for duplicates in the new index.
 
@@ -3576,20 +3575,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         2 3  c  3.0
         3 4  d  4.0
         4 5  e  5.0
-
-        `set_index` supports `inplace` parameter too:
-
-        >>> df.set_index("a", inplace=True)
-        >>> df
-           b    c
-        a
-        1  a  1.0
-        2  b  2.0
-        3  c  3.0
-        4  d  4.0
-        5  e  5.0
         """
-
+        if inplace is not no_default:
+            warnings.warn(
+                "The inplace keyword in DataFrame.set_index is deprecated and "
+                "will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         if not isinstance(keys, list):
             keys = [keys]
         if len(keys) == 0:
@@ -3677,8 +3672,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if verify_integrity and not idx.is_unique:
             raise ValueError(f"Values in Index are not unique: {idx}")
 
-        if to_drop:
-            df.drop(columns=to_drop, inplace=True)
+        for label in set(to_drop):
+            df._drop_column(label)
 
         df.index = idx
         return df if not inplace else None
@@ -3895,12 +3890,21 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         self,
         level=None,
         drop=False,
-        inplace=False,
+        inplace=no_default,
         col_level=0,
         col_fill="",
         allow_duplicates: bool = False,
         names: Hashable | Sequence[Hashable] | None = None,
     ):
+        if inplace is not no_default:
+            warnings.warn(
+                "The inplace keyword in DataFrame.reset_index is deprecated "
+                "and will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         if inplace and not self._flags.allows_duplicate_labels:
             raise ValueError(
                 "Cannot specify 'inplace=True' when "
@@ -4162,7 +4166,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         self,
         subset=None,
         keep: Literal["first", "last", False] = "first",
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         ignore_index: bool = False,
     ) -> Self | None:
         """
@@ -4183,6 +4187,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             - ``False`` : Drop all duplicates.
         inplace : bool, default ``False``
             Whether to drop duplicates in place or to return a copy.
+
+            .. deprecated:: 26.12
         ignore_index : bool, default ``False``
             If True, the resulting axis will be labeled 0, 1, ..., n - 1.
 
@@ -4237,6 +4243,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         2  Indomie   cup     3.5
         4  Indomie  pack     5.0
         """
+        if inplace is not no_default:
+            warnings.warn(
+                "The inplace keyword in DataFrame.drop_duplicates is "
+                "deprecated and will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         outdf = super().drop_duplicates(
             subset=subset,
             keep=keep,
@@ -4260,7 +4275,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         columns=None,
         axis=0,
         copy=True,
-        inplace=False,
+        inplace=no_default,
         level=None,
         errors="ignore",
     ):
@@ -4295,6 +4310,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             Also copy underlying data
         inplace : boolean, default False
             Return new DataFrame.  If True, assign columns without copy
+
+            .. deprecated:: 26.12
         level : int or level name, default None
             In case of a MultiIndex, only rename labels in the specified level.
         errors : {'raise', 'ignore', 'warn'}, default 'ignore'
@@ -4346,6 +4363,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             duplicates is passed, column names will be postfixed
             with a number.
         """
+        if inplace is not no_default:
+            warnings.warn(
+                "The inplace keyword in DataFrame.rename is deprecated and "
+                "will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         if errors != "ignore":
             raise NotImplementedError(
                 "Only errors='ignore' is currently supported"
@@ -8881,7 +8907,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
     @_performance_tracking
-    def eval(self, expr: str, inplace: bool = False, **kwargs):
+    def eval(
+        self, expr: str, inplace: bool | NoDefault = no_default, **kwargs
+    ):
         """Evaluate a string describing operations on DataFrame columns.
 
         Operates on columns only, not specific rows or elements.
@@ -8894,6 +8922,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             If the expression contains an assignment, whether to perform the
             operation inplace and mutate the existing DataFrame. Otherwise,
             a new DataFrame is returned.
+
+            .. deprecated:: 26.12
         **kwargs
             Not supported.
 
@@ -8941,17 +8971,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         3  4   4
         4  5   2
 
-        Use ``inplace=True`` to modify the original DataFrame.
-
-        >>> df.eval('C = A + B', inplace=True)
-        >>> df
-           A   B   C
-        0  1  10  11
-        1  2   8  10
-        2  3   6   9
-        3  4   4   8
-        4  5   2   7
-
         Multiple columns can be assigned to using multi-line expressions:
 
         >>> df.eval(
@@ -8983,6 +9002,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
               assignment statements where later statements are conditioned upon
               the output of earlier statements) is not supported.
         """
+        if inplace is not no_default:
+            warnings.warn(
+                "The inplace keyword in DataFrame.eval is deprecated and "
+                "will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         if kwargs:
             raise ValueError(
                 "Keyword arguments other than `inplace` are not supported"

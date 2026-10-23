@@ -95,7 +95,7 @@ def test_dataframe_rename_duplicate_column():
     with pytest.raises(
         ValueError, match="Duplicate column names are not allowed"
     ):
-        gdf.rename(columns={"a": "b"}, inplace=True)
+        gdf.rename(columns={"a": "b"})
 
 
 @pytest.mark.parametrize("level", ["x", 0])

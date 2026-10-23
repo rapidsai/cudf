@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import re
@@ -69,9 +69,9 @@ def test_dataframe_eval(nrows, expr, dtype):
 
     # Test inplace
     if re.search("[^=><]=[^=]", expr) is not None:
-        pdf_eval = df_eval.to_pandas()
-        pdf_eval.eval(expr, inplace=True)
-        df_eval.eval(expr, inplace=True)
+        pdf_eval = df_eval.to_pandas().eval(expr)
+        with pytest.warns(FutureWarning, match="inplace keyword"):
+            df_eval.eval(expr, inplace=True)
         assert_eq(pdf_eval, df_eval)
 
 
@@ -96,5 +96,5 @@ def test_dataframe_eval_misc():
     got = df.eval("isnull(a)")
     assert_eq(got, cudf.Series.isnull(df["a"]), check_names=False)
 
-    df.eval("c = isnull(1)", inplace=True)
+    df = df.eval("c = isnull(1)")
     assert_eq(df["c"], cudf.Series([False] * len(df), name="c"))

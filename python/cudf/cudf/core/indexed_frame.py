@@ -100,6 +100,7 @@ if TYPE_CHECKING:
         DataFrameOrSeries,
         Dtype,
         DtypeObj,
+        NoDefault,
         ScalarLike,
     )
     from cudf.core.column.lists import ListColumn
@@ -120,6 +121,8 @@ doc_reset_index_template = """
 {argument}
         inplace : bool, default False
             Modify the DataFrame in place (do not create a new object).
+
+            .. deprecated:: 26.12
         allow_duplicates : bool, default False
             Allow duplicate column labels to be created.
             Currently not supported.
@@ -2771,7 +2774,7 @@ class IndexedFrame(Frame):
         axis: Axis = 0,
         level=None,
         ascending: bool | Iterable[bool] = True,
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         kind: str = "quicksort",
         na_position: Literal["first", "last"] = "last",
         sort_remaining: bool = True,
@@ -2792,6 +2795,8 @@ class IndexedFrame(Frame):
             Sort ascending vs. descending.
         inplace : bool, default False
             If True, perform operation in-place.
+
+            .. deprecated:: 26.12
         kind : sorting method such as `quick sort` and others.
             Not yet supported.
         na_position : {'first', 'last'}, default 'last'
@@ -2862,6 +2867,15 @@ class IndexedFrame(Frame):
 
             * Not supporting: kind, sort_remaining=False
         """
+        if inplace is not no_default:
+            warnings.warn(
+                f"The inplace keyword in {type(self).__name__}.sort_index is "
+                "deprecated and will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         if kind != "quicksort":
             raise NotImplementedError("kind is not yet supported")
 
@@ -3752,7 +3766,7 @@ class IndexedFrame(Frame):
         by,
         axis: Axis = 0,
         ascending: bool | Iterable[bool] = True,
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         kind: str = "quicksort",
         na_position: Literal["first", "last"] = "last",
         ignore_index: bool = False,
@@ -3803,6 +3817,15 @@ class IndexedFrame(Frame):
             * Support axis='index' only.
             * Not supporting: inplace, kind
         """
+        if inplace is not no_default:
+            warnings.warn(
+                f"The inplace keyword in {type(self).__name__}.sort_values is "
+                "deprecated and will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
         if inplace:
@@ -4543,7 +4566,7 @@ class IndexedFrame(Frame):
         how="any",
         thresh=None,
         subset=None,
-        inplace=False,
+        inplace=no_default,
         ignore_index: bool = False,
     ):
         """
@@ -4568,6 +4591,8 @@ class IndexedFrame(Frame):
             columns, subset is a list of rows to consider.
         inplace : bool, default False
             If True, do operation inplace and return None.
+
+            .. deprecated:: 26.12
         ignore_index : bool, default ``False``
             If ``True``, the resulting axis will be labeled 0, 1, …, n - 1.
 
@@ -4636,14 +4661,16 @@ class IndexedFrame(Frame):
         >>> df.dropna(subset=['name', 'born'])
              name        toy       born
         0  Alfred  Batmobile 1940-04-25
-
-        Keep the DataFrame with valid entries in the same variable.
-
-        >>> df.dropna(inplace=True)
-        >>> df
-             name        toy       born
-        0  Alfred  Batmobile 1940-04-25
         """
+        if inplace is not no_default:
+            warnings.warn(
+                f"The inplace keyword in {type(self).__name__}.dropna is "
+                "deprecated and will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         if axis in [0, "index"]:
             result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
             if ignore_index:
@@ -5421,7 +5448,7 @@ class IndexedFrame(Frame):
         index=None,
         columns=None,
         level=None,
-        inplace: bool = False,
+        inplace: bool | NoDefault = no_default,
         errors: Literal["ignore", "raise"] = "raise",
     ) -> Self | None:
         """Drop specified labels from rows or columns.
@@ -5449,6 +5476,8 @@ class IndexedFrame(Frame):
         inplace : bool, default False
             If False, return a copy. Otherwise, do operation
             inplace and return None.
+
+            .. deprecated:: 26.12
         errors : {'ignore', 'raise'}, default 'raise'
             If 'ignore', suppress error and only existing labels are
             dropped.
@@ -5586,6 +5615,15 @@ class IndexedFrame(Frame):
         falcon speed   320.0  250.0
                weight    1.0    0.8
         """
+        if inplace is not no_default:
+            warnings.warn(
+                f"The inplace keyword in {type(self).__name__}.drop is "
+                "deprecated and will be removed in a future version.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            inplace = False
         if labels is not None:
             if index is not None or columns is not None:
                 raise ValueError(

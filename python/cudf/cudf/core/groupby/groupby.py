@@ -3023,16 +3023,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "max",
             ]
         )
-        res.rename(
+        return res.rename(
             columns={
                 "_quantile_25": "25%",
                 "_quantile_50": "50%",
                 "_quantile_75": "75%",
             },
             level=1,
-            inplace=True,
         )
-        return res
 
     @_performance_tracking
     def cov(self, min_periods=0, ddof=1, numeric_only: bool = False):

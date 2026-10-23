@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -7,7 +7,9 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_310
 from cudf.testing import assert_eq
+from cudf.testing._utils import expect_warning_if
 
 
 @pytest.mark.parametrize(
@@ -53,8 +55,16 @@ def test_set_index(index, drop, append, inplace):
     )
     pdf = gdf.to_pandas()
 
-    expected = pdf.set_index(index, inplace=inplace, drop=drop, append=append)
-    actual = gdf.set_index(index, inplace=inplace, drop=drop, append=append)
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expected = pdf.set_index(
+            index, inplace=inplace, drop=drop, append=append
+        )
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        actual = gdf.set_index(
+            index, inplace=inplace, drop=drop, append=append
+        )
 
     if inplace:
         expected = pdf

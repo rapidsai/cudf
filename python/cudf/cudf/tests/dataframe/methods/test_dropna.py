@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -7,7 +7,9 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_310
 from cudf.testing import assert_eq
+from cudf.testing._utils import expect_warning_if
 
 
 def test_datetime_dataframe():
@@ -52,8 +54,12 @@ def test_dropna_dataframe(data, dropna_how, axis, inplace):
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)
 
-    expected = pdf.dropna(axis=axis, how=dropna_how, inplace=inplace)
-    actual = gdf.dropna(axis=axis, how=dropna_how, inplace=inplace)
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expected = pdf.dropna(axis=axis, how=dropna_how, inplace=inplace)
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        actual = gdf.dropna(axis=axis, how=dropna_how, inplace=inplace)
 
     if inplace:
         expected = pdf
@@ -149,10 +155,16 @@ def test_dropna_thresh_cols(thresh, subset, inplace):
     )
     gdf = cudf.from_pandas(pdf)
 
-    expected = pdf.dropna(
-        axis=1, thresh=thresh, subset=subset, inplace=inplace
-    )
-    actual = gdf.dropna(axis=1, thresh=thresh, subset=subset, inplace=inplace)
+    with expect_warning_if(
+        PANDAS_GE_310, pd.errors.Pandas4Warning, match="inplace keyword"
+    ):
+        expected = pdf.dropna(
+            axis=1, thresh=thresh, subset=subset, inplace=inplace
+        )
+    with pytest.warns(FutureWarning, match="inplace keyword"):
+        actual = gdf.dropna(
+            axis=1, thresh=thresh, subset=subset, inplace=inplace
+        )
 
     if inplace:
         expected = pdf
