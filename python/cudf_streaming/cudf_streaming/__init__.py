@@ -19,13 +19,13 @@ from cudf_streaming.approx_distinct_count import (
 from cudf_streaming.bloom_filter import BloomFilter
 from cudf_streaming.channel_metadata import (
     ChannelMetadata,
-    DataScope,
     HashScheme,
     Ordering,
     OrderKey,
     OrderScheme,
     Partitioning,
     RowOrdering,
+    RowOrderingScope,
 )
 from cudf_streaming.partition import (
     partition_and_pack as actor_partition_and_pack,
@@ -50,13 +50,13 @@ __all__ = [
     "CardinalityEstimate",
     "CardinalityEstimator",
     "ChannelMetadata",
-    "DataScope",
     "HashScheme",
     "OrderKey",
     "OrderScheme",
     "Ordering",
     "Partitioning",
     "RowOrdering",
+    "RowOrderingScope",
     "TableChunk",
     "actor_partition_and_pack",
     "actor_unpack_and_concat",

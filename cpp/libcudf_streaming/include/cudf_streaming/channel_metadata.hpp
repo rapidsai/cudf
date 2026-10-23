@@ -60,13 +60,13 @@ struct order_key {
 };
 
 /**
- * @brief Rows covered by a metadata property.
+ * @brief Rows covered by a row-ordering guarantee.
  *
  * `GLOBAL` applies to the complete logical dataset. For duplicated data, this
  * means one logical copy rather than all copies concatenated together.
  * `RANK_LOCAL` applies independently to each rank.
  */
-enum class data_scope : std::uint8_t {
+enum class row_ordering_scope : std::uint8_t {
   GLOBAL,      ///< The complete logical dataset.
   RANK_LOCAL,  ///< Each rank's local data independently.
 };
@@ -74,18 +74,19 @@ enum class data_scope : std::uint8_t {
 /**
  * @brief A row-ordering guarantee for a data stream.
  *
- * When `group_keys` is empty, rows are ordered by `order_keys`. Otherwise,
- * each group's subsequence is ordered by `order_keys`. Groups need not be
- * contiguous or ordered relative to one another.
+ * An empty `group_keys` denotes an ungrouped ordering: all rows in the selected
+ * scope are ordered by `order_keys`. Otherwise, each group's subsequence is
+ * ordered by `order_keys`. Groups need not be contiguous or ordered relative
+ * to one another.
  *
  * A global ordering applies to the rank-ordered concatenation of FIFO streams.
  * For duplicated data, each rank contains an ordered copy of the same logical
  * stream. A rank-local ordering makes no guarantee between ranks.
  */
 struct row_ordering {
-  std::vector<order_key> order_keys;        ///< Keys that order rows.
-  data_scope scope{data_scope::GLOBAL};     ///< Scope of the guarantee.
-  std::vector<cudf::size_type> group_keys;  ///< Columns defining equality groups.
+  std::vector<order_key> order_keys;                     ///< Keys that order rows.
+  row_ordering_scope scope{row_ordering_scope::GLOBAL};  ///< Scope of the guarantee.
+  std::vector<cudf::size_type> group_keys;               ///< Columns defining equality groups.
 
   /// @brief Default constructor. Produces an invalid (empty) row ordering.
   row_ordering() = default;
@@ -99,7 +100,7 @@ struct row_ordering {
    * @throws std::invalid_argument if `order_keys` is empty.
    */
   row_ordering(std::vector<order_key> order_keys,
-               data_scope scope,
+               row_ordering_scope scope,
                std::vector<cudf::size_type> group_keys = {});
 
   /**

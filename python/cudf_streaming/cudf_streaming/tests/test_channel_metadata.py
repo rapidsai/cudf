@@ -11,13 +11,13 @@ import pytest
 
 from cudf_streaming import (
     ChannelMetadata,
-    DataScope,
     HashScheme,
     Ordering,
     OrderKey,
     OrderScheme,
     Partitioning,
     RowOrdering,
+    RowOrderingScope,
     TableChunk,
 )
 from rapidsmpf.memory.buffer import MemoryType
@@ -139,18 +139,20 @@ def test_order_key() -> None:
 
 def test_row_ordering() -> None:
     key = OrderKey(1, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
-    ordering = RowOrdering((key,), DataScope.RANK_LOCAL, group_keys=(0,))
+    ordering = RowOrdering(
+        (key,), RowOrderingScope.RANK_LOCAL, group_keys=(0,)
+    )
 
     assert ordering.order_keys == (key,)
-    assert ordering.scope == DataScope.RANK_LOCAL
+    assert ordering.scope == RowOrderingScope.RANK_LOCAL
     assert ordering.group_keys == (0,)
     assert ordering == RowOrdering(
-        (key,), DataScope.RANK_LOCAL, group_keys=(0,)
+        (key,), RowOrderingScope.RANK_LOCAL, group_keys=(0,)
     )
     assert "RowOrdering" in repr(ordering)
 
     with pytest.raises(ValueError, match="order_keys must not be empty"):
-        RowOrdering((), DataScope.GLOBAL)
+        RowOrdering((), RowOrderingScope.GLOBAL)
 
 
 def test_order_scheme(context: Context) -> None:
@@ -439,7 +441,7 @@ def test_partitioning_scenarios(context: Context) -> None:
 
     row_ordering = RowOrdering(
         (OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),),
-        DataScope.GLOBAL,
+        RowOrderingScope.GLOBAL,
     )
     p_ordered_rows = Partitioning(row_orderings=(row_ordering,))
     assert p_ordered_rows.inter_rank is None
@@ -512,7 +514,9 @@ def test_channel_metadata() -> None:
 def test_message_roundtrip(context: Context) -> None:
     """Test ChannelMetadata can round-trip through Message."""
     key = OrderKey(1, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
-    row_ordering = RowOrdering((key,), DataScope.RANK_LOCAL, group_keys=(0,))
+    row_ordering = RowOrdering(
+        (key,), RowOrderingScope.RANK_LOCAL, group_keys=(0,)
+    )
     m = ChannelMetadata(
         local_count=4,
         partitioning=Partitioning(

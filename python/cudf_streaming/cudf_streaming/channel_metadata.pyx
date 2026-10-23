@@ -138,14 +138,15 @@ cdef class RowOrdering:
     scope
         Rows covered by the ordering guarantee.
     group_keys
-        Columns defining equality groups. When set, each group's subsequence
-        is ordered independently.
+        Columns defining equality groups. When empty, all rows in the selected
+        scope are ordered together. Otherwise, each group's subsequence is
+        ordered independently.
     """
 
     def __init__(
         self,
         object order_keys,
-        DataScope scope,
+        RowOrderingScope scope,
         object group_keys=(),
     ):
         cdef vector[cpp_OrderKey] cpp_order_keys
@@ -174,7 +175,7 @@ cdef class RowOrdering:
         )
 
     @property
-    def scope(self) -> DataScope:
+    def scope(self) -> RowOrderingScope:
         """Scope of the ordering guarantee."""
         return self._handle.scope
 

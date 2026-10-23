@@ -43,7 +43,7 @@ void validate_ordering(ordering const& ordering)
 }  // namespace
 
 row_ordering::row_ordering(std::vector<order_key> order_keys,
-                           data_scope scope,
+                           row_ordering_scope scope,
                            std::vector<cudf::size_type> group_keys)
   : order_keys{std::move(order_keys)}, scope{scope}, group_keys{std::move(group_keys)}
 {
