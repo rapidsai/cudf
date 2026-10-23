@@ -725,6 +725,103 @@ public class VariantUtilsTest extends CudfTestBase {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  void castDecimalAcceptsEveryEncodedScaleForEveryWidth() {
+    List<List<Byte>> encoded = new ArrayList<>();
+    List<Integer> expected32 = new ArrayList<>();
+    List<Long> expected64 = new ArrayList<>();
+    List<BigInteger> expected128 = new ArrayList<>();
+    for (int fractionalDigits = 0; fractionalDigits <= 38; fractionalDigits++) {
+      for (int sign : new int[] {1, -1}) {
+        // The encoded scale is independent of the payload width, even for DECIMAL4/8.
+        encoded.add(VariantEncoder.decimal4(sign, fractionalDigits));
+        encoded.add(VariantEncoder.decimal8(sign, fractionalDigits));
+        encoded.add(VariantEncoder.decimal16(BigInteger.valueOf(sign), fractionalDigits));
+        for (int width = 0; width < 3; width++) {
+          expected32.add(fractionalDigits <= 9 ?
+              BigInteger.TEN.pow(9 - fractionalDigits).intValueExact() * sign : 0);
+          expected64.add(fractionalDigits <= 18 ?
+              BigInteger.TEN.pow(18 - fractionalDigits).longValueExact() * sign : 0L);
+          expected128.add(BigInteger.TEN.pow(38 - fractionalDigits)
+              .multiply(BigInteger.valueOf(sign)));
+        }
+      }
+    }
+    List<Byte>[] encodedRows = (List<Byte>[]) encoded.toArray(new List<?>[0]);
+    try (ColumnVector values = ColumnVector.fromLists(BINARY_TYPE, encodedRows);
+         ColumnVector result32 = VariantUtils.castVariantValue(
+             values, DType.create(DType.DTypeEnum.DECIMAL32, -9));
+         ColumnVector result64 = VariantUtils.castVariantValue(
+             values, DType.create(DType.DTypeEnum.DECIMAL64, -18));
+         ColumnVector result128 = VariantUtils.castVariantValue(
+             values, DType.create(DType.DTypeEnum.DECIMAL128, -38));
+         ColumnVector expected32Column = ColumnVector.decimalFromBoxedInts(
+             -9, expected32.toArray(new Integer[0]));
+         ColumnVector expected64Column = ColumnVector.decimalFromBoxedLongs(
+             -18, expected64.toArray(new Long[0]));
+         ColumnVector expected128Column = ColumnVector.decimalFromBigInt(
+             -38, expected128.toArray(new BigInteger[0]))) {
+      assertColumnsAreEqual(expected32Column, result32);
+      assertColumnsAreEqual(expected64Column, result64);
+      assertColumnsAreEqual(expected128Column, result128);
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void positiveDecimalTargetScaleUsesBase10ExponentForBothEntryPoints() {
+    VariantEncoder encoder = new VariantEncoder("price");
+    List<List<Byte>> encoded = Arrays.asList(
+        VariantEncoder.decimal4(12345, 0),
+        VariantEncoder.decimal8(-12345, 0),
+        VariantEncoder.decimal16(BigInteger.valueOf(12345), 2));
+    List<StructData> rows = new ArrayList<>();
+    for (List<Byte> value : encoded) {
+      rows.add(variant(encoder.metadata(), encoder.object(fields(field("price", value)))));
+    }
+    DType[] targets = {
+        DType.create(DType.DTypeEnum.DECIMAL32, 2),
+        DType.create(DType.DTypeEnum.DECIMAL64, 2),
+        DType.create(DType.DTypeEnum.DECIMAL128, 2)
+    };
+    List<Byte>[] encodedRows = (List<Byte>[]) encoded.toArray(new List<?>[0]);
+    try (ColumnVector values = ColumnVector.fromLists(BINARY_TYPE, encodedRows);
+         ColumnVector variant = ColumnVector.fromStructs(VARIANT_TYPE, rows);
+         ColumnVector expected32 = ColumnVector.decimalFromInts(2, 123, -123, 1);
+         ColumnVector expected64 = ColumnVector.decimalFromLongs(2, 123, -123, 1);
+         ColumnVector expected128 = ColumnVector.decimalFromBigInt(
+             2, BigInteger.valueOf(123), BigInteger.valueOf(-123), BigInteger.ONE)) {
+      ColumnVector[] expected = {expected32, expected64, expected128};
+      for (int i = 0; i < targets.length; i++) {
+        try (ColumnVector direct = VariantUtils.castVariantValue(values, targets[i]);
+             ColumnVector extracted =
+                 VariantUtils.extractVariantField(variant, "price", targets[i])) {
+          assertColumnsAreEqual(expected[i], direct);
+          assertColumnsAreEqual(expected[i], extracted);
+        }
+      }
+    }
+  }
+
+  @Test
+  void castDecimalRejectsOverflowWhenWideningTargetScale() {
+    DType target = DType.create(DType.DTypeEnum.DECIMAL128, -38);
+    try (ColumnVector values = ColumnVector.fromLists(
+             BINARY_TYPE,
+             VariantEncoder.decimal4(0, 0),
+             VariantEncoder.decimal4(1, 0),
+             VariantEncoder.decimal4(-1, 0),
+             VariantEncoder.decimal8(2, 0),
+             VariantEncoder.decimal16(BigInteger.valueOf(-2), 0));
+         ColumnVector result = VariantUtils.castVariantValue(values, target);
+         ColumnVector expected = ColumnVector.decimalFromBigInt(
+             -38, BigInteger.ZERO, BigInteger.TEN.pow(38), BigInteger.TEN.pow(38).negate(),
+             null, null)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void castDecimal128UsesFullPayloadWidth() {
     BigInteger high = BigInteger.ONE.shiftLeft(100).add(BigInteger.valueOf(1234));
     DType decimal128 = DType.create(DType.DTypeEnum.DECIMAL128, 0);

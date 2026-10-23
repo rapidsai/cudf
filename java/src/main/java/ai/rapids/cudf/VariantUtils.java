@@ -84,6 +84,10 @@ public class VariantUtils {
    * the target scale, truncating toward zero when fractional digits are discarded. Input nulls,
    * encoded Variant nulls, physical-type mismatches, malformed values, and decimal overflows
    * produce null output rows.
+   *
+   * <p>The target decimal scale uses cuDF's base-10 exponent convention: scale {@code -2}
+   * represents hundredths, while scale {@code 2} represents hundreds. Overflow is checked against
+   * the target's integer storage width; no declared decimal precision is enforced.
    */
   public static ColumnVector castVariantValue(ColumnView valueBytes, DType targetType) {
     Objects.requireNonNull(valueBytes, "valueBytes");
@@ -104,6 +108,10 @@ public class VariantUtils {
    * Decimal values are rescaled to the target scale, truncating toward zero when fractional digits
    * are discarded. Missing fields, input nulls, encoded Variant nulls, physical-type mismatches,
    * malformed values, and decimal overflows produce null output rows.
+   *
+   * <p>The target decimal scale uses cuDF's base-10 exponent convention: scale {@code -2}
+   * represents hundredths, while scale {@code 2} represents hundreds. Overflow is checked against
+   * the target's integer storage width; no declared decimal precision is enforced.
    *
    * @param variantStruct Variant materialization: STRUCT(metadata LIST&lt;UINT8&gt;,
    *                      value LIST&lt;UINT8&gt;, optional shredded children...)
