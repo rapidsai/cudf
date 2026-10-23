@@ -500,7 +500,17 @@ def test_unsupported_regex_raises(engine: pl.GPUEngine, pattern):
 
 @pytest.mark.parametrize(
     "pattern",
-    ["(?i)ab", "a(?i)b", "(?i:a)b", "(?m)^b", "(?s)a.b", "(?ims)^A.B$", "x(?i)Y"],
+    [
+        "(?i)ab",
+        "a(?i)b",
+        "(?i:a)b",
+        "(?m)^b",
+        "(?s)a.b",
+        "(?ims)^A.B$",
+        "x(?i)Y",
+        "(?s)",
+        "(?i)(?m)",
+    ],
 )
 def test_regex_inline_flags(engine: pl.GPUEngine, pattern):
     df = pl.LazyFrame({"a": ["ab", "AB", "aB", "Ab", "x\nb", "a\nb", "xy\nAB", None]})

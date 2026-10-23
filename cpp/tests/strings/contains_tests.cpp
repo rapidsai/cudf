@@ -987,6 +987,8 @@ TEST_F(StringsContainsTests, InlineFlags)
     {"(?im)^abc$", "^abc$", static_cast<flags_t>(flags_t::IGNORECASE | flags_t::MULTILINE)},
     {"(?i)(?s)a.*F", "a.*F", static_cast<flags_t>(flags_t::IGNORECASE | flags_t::DOTALL)},
     {"(?i)abc", "(?i)abc", flags_t::IGNORECASE},
+    {"(?s)", "", flags_t::DOTALL},
+    {"(?i)(?m)", "", static_cast<flags_t>(flags_t::IGNORECASE | flags_t::MULTILINE)},
   };
   for (auto const& [inline_ptn, ptn, flags] : tests) {
     auto prog_inline = cudf::strings::regex_program::create(inline_ptn);
