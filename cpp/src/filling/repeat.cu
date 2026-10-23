@@ -10,17 +10,19 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/repeat.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/buffer>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/stream>
@@ -45,14 +47,16 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   auto const temp_mr = mr.get_temporary_mr();
   auto count_iter    = cudf::detail::indexalator_factory::make_input_iterator(count);
 
-  rmm::device_uvector<cudf::size_type> offsets(count.size(), stream, temp_mr);
+  cuda::device_buffer<size_type> offsets(stream, temp_mr, count.size(), cuda::no_init);
   thrust::inclusive_scan(rmm::exec_policy_nosync(stream, temp_mr),
                          count_iter,
                          count_iter + count.size(),
                          offsets.begin());
 
-  size_type output_size{offsets.back_element(stream)};
-  rmm::device_uvector<size_type> indices(output_size, stream, temp_mr);
+  size_type output_size;
+  cudf::detail::cuda_memcpy(
+    host_span<size_type>{&output_size, 1}, device_span<size_type const>{offsets}.last(1), stream);
+  cuda::device_buffer<size_type> indices(stream, temp_mr, output_size, cuda::no_init);
   thrust::upper_bound(rmm::exec_policy_nosync(stream, temp_mr),
                       offsets.begin(),
                       offsets.end(),
