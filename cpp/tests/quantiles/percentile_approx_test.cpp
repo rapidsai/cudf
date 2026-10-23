@@ -59,7 +59,6 @@ struct percentile_approx_dispatch {
                                            int delta,
                                            std::vector<double> const& percentages,
                                            cudf::size_type ulps)
-    requires(!cudf::concepts::arithmetic<T> && !cudf::concepts::fixed_point<T>)
   {
     CUDF_FAIL("Invalid input type for percentile_approx test");
   }

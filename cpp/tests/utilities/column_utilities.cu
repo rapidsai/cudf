@@ -280,7 +280,6 @@ struct column_property_comparator {
                   debug_output_level verbosity,
                   cuda::stream_ref stream,
                   cudf::memory_resources mr)
-    requires(not cudf::concepts::nested<T>)
   {
     return compare_common(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity, stream, mr);
   }
@@ -1049,7 +1048,6 @@ struct strings_to_host_fn {
                   char const*,
                   cudf::column_view const&,
                   cuda::stream_ref)
-    requires(!cuda::std::same_as<OffsetType, int32_t> && !cuda::std::same_as<OffsetType, int64_t>)
   {
     CUDF_FAIL("invalid offsets type");
   }

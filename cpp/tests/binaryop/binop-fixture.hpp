@@ -67,7 +67,6 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
 
   template <typename T>
   auto make_random_wrapped_scalar()
-    requires(!cuda::std::same_as<T, std::string>)
   {
     cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
     return cudf::scalar_type_t<T>(rand_gen.generate());

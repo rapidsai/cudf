@@ -140,7 +140,6 @@ class UniformRandomGenerator {
    * @return generated random number
    */
   template <typename TL = T>
-    requires(not cudf::concepts::timestamp<TL>)
   T generate()
   {
     return T{dist(rng)};

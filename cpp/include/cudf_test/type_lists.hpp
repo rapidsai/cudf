@@ -73,8 +73,7 @@ constexpr auto types_to_ids()
  * @param init_list Values used to create the output vector
  * @return Vector of TypeParam with the values specified
  */
-template <typename TypeParam, typename T>
-  requires(cudf::concepts::fixed_width<TypeParam> && !cudf::concepts::timestamp<TypeParam>)
+template <cudf::concepts::fixed_width TypeParam, typename T>
 thrust::host_vector<TypeParam> make_type_param_vector(std::initializer_list<T> const& init_list)
 {
   std::vector<T> input{init_list};
@@ -133,8 +132,7 @@ thrust::host_vector<std::string> make_type_param_vector(std::initializer_list<T>
  * @return A fixed width type - [u]int32/float/duration etc. of type TypeParam with the
  *         value specified
  */
-template <typename TypeParam, typename T>
-  requires(cudf::concepts::fixed_width<TypeParam> && !cudf::concepts::timestamp<TypeParam>)
+template <cudf::concepts::fixed_width TypeParam, typename T>
 TypeParam make_type_param_scalar(T const init_value)
 {
   return static_cast<TypeParam>(init_value);

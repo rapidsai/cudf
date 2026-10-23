@@ -198,7 +198,6 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
  *  `column_view`'s data, and second is the column's bitmask.
  */
 template <typename T>
-  requires(not cudf::concepts::fixed_point<T>)
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(
   column_view c,
   cuda::stream_ref stream   = cudf::test::get_default_stream(),

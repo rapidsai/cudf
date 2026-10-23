@@ -59,8 +59,6 @@ thrust::host_vector<typename TypeParam::rep> make_vector(std::initializer_list<T
 
 template <typename TypeParam, typename T>
 thrust::host_vector<TypeParam> make_vector(std::initializer_list<T> const& init)
-  requires(not(cuda::std::same_as<TypeParam, cudf::string_view> ||
-               cudf::concepts::fixed_point<TypeParam>))
 {
   return cudf::test::make_type_param_vector<TypeParam, T>(init);
 }

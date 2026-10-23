@@ -54,7 +54,6 @@ __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 }
 
 template <typename T, typename BinaryOp>
-  requires(!is_timestamp_sum<T, BinaryOp>())
 __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 {
   T old_value = *addr;
@@ -87,7 +86,6 @@ CUDF_KERNEL void gpu_atomicCAS_test(T* result, T* data, size_t size)
 }
 
 template <typename T>
-  requires(!cudf::concepts::timestamp<T>)
 T accumulate(cudf::host_span<T const> xs)
 {
   return std::accumulate(xs.begin(), xs.end(), T{0});

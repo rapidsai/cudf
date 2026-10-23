@@ -51,8 +51,6 @@ struct Add {
 
   template <typename OutT = TypeOut>
   OutT operator()(TypeLhs lhs, TypeRhs rhs) const
-    requires(!cudf::concepts::chrono<OutT> || !cudf::concepts::chrono<TypeLhs> ||
-             !cudf::concepts::chrono<TypeRhs>)
   {
     using TypeCommon = std::common_type_t<OutT, TypeLhs, TypeRhs>;
     return static_cast<OutT>(static_cast<TypeCommon>(lhs) + static_cast<TypeCommon>(rhs));
@@ -73,8 +71,6 @@ struct Sub {
 
   template <typename OutT = TypeOut>
   OutT operator()(TypeLhs lhs, TypeRhs rhs) const
-    requires(!cudf::concepts::chrono<OutT> || !cudf::concepts::chrono<TypeLhs> ||
-             !cudf::concepts::chrono<TypeRhs>)
   {
     using TypeCommon = std::common_type_t<OutT, TypeLhs, TypeRhs>;
     return static_cast<OutT>(static_cast<TypeCommon>(lhs) - static_cast<TypeCommon>(rhs));
@@ -85,7 +81,6 @@ template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Mul {
   template <typename OutT = TypeOut>
   TypeOut operator()(TypeLhs lhs, TypeRhs rhs) const
-    requires(!cudf::concepts::duration<OutT>)
   {
     using TypeCommon = std::common_type_t<TypeOut, TypeLhs, TypeRhs>;
     return static_cast<TypeOut>(static_cast<TypeCommon>(lhs) * static_cast<TypeCommon>(rhs));

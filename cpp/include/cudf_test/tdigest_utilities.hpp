@@ -43,7 +43,6 @@ struct tdigest_gen {
 
   template <typename T, typename Func>
   std::unique_ptr<column> operator()(Func op, column_view const& values, int delta)
-    requires(!cudf::concepts::arithmetic<T> && !cudf::concepts::fixed_point<T>)
   {
     CUDF_FAIL("Invalid tdigest test type");
   }
