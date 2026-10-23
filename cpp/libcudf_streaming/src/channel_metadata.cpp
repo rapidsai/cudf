@@ -7,6 +7,7 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/stream_compaction.hpp>
 
 #include <cudf_streaming/channel_metadata.hpp>
 
@@ -17,6 +18,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <numeric>
 #include <stdexcept>
 #include <utility>
 
@@ -60,6 +62,27 @@ ordering ordering::with_keys(std::vector<order_key> new_keys) const
 ordering ordering::with_locally_ordered(bool locally_ordered) const
 {
   return ordering{keys, boundaries, strict_boundaries, locally_ordered};
+}
+
+ordering ordering::as_strict(rapidsmpf::BufferResource& br) const
+{
+  if (strict_boundaries) { return *this; }
+
+  auto const boundary_view = boundaries->table_view();
+  std::vector<cudf::size_type> key_columns(boundary_view.num_columns());
+  std::iota(key_columns.begin(), key_columns.end(), 0);
+  auto const stream = boundaries->stream();
+  // Equal boundary rows are adjacent because boundaries are ordered.
+  auto unique_boundaries = cudf::unique(boundary_view,
+                                        key_columns,
+                                        cudf::duplicate_keep_option::KEEP_FIRST,
+                                        cudf::null_equality::EQUAL,
+                                        stream,
+                                        br.device_mr());
+  return ordering{keys,
+                  std::make_shared<table_chunk>(std::move(unique_boundaries), stream),
+                  true,
+                  locally_ordered};
 }
 
 bool ordering::boundaries_aligned_with(ordering const& other, rapidsmpf::BufferResource& br) const
