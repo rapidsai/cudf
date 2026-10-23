@@ -1140,7 +1140,8 @@ namespace {
 template <typename IndexType>
 std::unique_ptr<cudf::column> dictionary_from_arrow_host(std::vector<int64_t> const& keys,
                                                          std::vector<IndexType> const& indices,
-                                                         std::vector<uint8_t> const& validity)
+                                                         std::vector<uint8_t> const& validity,
+                                                         int64_t offset = 0)
 {
   nanoarrow::UniqueSchema schema;
   NANOARROW_THROW_NOT_OK(
@@ -1151,6 +1152,7 @@ std::unique_ptr<cudf::column> dictionary_from_arrow_host(std::vector<int64_t> co
   auto array = get_nanoarrow_dict_array<int64_t, IndexType>(keys, indices, validity);
   NANOARROW_THROW_NOT_OK(
     ArrowArrayFinishBuilding(array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+  slice_host_nanoarrow(array.get(), offset, static_cast<int64_t>(indices.size()));
 
   ArrowDeviceArray input;
   memcpy(&input.array, array.get(), sizeof(ArrowArray));
@@ -1257,4 +1259,11 @@ TYPED_TEST(FromArrowHostDictionaryNarrowIndicesTest, WidenAboveSignedLimit)
   EXPECT_EQ(cudf::dictionary_column_view(got->view()).indices().type(),
             cudf::data_type{cudf::type_to_id<WiderType>()});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), got->view());
+
+  auto got_sliced = dictionary_from_arrow_host<IndexType>(
+    keys, std::vector<IndexType>{static_cast<IndexType>(max_index), 0, 1}, validity, 1);
+  auto expected_sliced = cudf::slice(expected->view(), {1, 3}).front();
+  EXPECT_EQ(cudf::dictionary_column_view(got_sliced->view()).indices().type(),
+            cudf::data_type{cudf::type_to_id<WiderType>()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sliced, got_sliced->view());
 }
