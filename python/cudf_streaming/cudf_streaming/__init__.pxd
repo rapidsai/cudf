@@ -10,13 +10,13 @@ from cudf_streaming.approx_distinct_count cimport (
 from cudf_streaming.bloom_filter cimport BloomFilter, cpp_BloomFilter
 from cudf_streaming.channel_metadata cimport (
     ChannelMetadata,
+    DataScope,
     HashScheme,
     OrderKey,
     OrderScheme,
     Ordering,
     Partitioning,
     RowOrdering,
-    DataScope,
     cpp_ChannelMetadata,
     cpp_HashScheme,
     cpp_OrderKey,

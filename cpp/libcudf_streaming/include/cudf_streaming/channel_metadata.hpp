@@ -60,12 +60,11 @@ struct order_key {
 };
 
 /**
- * @brief Set of rows described by a metadata fact.
+ * @brief Rows covered by a metadata property.
  *
- * `GLOBAL` describes the complete logical dataset. For duplicated data, this
- * means one logical copy rather than the physical concatenation of all copies.
- * `RANK_LOCAL` describes the rows on each rank independently, so metadata
- * values and guarantees may differ between ranks.
+ * `GLOBAL` applies to the complete logical dataset. For duplicated data, this
+ * means one logical copy rather than all copies concatenated together.
+ * `RANK_LOCAL` applies independently to each rank.
  */
 enum class data_scope : std::uint8_t {
   GLOBAL,      ///< The complete logical dataset.
@@ -139,6 +138,7 @@ struct ordering {
   /// See struct-level note on `strict_boundaries` semantics.
   bool strict_boundaries{false};
   /// See struct-level note on `locally_ordered` semantics.
+  // TODO: Remove after cudf-polars migrates local row-order metadata to `row_ordering`.
   bool locally_ordered{true};
 
   /// @brief Default constructor. Produces an invalid (empty) ordering.

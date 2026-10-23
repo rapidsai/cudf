@@ -128,7 +128,19 @@ cdef class OrderKey:
 
 
 cdef class RowOrdering:
-    """A row-ordering guarantee for a data stream."""
+    """
+    A row-ordering guarantee for a data stream.
+
+    Parameters
+    ----------
+    order_keys
+        Non-empty sequence of keys that order rows.
+    scope
+        Rows covered by the ordering guarantee.
+    group_keys
+        Columns defining equality groups. When set, each group's subsequence
+        is ordered independently.
+    """
 
     def __init__(
         self,
@@ -440,7 +452,7 @@ cdef class ChannelMetadata:
     local_count
         Estimated number of chunks for this rank.
     partitioning
-        How the data is partitioned (default: no partitioning).
+        Partitioning and row-ordering metadata (default: none).
     duplicated
         Whether data is duplicated on all workers (default: False).
     """
