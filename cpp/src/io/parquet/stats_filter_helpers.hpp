@@ -220,7 +220,11 @@ class stats_caster_base {
         null_count++;
       };
 
-      if (not binary_value.has_value()) { return set_to_null(); }
+      // Return early if the binary value isn't set
+      if (not binary_value.has_value()) {
+        set_to_null();
+        return;
+      }
 
       // For strings, also insert the characters
       if constexpr (std::is_same_v<T, string_view>) {
