@@ -453,6 +453,7 @@ if packaging.version.parse(sqlite3.sqlite_version) <= packaging.version.parse("3
             "tests/unit/sql/test_filter_clause.py::test_filter_clause_multiple_aggs": 'sqlite3.OperationalError: near "AS": syntax error',
             "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[STRING_AGG]": 'sqlite3.OperationalError: near "ORDER": syntax error',
             "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[GROUP_CONCAT]": 'sqlite3.OperationalError: near "ORDER": syntax error',
+            "tests/unit/sql/test_window_functions.py::test_window_frame_validation": 'sqlite3.OperationalError: near "GROUPS": syntax error',
         }
     )
 
