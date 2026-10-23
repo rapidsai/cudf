@@ -60,16 +60,16 @@ struct order_key {
 };
 
 /**
- * @brief Scope of a row-ordering guarantee.
+ * @brief Set of rows described by a metadata fact.
  *
- * `GLOBAL` describes the logical stream. For partitioned data, the
- * rank-ordered concatenation of FIFO streams is ordered. For duplicated data,
- * each rank contains an ordered copy of the same logical stream.
- * `RANK_LOCAL` makes no ordering guarantee between ranks.
+ * `GLOBAL` describes the complete logical dataset. For duplicated data, this
+ * means one logical copy rather than the physical concatenation of all copies.
+ * `RANK_LOCAL` describes the rows on each rank independently, so metadata
+ * values and guarantees may differ between ranks.
  */
-enum class row_ordering_scope : std::uint8_t {
-  GLOBAL,      ///< The logical stream is ordered.
-  RANK_LOCAL,  ///< Each rank's FIFO stream is ordered independently.
+enum class data_scope : std::uint8_t {
+  GLOBAL,      ///< The complete logical dataset.
+  RANK_LOCAL,  ///< Each rank's local data independently.
 };
 
 /**
@@ -78,11 +78,15 @@ enum class row_ordering_scope : std::uint8_t {
  * When `group_keys` is empty, rows are ordered by `order_keys`. Otherwise,
  * each group's subsequence is ordered by `order_keys`. Groups need not be
  * contiguous or ordered relative to one another.
+ *
+ * A global ordering applies to the rank-ordered concatenation of FIFO streams.
+ * For duplicated data, each rank contains an ordered copy of the same logical
+ * stream. A rank-local ordering makes no guarantee between ranks.
  */
 struct row_ordering {
-  std::vector<order_key> order_keys;                     ///< Keys that order rows.
-  row_ordering_scope scope{row_ordering_scope::GLOBAL};  ///< Scope of the guarantee.
-  std::vector<cudf::size_type> group_keys;               ///< Columns defining equality groups.
+  std::vector<order_key> order_keys;        ///< Keys that order rows.
+  data_scope scope{data_scope::GLOBAL};     ///< Scope of the guarantee.
+  std::vector<cudf::size_type> group_keys;  ///< Columns defining equality groups.
 
   /// @brief Default constructor. Produces an invalid (empty) row ordering.
   row_ordering() = default;
@@ -96,7 +100,7 @@ struct row_ordering {
    * @throws std::invalid_argument if `order_keys` is empty.
    */
   row_ordering(std::vector<order_key> order_keys,
-               row_ordering_scope scope,
+               data_scope scope,
                std::vector<cudf::size_type> group_keys = {});
 
   /**

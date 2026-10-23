@@ -133,7 +133,7 @@ cdef class RowOrdering:
     def __init__(
         self,
         object order_keys,
-        RowOrderingScope scope,
+        DataScope scope,
         object group_keys=(),
     ):
         cdef vector[cpp_OrderKey] cpp_order_keys
@@ -162,7 +162,7 @@ cdef class RowOrdering:
         )
 
     @property
-    def scope(self) -> RowOrderingScope:
+    def scope(self) -> DataScope:
         """Scope of the ordering guarantee."""
         return self._handle.scope
 

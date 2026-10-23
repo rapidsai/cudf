@@ -34,7 +34,7 @@ class OrderKey:
     order: plc.types.Order
     null_order: plc.types.NullOrder
 
-class RowOrderingScope(IntEnum):
+class DataScope(IntEnum):
     GLOBAL = 0
     RANK_LOCAL = 1
 
@@ -42,13 +42,13 @@ class RowOrdering:
     def __init__(
         self,
         order_keys: Sequence[OrderKey],
-        scope: RowOrderingScope,
+        scope: DataScope,
         group_keys: Sequence[int] = (),
     ) -> None: ...
     @property
     def order_keys(self) -> tuple[OrderKey, ...]: ...
     @property
-    def scope(self) -> RowOrderingScope: ...
+    def scope(self) -> DataScope: ...
     @property
     def group_keys(self) -> tuple[int, ...]: ...
     def __eq__(self, other: object) -> bool: ...

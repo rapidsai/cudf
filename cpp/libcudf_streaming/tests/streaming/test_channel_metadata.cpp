@@ -42,14 +42,13 @@ TEST_F(StreamingChannelMetadata, HashScheme)
 TEST_F(StreamingChannelMetadata, RowOrdering)
 {
   order_key key{1, cudf::order::ASCENDING, cudf::null_order::BEFORE};
-  row_ordering ordering{{key}, row_ordering_scope::RANK_LOCAL, {0}};
+  row_ordering ordering{{key}, data_scope::RANK_LOCAL, {0}};
 
   EXPECT_EQ(ordering.order_keys, (std::vector<order_key>{key}));
-  EXPECT_EQ(ordering.scope, row_ordering_scope::RANK_LOCAL);
+  EXPECT_EQ(ordering.scope, data_scope::RANK_LOCAL);
   EXPECT_EQ(ordering.group_keys, (std::vector<cudf::size_type>{0}));
-  EXPECT_EQ(ordering, (row_ordering{{key}, row_ordering_scope::RANK_LOCAL, {0}}));
-  EXPECT_THROW(static_cast<void>(row_ordering{{}, row_ordering_scope::GLOBAL}),
-               std::invalid_argument);
+  EXPECT_EQ(ordering, (row_ordering{{key}, data_scope::RANK_LOCAL, {0}}));
+  EXPECT_THROW(static_cast<void>(row_ordering{{}, data_scope::GLOBAL}), std::invalid_argument);
 }
 
 TEST_F(StreamingChannelMetadata, OrderSchemeCtorRejectsEmptyKeys)
@@ -160,7 +159,7 @@ TEST_F(StreamingChannelMetadata, ChannelMetadata)
 TEST_F(StreamingChannelMetadata, MessageRoundTrip)
 {
   order_key key{1, cudf::order::ASCENDING, cudf::null_order::BEFORE};
-  row_ordering expected{{key}, row_ordering_scope::RANK_LOCAL, {0}};
+  row_ordering expected{{key}, data_scope::RANK_LOCAL, {0}};
   // channel_metadata round-trip
   partitioning part{
     partitioning_spec::from_hash(hash_scheme{{0}, 16}), partitioning_spec::inherit(), {expected}};

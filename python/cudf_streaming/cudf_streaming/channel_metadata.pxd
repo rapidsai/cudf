@@ -35,17 +35,17 @@ cdef extern from "<cudf_streaming/channel_metadata.hpp>" \
         cpp_null_order null_order
         bool_t operator==(const cpp_OrderKey&) noexcept
 
-    cpdef enum class RowOrderingScope "cudf_streaming::row_ordering_scope"(uint8_t):
+    cpdef enum class DataScope "cudf_streaming::data_scope"(uint8_t):
         GLOBAL
         RANK_LOCAL
 
     cdef cppclass cpp_RowOrdering "cudf_streaming::row_ordering":
         cpp_RowOrdering() noexcept
         cpp_RowOrdering(
-            vector[cpp_OrderKey], RowOrderingScope, vector[int32_t]
+            vector[cpp_OrderKey], DataScope, vector[int32_t]
         ) except +ex_handler
         vector[cpp_OrderKey] order_keys
-        RowOrderingScope scope
+        DataScope scope
         vector[int32_t] group_keys
         bool_t operator==(const cpp_RowOrdering&) noexcept
 
