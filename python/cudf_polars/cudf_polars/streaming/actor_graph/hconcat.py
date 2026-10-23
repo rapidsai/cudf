@@ -8,18 +8,17 @@ from typing import TYPE_CHECKING
 
 from cudf_streaming.channel_metadata import (
     HashScheme,
-    OrderScheme,
     Partitioning,
+    RangeScheme,
 )
 
-from cudf_polars.streaming.actor_graph.utils import (
-    maybe_remap_partitioning,
-)
+from cudf_polars.streaming.actor_graph.ordering import remap_row_orderings
+from cudf_polars.streaming.actor_graph.utils import maybe_remap_partitioning
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from cudf_streaming.channel_metadata import ChannelMetadata
+    from cudf_streaming.channel_metadata import ChannelMetadata, RowOrdering
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import HConcat
@@ -38,19 +37,21 @@ def _combine_hconcat_scheme(
         return None
 
     hash_schemes = tuple(scheme for scheme in schemes if isinstance(scheme, HashScheme))
-    order_schemes = tuple(
-        scheme for scheme in schemes if isinstance(scheme, OrderScheme)
+    range_schemes = tuple(
+        scheme for scheme in schemes if isinstance(scheme, RangeScheme)
     )
-    if hash_schemes and order_schemes:
+    if hash_schemes and range_schemes:
         return None
     if hash_schemes:
         first = hash_schemes[0]
         return first if all(scheme == first for scheme in hash_schemes) else None
-    if order_schemes:
+    if range_schemes:
         orderings = tuple(
-            ordering for scheme in order_schemes for ordering in scheme.orderings
+            ordering
+            for scheme in range_schemes
+            for ordering in scheme.partition_orderings
         )
-        return OrderScheme(orderings) if orderings else None
+        return RangeScheme(orderings) if orderings else None
     return None
 
 
@@ -88,3 +89,20 @@ def build_hconcat_partitioning(
     if inter_rank is None and local is None:
         return None
     return Partitioning(inter_rank, local)
+
+
+def build_hconcat_row_orderings(
+    ir: HConcat,
+    child_metadatas: Sequence[ChannelMetadata],
+) -> tuple[RowOrdering, ...]:
+    """Build row-ordering metadata for an internal, row-aligned HConcat."""
+    return tuple(
+        ordering
+        for child_index, metadata in enumerate(child_metadatas)
+        for ordering in remap_row_orderings(
+            ir,
+            metadata.row_orderings,
+            child_index=child_index,
+            preserves_order=True,
+        )
+    )

@@ -6,8 +6,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
+from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR, Rolling, Select
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
+from cudf_polars.dsl.utils.column_domain import ColumnBinding, column_domain_bindings
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
 from cudf_polars.streaming.utils import _lower_ir_fallback
@@ -70,6 +72,16 @@ class FixedSizeRolling(IR):
     ) -> DataFrame:
         """Evaluate fixed-size rolling expressions against df."""
         return Select.do_evaluate(exprs, should_broadcast, df, context=context)
+
+
+@column_domain_bindings.register(FixedSizeRolling)
+def _(node: FixedSizeRolling) -> dict[str, ColumnBinding]:
+    """Return direct input-column bindings for fixed-size rolling output."""
+    return {
+        item.name: ColumnBinding(0, item.value.name)
+        for item in node.exprs
+        if isinstance(item.value, Col)
+    }
 
 
 @lower_ir_node.register(FixedSizeRolling)

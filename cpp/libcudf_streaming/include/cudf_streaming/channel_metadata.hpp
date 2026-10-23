@@ -31,6 +31,17 @@ struct hash_scheme {
   std::vector<cudf::size_type> column_indices;  ///< Column indices to hash on.
   int modulus;                                  ///< Hash modulus (number of partitions).
 
+  /// @brief Default constructor. Produces an invalid (empty) hash scheme.
+  hash_scheme() = default;
+
+  /**
+   * @brief Construct a validated hash scheme.
+   *
+   * @param column_indices Non-empty, unique, non-negative column indices.
+   * @param modulus Positive hash modulus.
+   */
+  hash_scheme(std::vector<cudf::size_type> column_indices, int modulus);
+
   /**
    * @brief Equality comparison.
    * @return True if both schemes are equal.
@@ -60,7 +71,7 @@ struct order_key {
 };
 
 /**
- * @brief A valid ordering description for order-partitioned data.
+ * @brief A partition-ordering description for range-partitioned data.
  *
  * Data is partitioned by value ranges based on predetermined boundaries.
  * For N partitions, there are N-1 boundary rows:
@@ -77,101 +88,127 @@ struct order_key {
  * `strict_boundaries`: when true, every row in a chunk belongs to a single partition's
  * half-open key range (partition keys do not straddle chunk interiors). When false,
  * a chunk may contain keys spanning multiple partitions.
- *
- * `locally_ordered`: when true, rows within each partition at this level are ordered by
- * `keys`. When false, partitions are still ordered across partition boundaries, but row
- * order within a partition is not guaranteed.
  */
-struct ordering {
+struct partition_ordering {
   std::vector<order_key> keys;              ///< Sort keys (column, order, null_order per entry).
   std::shared_ptr<table_chunk> boundaries;  ///< N-1 boundary rows for N partitions.
   /// See struct-level note on `strict_boundaries` semantics.
   bool strict_boundaries{false};
-  /// See struct-level note on `locally_ordered` semantics.
-  bool locally_ordered{true};
 
-  /// @brief Default constructor. Produces an invalid (empty) ordering.
-  ordering() = default;
+  /// @brief Default constructor. Produces an invalid (empty) partition ordering.
+  partition_ordering() = default;
 
   /**
-   * @brief Construct a validated ordering.
+   * @brief Construct a validated partition ordering.
    *
    * @param keys Non-empty sort keys; size must equal `boundaries->shape().second`.
    * @param boundaries Non-null, device-resident boundary table (N-1 rows for N
    * partitions). Accepts a `unique_ptr<table_chunk>` via implicit conversion.
    * @param strict_boundaries See struct-level doc. Defaults to false.
-   * @param locally_ordered See struct-level doc. Defaults to true.
    * @throws std::invalid_argument if `keys` is empty, `boundaries` is null or not
    * device-resident, or `keys.size() != boundaries->shape().second`.
    */
-  ordering(std::vector<order_key> keys,
-           std::shared_ptr<table_chunk> boundaries,
-           bool strict_boundaries = false,
-           bool locally_ordered   = true);
+  partition_ordering(std::vector<order_key> keys,
+                     std::shared_ptr<table_chunk> boundaries,
+                     bool strict_boundaries = false);
 
   /**
-   * @brief Return a new ordering with updated key column indices, sharing
-   * boundary rows.
+   * @brief Return a new partition ordering with updated key column indices,
+   * sharing boundary rows.
    *
    * @param new_keys Replacement sort keys; size must equal
    * `boundaries->shape().second`.
-   * @return A new ordering with `new_keys` and the same boundaries and
-   * ordering flags.
-   * @throws std::invalid_argument if `new_keys` is empty or size mismatches
-   * boundaries.
+   * @return A new partition ordering with `new_keys` and the same boundaries and strictness.
+   * @throws std::invalid_argument if `new_keys` changes the number, direction,
+   * or null order of the keys.
    */
-  [[nodiscard]] ordering with_keys(std::vector<order_key> new_keys) const;
+  [[nodiscard]] partition_ordering with_keys(std::vector<order_key> new_keys) const;
 
   /**
-   * @brief Return a new ordering with updated local row-order metadata.
+   * @brief Check whether boundary values are aligned with another partition ordering.
    *
-   * @param locally_ordered Whether rows within each partition are ordered by `keys`.
-   * @return A new ordering with the same keys, boundaries, and strictness.
-   */
-  [[nodiscard]] ordering with_locally_ordered(bool locally_ordered) const;
-
-  /**
-   * @brief Check whether boundary values are aligned with another ordering.
-   *
-   * @param other The ordering to compare against.
+   * @param other The partition ordering to compare against.
    * @param br Buffer resource used for temporary allocations during comparison.
    * @return True when both orderings have matching boundary values and
    * strict_boundaries attributes, and are otherwise compatible (same order and
-   * null_order). This comparison intentionally ignores `locally_ordered`.
+   * null_order).
    */
-  [[nodiscard]] bool boundaries_aligned_with(ordering const& other,
+  [[nodiscard]] bool boundaries_aligned_with(partition_ordering const& other,
                                              rapidsmpf::BufferResource& br) const;
 };
 
 /**
- * @brief Order-based partitioning scheme for order-partitioned data.
+ * @brief Range-based partitioning scheme.
  *
- * An order_scheme advertises that the same stream is order-partitioned with
- * respect to any individual ordering it contains. Consumers are responsible for
- * selecting the ordering that is relevant to a particular operation.
+ * A range_scheme advertises that the same stream is range-partitioned with
+ * respect to any individual partition ordering it contains. Consumers select
+ * the partition ordering relevant to an operation.
  */
-struct order_scheme {
-  std::vector<ordering> orderings;  ///< Ordering descriptions valid for the stream.
+struct range_scheme {
+  /// Partition-ordering descriptions valid for the stream.
+  std::vector<partition_ordering> partition_orderings;
 
   /// @brief Default constructor. Produces an invalid (empty) scheme.
-  order_scheme() = default;
+  range_scheme() = default;
 
   /**
-   * @brief Construct a validated single-ordering order_scheme.
+   * @brief Construct a validated multi-partition-ordering range_scheme.
    *
-   * See `ordering` for parameter semantics.
+   * @param partition_orderings Non-empty sequence of partition orderings valid for the
+   * stream.
    */
-  order_scheme(std::vector<order_key> keys,
-               std::shared_ptr<table_chunk> boundaries,
-               bool strict_boundaries = false,
-               bool locally_ordered   = true);
+  explicit range_scheme(std::vector<partition_ordering> partition_orderings);
+};
+
+/**
+ * @brief Scope of a row-ordering guarantee.
+ */
+enum class row_ordering_scope : std::uint8_t {
+  GLOBAL,      ///< The logical stream is ordered across ranks within each equality group.
+  RANK_LOCAL,  ///< Each rank's FIFO stream is ordered independently.
+};
+
+/**
+ * @brief A row-ordering guarantee for a data stream.
+ *
+ * With no group keys, rows are lexicographically ordered by `order_keys`.
+ * With group keys, the rows in each equality group are ordered by
+ * `order_keys`. Groups need not be contiguous, and group-key order is not
+ * significant. Equality follows the grouping semantics of the operation that
+ * consumes the guarantee. A producer may combine this fact with hash
+ * partitioning only when equal rows are guaranteed to hash to the same rank.
+ *
+ * A GLOBAL guarantee applies to the rank-ordered concatenation of FIFO
+ * streams. When channel metadata marks the data as duplicated, each rank is
+ * instead a complete replica of that logical stream.
+ */
+struct row_ordering {
+  std::vector<order_key> order_keys;                     ///< Keys that order rows.
+  row_ordering_scope scope{row_ordering_scope::GLOBAL};  ///< Scope of the guarantee.
+  std::vector<cudf::size_type> group_keys;  ///< Sorted columns defining equality groups.
+
+  /// @brief Default constructor. Produces an invalid (empty) row ordering.
+  row_ordering() = default;
 
   /**
-   * @brief Construct a validated multi-ordering order_scheme.
+   * @brief Construct a validated row ordering.
    *
-   * @param orderings Non-empty sequence of orderings valid for the stream.
+   * @param order_keys Non-empty keys that order rows.
+   * @param scope Scope of the ordering guarantee.
+   * @param group_keys Columns defining equality groups.
+   * @throws std::invalid_argument if a column index is negative or repeated,
+   * `order_keys` is empty, a column is both a group and order key, or `scope`
+   * is invalid.
    */
-  explicit order_scheme(std::vector<ordering> orderings);
+  row_ordering(std::vector<order_key> order_keys,
+               row_ordering_scope scope,
+               std::vector<cudf::size_type> group_keys = {});
+
+  /**
+   * @brief Equality comparison.
+   * @return True if all fields are equal.
+   */
+  bool operator==(row_ordering const&) const = default;
 };
 
 /**
@@ -183,7 +220,7 @@ struct order_scheme {
  * - `none()`: No partitioning information at this level.
  * - `inherit()`: Partitioning is inherited from the parent level unchanged.
  * - `from_hash(h)`: Explicit hash partitioning with the given scheme.
- * - `from_order(o)`: Explicit order/range partitioning with the given scheme.
+ * - `from_range(r)`: Explicit range partitioning with the given scheme.
  */
 struct partitioning_spec {
   /**
@@ -193,12 +230,12 @@ struct partitioning_spec {
     NONE,     ///< No partitioning information at this level.
     INHERIT,  ///< Partitioning is inherited from parent level unchanged.
     HASH,     ///< Hash partitioning.
-    ORDER,    ///< Order/range partitioning.
+    RANGE,    ///< Range partitioning.
   };
 
   type type = type::NONE;             ///< The type of partitioning.
   std::optional<hash_scheme> hash;    ///< Valid only when type == HASH.
-  std::optional<order_scheme> order;  ///< Valid only when type == ORDER.
+  std::optional<range_scheme> range;  ///< Valid only when type == RANGE.
 
   /**
    * @brief Create a spec indicating no partitioning information.
@@ -212,7 +249,7 @@ struct partitioning_spec {
    */
   static partitioning_spec inherit()
   {
-    return {.type = type::INHERIT, .hash = std::nullopt, .order = std::nullopt};
+    return {.type = type::INHERIT, .hash = std::nullopt, .range = std::nullopt};
   }
 
   /**
@@ -220,18 +257,14 @@ struct partitioning_spec {
    * @param h The hash scheme to use.
    * @return A partitioning_spec with type HASH.
    */
-  static partitioning_spec from_hash(hash_scheme h)
-  {
-    return {.type = type::HASH, .hash = std::move(h), .order = std::nullopt};
-  }
+  static partitioning_spec from_hash(hash_scheme h);
 
   /**
-   * @brief Create a spec for order/range partitioning.
-   * @param o The order scheme to use. `o.orderings` must be non-empty; otherwise
-   * throws `std::invalid_argument`.
-   * @return A partitioning_spec with type ORDER.
+   * @brief Create a spec for range partitioning.
+   * @param r The range scheme to use. `r.partition_orderings` must be non-empty.
+   * @return A partitioning_spec with type RANGE.
    */
-  static partitioning_spec from_order(order_scheme o);
+  static partitioning_spec from_range(range_scheme r);
 };
 
 /**
@@ -258,13 +291,14 @@ struct partitioning {
 /**
  * @brief Channel-level metadata describing the data stream.
  *
- * Contains information about chunk counts, partitioning, and duplication
- * status for the data flowing through a channel.
+ * Contains information about chunk counts, partitioning, duplication, and row
+ * ordering for the data flowing through a channel.
  */
 struct channel_metadata {
-  std::uint64_t local_count{};       ///< Local chunk-count estimate for this rank.
-  struct partitioning partitioning;  ///< How the data is partitioned.
-  bool duplicated{};                 ///< Whether data is duplicated on all workers.
+  std::uint64_t local_count{};              ///< Local chunk-count estimate for this rank.
+  struct partitioning partitioning;         ///< How the data is partitioned.
+  bool duplicated{};                        ///< Whether data is duplicated on all workers.
+  std::vector<row_ordering> row_orderings;  ///< Row-ordering guarantees for the stream.
 
   /// @brief Default constructor.
   channel_metadata() = default;
@@ -275,13 +309,12 @@ struct channel_metadata {
    * @param local_count Local chunk count.
    * @param partitioning Partitioning metadata (default: no partitioning).
    * @param duplicated Whether data is duplicated (default: false).
+   * @param row_orderings Row-ordering guarantees (default: none).
    */
   channel_metadata(std::uint64_t local_count,
-                   struct partitioning partitioning = {},
-                   bool duplicated                  = false)
-    : local_count(local_count), partitioning(std::move(partitioning)), duplicated(duplicated)
-  {
-  }
+                   struct partitioning partitioning        = {},
+                   bool duplicated                         = false,
+                   std::vector<row_ordering> row_orderings = {});
 };
 
 /**

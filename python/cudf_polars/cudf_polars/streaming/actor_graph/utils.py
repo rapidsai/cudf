@@ -23,9 +23,9 @@ from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     OrderKey,
-    OrderScheme,
-    Ordering,
+    PartitionOrdering,
     Partitioning,
+    RangeScheme,
 )
 from cudf_streaming.table_chunk import (
     TableChunk,
@@ -38,7 +38,7 @@ from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.expr import Cast, Col, NamedExpr, TemporalFunction
+from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import (
     Filter,
     GroupBy,
@@ -52,6 +52,10 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.utils.column_domain import column_domain_bindings
 from cudf_polars.dsl.utils.naming import indices_to_names, names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
+from cudf_polars.streaming.actor_graph.ordering import (
+    leading_order_keys,
+    ordering_derivation,
+)
 from cudf_polars.streaming.actor_graph.tracing import (
     ActorTracer,
     record_channel_metrics,
@@ -80,13 +84,12 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
     from cudf_polars.typing import Schema
 
 
-type InterRankScheme = HashScheme | OrderScheme | None
+type InterRankScheme = HashScheme | RangeScheme | None
 type PartitioningScheme = InterRankScheme | Literal["inherit"]
 type OrderingMetadata = dict[int, OrderKey]
 
@@ -111,7 +114,7 @@ def _hash_keys_match(
 
 
 def _ordering_keys_match(
-    ordering: Ordering,
+    ordering: PartitionOrdering,
     keys: Sequence[int | OrderKey],
     key_indices: tuple[int, ...],
     *,
@@ -131,15 +134,15 @@ def _ordering_keys_match(
     return tuple(k.column_index for k in ordering.keys) == key_indices[:n_keys]
 
 
-def _matching_order_scheme(
-    scheme: OrderScheme,
+def _matching_range_scheme(
+    scheme: RangeScheme,
     keys: Sequence[int | OrderKey],
     key_indices: tuple[int, ...],
     *,
     allow_subset: bool,
     order_based: bool,
-) -> OrderScheme | None:
-    orderings = scheme.orderings
+) -> RangeScheme | None:
+    orderings = scheme.partition_orderings
     matches = [
         (i, ordering)
         for i, ordering in enumerate(orderings)
@@ -155,7 +158,7 @@ def _matching_order_scheme(
         # Prefer the most specific matching ordering; equal-length ties
         # keep the original metadata order.
         i, ordering = max(matches, key=lambda match: len(match[1].keys))
-        return OrderScheme(
+        return RangeScheme(
             (
                 ordering,
                 *orderings[:i],
@@ -177,8 +180,8 @@ def _keys_match(
         scheme, key_indices, allow_subset=allow_subset
     ):
         return scheme
-    if isinstance(scheme, OrderScheme):
-        return _matching_order_scheme(
+    if isinstance(scheme, RangeScheme):
+        return _matching_range_scheme(
             scheme,
             keys,
             key_indices,
@@ -438,35 +441,13 @@ async def shutdown_on_error(
 
 
 def _update_ordering_indices(
-    ordering: Ordering, new_indices: tuple[int, ...]
-) -> Ordering:
+    ordering: PartitionOrdering, new_indices: tuple[int, ...]
+) -> PartitionOrdering:
     return ordering.with_keys(
         (
             OrderKey(idx, k.order, k.null_order)
             for k, idx in zip(ordering.keys, new_indices, strict=True)
         )
-    )
-
-
-def _clear_scheme_local_ordering(scheme: PartitioningScheme) -> PartitioningScheme:
-    """Return scheme with local row-order metadata cleared from any orderings."""
-    if isinstance(scheme, OrderScheme):
-        return OrderScheme(
-            tuple(
-                ordering.with_locally_ordered(locally_ordered=False)
-                for ordering in scheme.orderings
-            )
-        )
-    return scheme
-
-
-def clear_local_ordering(partitioning: Partitioning | None) -> Partitioning | None:
-    """Return partitioning with order/range metadata preserved but local row order cleared."""
-    if partitioning is None:
-        return None
-    return Partitioning(
-        inter_rank=_clear_scheme_local_ordering(partitioning.inter_rank),
-        local=_clear_scheme_local_ordering(partitioning.local),
     )
 
 
@@ -478,60 +459,19 @@ def join_preserves_side_order(
     return maintain_order.startswith(side)
 
 
-def _is_truncate_transparent_cast(expr: Cast) -> bool:
-    src_id = expr.children[0].dtype.id()
-    dst_id = expr.dtype.id()
-    if src_id == dst_id:
-        return True
-    return (
-        src_id == plc.TypeId.INT64 and dst_id == plc.TypeId.TIMESTAMP_NANOSECONDS
-    ) or (src_id == plc.TypeId.TIMESTAMP_NANOSECONDS and dst_id == plc.TypeId.INT64)
-
-
-def _unwrap_truncate_transparent_casts(expr: Expr) -> Expr:
-    while isinstance(expr, Cast) and _is_truncate_transparent_cast(expr):
-        (expr,) = expr.children
-    return expr
-
-
-def _truncate_source_name(expr: Expr) -> str | None:
-    expr = _unwrap_truncate_transparent_casts(expr)
-    if (
-        isinstance(expr, TemporalFunction)
-        and expr.name is TemporalFunction.Name.Truncate
-    ):
-        source = _unwrap_truncate_transparent_casts(expr.children[0])
-        if isinstance(source, Col):
-            return source.name
-    return None
-
-
-def _ordering_derivation(ne: NamedExpr) -> tuple[str, bool] | None:
-    """
-    Return derivation metadata for supported one-column ordering derivations.
-
-    This is intentionally narrow for now: only temporal truncation is recognized.
-    """
-    source_name = _truncate_source_name(ne.value)
-    if source_name is None:
-        return None
-    # Truncated boundaries may be non-strict.
-    return source_name, False
-
-
 def _derived_ordering(
-    ordering: Ordering,
+    ordering: PartitionOrdering,
     ne: NamedExpr,
     old_to_new_names: dict[str, dict[str, None]],
     child_schema: Schema,
     output_schema: Schema,
     context: Context | None,
-) -> Ordering | None:
+) -> PartitionOrdering | None:
     """Create an ordering for a supported derivation of one key."""
     if context is None:
         return None
 
-    derivation = _ordering_derivation(ne)
+    derivation = ordering_derivation(ne)
     if derivation is None:
         return None
     source_name, strict_boundaries = derivation
@@ -588,11 +528,10 @@ def _derived_ordering(
             strict=True,
         )
     )
-    return Ordering(
+    return PartitionOrdering(
         keys,
         boundaries,
         strict_boundaries=strict_boundaries,
-        locally_ordered=ordering.locally_ordered,
     )
 
 
@@ -625,10 +564,10 @@ def _remap_scheme_select(
             )
             return HashScheme(new_indices, scheme.modulus)
         return None
-    if isinstance(scheme, OrderScheme):
+    if isinstance(scheme, RangeScheme):
         old_to_new_names = _select_column_targets(select)
-        new_orderings: list[Ordering] = []
-        for ordering in scheme.orderings:
+        new_orderings: list[PartitionOrdering] = []
+        for ordering in scheme.partition_orderings:
             old_key_names = indices_to_names(
                 ordering.column_indices, select.children[0].schema
             )
@@ -660,7 +599,7 @@ def _remap_scheme_select(
                 if derived is not None:
                     new_orderings.append(derived)
         if new_orderings:
-            return OrderScheme(new_orderings)
+            return RangeScheme(new_orderings)
         return None
     if scheme not in (None, "inherit"):  # pragma: no cover
         return None  # Guard against future/unsupported scheme types
@@ -677,9 +616,9 @@ def _remap_scheme_simple(
         except (ValueError, KeyError, IndexError):
             return None
         return HashScheme(new_indices, scheme.modulus)
-    if isinstance(scheme, OrderScheme):
-        new_orderings: list[Ordering] = []
-        for ordering in scheme.orderings:
+    if isinstance(scheme, RangeScheme):
+        new_orderings: list[PartitionOrdering] = []
+        for ordering in scheme.partition_orderings:
             try:
                 old_key_names = indices_to_names(ordering.column_indices, child.schema)
                 new_indices = names_to_indices(old_key_names, ir.schema)
@@ -687,7 +626,7 @@ def _remap_scheme_simple(
                 continue
             new_orderings.append(_update_ordering_indices(ordering, new_indices))
         if new_orderings:
-            return OrderScheme(new_orderings)
+            return RangeScheme(new_orderings)
         return None
     return scheme  # None or "inherit" passes through unchanged
 
@@ -711,9 +650,9 @@ def _remap_scheme_bindings(ir: IR, scheme: PartitioningScheme) -> PartitioningSc
             )
             return HashScheme(new_indices, scheme.modulus)
         return None
-    if isinstance(scheme, OrderScheme):
-        new_orderings: list[Ordering] = []
-        for ordering in scheme.orderings:
+    if isinstance(scheme, RangeScheme):
+        new_orderings: list[PartitionOrdering] = []
+        for ordering in scheme.partition_orderings:
             old_key_names = indices_to_names(ordering.column_indices, child.schema)
             if not set(old_key_names).issubset(set(old_to_new_names)):
                 continue
@@ -726,7 +665,7 @@ def _remap_scheme_bindings(ir: IR, scheme: PartitioningScheme) -> PartitioningSc
             )
             new_orderings.append(_update_ordering_indices(ordering, new_indices))
         if new_orderings:
-            return OrderScheme(new_orderings)
+            return RangeScheme(new_orderings)
         return None
     return scheme
 
@@ -835,6 +774,7 @@ async def send_metadata(
             local_count=metadata.local_count,
             partitioning=metadata.partitioning,
             duplicated=metadata.duplicated,
+            row_orderings=metadata.row_orderings,
         ),
     )
     await ch.send_metadata(ctx, msg)
@@ -1604,8 +1544,8 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
         """True when one scheme proves strict partitioning."""
         if scheme is None or scheme == "inherit":
             return False
-        if isinstance(scheme, OrderScheme):
-            return scheme.orderings[0].strict_boundaries
+        if isinstance(scheme, RangeScheme):
+            return scheme.partition_orderings[0].strict_boundaries
         return True
 
     def is_strictly_partitioned(
@@ -1616,10 +1556,14 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
         """True if data is strictly partitioned at the requested level."""
         return self._scheme_is_strict(self._scheme_for_level(level))
 
-    def get_ordering(self, *, level: PartitioningLevel = "flat") -> Ordering | None:
+    def get_ordering(
+        self, *, level: PartitioningLevel = "flat"
+    ) -> PartitionOrdering | None:
         """Return the normalized ordering for the requested partitioning level."""
         scheme = self._scheme_for_level(level)
-        return scheme.orderings[0] if isinstance(scheme, OrderScheme) else None
+        return (
+            scheme.partition_orderings[0] if isinstance(scheme, RangeScheme) else None
+        )
 
     def is_aligned_with(
         self, other: NormalizedPartitioning, br: BufferResource
@@ -1630,11 +1574,11 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
             lhs: PartitioningScheme,
             rhs: PartitioningScheme,
         ) -> bool:
-            if isinstance(lhs, OrderScheme):
-                if not isinstance(rhs, OrderScheme):
+            if isinstance(lhs, RangeScheme):
+                if not isinstance(rhs, RangeScheme):
                     return False
-                lhs_ordering = lhs.orderings[0]
-                rhs_ordering = rhs.orderings[0]
+                lhs_ordering = lhs.partition_orderings[0]
+                rhs_ordering = rhs.partition_orderings[0]
                 return lhs_ordering.boundaries_aligned_with(rhs_ordering, br)
             elif isinstance(lhs, HashScheme):
                 return (
@@ -1680,8 +1624,8 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
         keys
             Key column descriptors. Pass sequence of ``int`` values
             (column indices) to match by column index only (both
-            ``HashScheme`` and ``OrderScheme``). Pass a sequence of
-            ``OrderKey`` instances to match ``OrderScheme`` with full
+            ``HashScheme`` and ``RangeScheme``). Pass a sequence of
+            ``OrderKey`` instances to match ``RangeScheme`` with full
             order/null-order semantics.
         allow_subset
             If True, the metadata keys may be a prefix of ``keys``.
@@ -1887,23 +1831,7 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
 
 def _leading_order_keys(metadata: ChannelMetadata | None) -> OrderingMetadata:
     """Return unambiguous leading order keys implied by channel metadata."""
-    if metadata is None or metadata.partitioning is None:
-        return {}
-
-    scheme = metadata.partitioning.local
-    if scheme == "inherit":
-        scheme = metadata.partitioning.inter_rank
-    if not isinstance(scheme, OrderScheme):
-        return {}
-
-    candidates: dict[int, OrderKey | None] = {}
-    for ordering in scheme.orderings:
-        if not ordering.locally_ordered or not ordering.keys:
-            continue
-        key = ordering.keys[0]
-        current = candidates.get(key.column_index, key)
-        candidates[key.column_index] = key if current == key else None
-    return {index: key for index, key in candidates.items() if key is not None}
+    return {} if metadata is None else leading_order_keys(metadata.row_orderings)
 
 
 def _apply_ordering_metadata(

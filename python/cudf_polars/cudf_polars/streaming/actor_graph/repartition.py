@@ -22,6 +22,7 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     ir_context_for_node,
 )
 from cudf_polars.streaming.actor_graph.nodes import shutdown_on_error
+from cudf_polars.streaming.actor_graph.ordering import global_row_orderings
 from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
@@ -147,6 +148,7 @@ async def concatenate_node(
             metadata = ChannelMetadata(
                 local_count=local_output_count,
                 duplicated=output_duplicated,
+                row_orderings=global_row_orderings(input_metadata, nranks=comm.nranks),
             )
             await send_metadata(ch_out, context, metadata)
             if tracer is not None and output_duplicated:
@@ -185,6 +187,7 @@ async def concatenate_node(
             metadata = ChannelMetadata(
                 local_count=local_output_count,
                 duplicated=output_duplicated,
+                row_orderings=input_metadata.row_orderings,
             )
             await send_metadata(ch_out, context, metadata)
             if tracer is not None and output_duplicated:

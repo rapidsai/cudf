@@ -12,12 +12,15 @@ import pytest
 from cudf_streaming import (
     ChannelMetadata,
     HashScheme,
-    Ordering,
     OrderKey,
-    OrderScheme,
     Partitioning,
+    PartitionOrdering,
+    RangeScheme,
+    RowOrdering,
+    RowOrderingScope,
     TableChunk,
 )
+from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.message import Message
 
 if TYPE_CHECKING:
@@ -47,16 +50,15 @@ def _column_from_values(
     return plc.Column.from_iterable_of_py(values, dtype)
 
 
-def _two_key_ordering_from_boundary_values(
+def _two_key_partition_ordering(
     context: Context,
     int_values: list[int | None],
     string_values: list[str | None],
     *,
     strict_boundaries: bool = False,
-    locally_ordered: bool = True,
-) -> Ordering:
-    """Two-key Ordering with mixed INT64/STRING boundary columns."""
-    return Ordering(
+) -> PartitionOrdering:
+    """Return a two-key partition ordering with mixed boundary columns."""
+    return PartitionOrdering(
         [
             OrderKey(
                 0,
@@ -83,25 +85,22 @@ def _two_key_ordering_from_boundary_values(
             ),
         ),
         strict_boundaries=strict_boundaries,
-        locally_ordered=locally_ordered,
     )
 
 
-def _two_key_order_scheme(
+def _two_key_range_scheme(
     context: Context,
     *,
     strict_boundaries: bool = False,
-    locally_ordered: bool = True,
-) -> OrderScheme:
-    """Two-key OrderScheme with a 1-row boundary table (2 partitions)."""
-    return OrderScheme(
+) -> RangeScheme:
+    """Return a two-key range scheme with one boundary row."""
+    return RangeScheme(
         [
-            _two_key_ordering_from_boundary_values(
+            _two_key_partition_ordering(
                 context,
                 [100],
                 ["abc"],
                 strict_boundaries=strict_boundaries,
-                locally_ordered=locally_ordered,
             )
         ]
     )
@@ -119,6 +118,15 @@ def test_hash_scheme() -> None:
     assert h1 != HashScheme((0, 1), 32)
     assert h1 != HashScheme((2,), 16)
 
+    with pytest.raises(ValueError):
+        HashScheme((), 16)
+    with pytest.raises(ValueError):
+        HashScheme((0, 0), 16)
+    with pytest.raises(ValueError):
+        HashScheme((-1,), 16)
+    with pytest.raises(ValueError):
+        HashScheme((0,), 0)
+
 
 def test_order_key() -> None:
     k = OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
@@ -134,38 +142,97 @@ def test_order_key() -> None:
     assert "OrderKey" in repr(k)
 
 
-def test_order_scheme(context: Context) -> None:
-    """Test OrderScheme construction, properties, equality, and repr."""
-    o1 = _two_key_order_scheme(context)
-    ordering = o1.orderings[0]
-    assert ordering.keys == (
+def test_row_ordering() -> None:
+    """Test row-ordering properties, equality, and repr."""
+    time = OrderKey(2, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
+    global_ordering = RowOrdering([time], RowOrderingScope.GLOBAL)
+    grouped = RowOrdering(
+        [time], RowOrderingScope.RANK_LOCAL, group_keys=(0, 1)
+    )
+
+    assert global_ordering.order_keys == (time,)
+    assert global_ordering.scope == RowOrderingScope.GLOBAL
+    assert global_ordering.group_keys == ()
+    assert grouped.scope == RowOrderingScope.RANK_LOCAL
+    assert grouped.group_keys == (0, 1)
+    assert grouped == RowOrdering(
+        [time], RowOrderingScope.RANK_LOCAL, group_keys=(0, 1)
+    )
+    assert grouped == RowOrdering(
+        [time], RowOrderingScope.RANK_LOCAL, group_keys=(1, 0)
+    )
+    assert grouped != global_ordering
+    assert grouped != object()
+    assert "RowOrdering" in repr(grouped)
+
+
+@pytest.mark.parametrize(
+    ("order_indices", "group_indices", "match"),
+    [
+        ((), (), "must not be empty"),
+        ((-1,), (), "non-negative"),
+        ((0, 0), (), "unique"),
+        ((1,), (-1,), "non-negative"),
+        ((1,), (0, 0), "unique"),
+        ((0,), (0,), "unique"),
+    ],
+)
+def test_row_ordering_validation(
+    order_indices: tuple[int, ...],
+    group_indices: tuple[int, ...],
+    match: str,
+) -> None:
+    """Reject invalid row-ordering keys."""
+    order_keys = tuple(
+        OrderKey(
+            index,
+            plc.types.Order.ASCENDING,
+            plc.types.NullOrder.BEFORE,
+        )
+        for index in order_indices
+    )
+    with pytest.raises(ValueError, match=match):
+        RowOrdering(
+            order_keys,
+            RowOrderingScope.GLOBAL,
+            group_keys=group_indices,
+        )
+
+
+def test_range_scheme(context: Context) -> None:
+    """Test RangeScheme construction, properties, and repr."""
+    o1 = _two_key_range_scheme(context)
+    partition_ordering = o1.partition_orderings[0]
+    assert partition_ordering.keys == (
         OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),
         OrderKey(1, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER),
     )
-    assert ordering.column_indices == (0, 1)
-    assert not ordering.strict_boundaries
-    assert ordering.locally_ordered
-    assert ordering.num_boundaries == 1
-    assert "OrderScheme" in repr(o1)
+    assert partition_ordering.column_indices == (0, 1)
+    assert not partition_ordering.strict_boundaries
+    assert partition_ordering.num_boundaries == 1
+    assert "PartitionOrdering" in repr(partition_ordering)
+    assert "RangeScheme" in repr(o1)
 
-    assert o1.orderings[0].boundaries_aligned_with(
-        _two_key_order_scheme(context).orderings[0], context.br()
+    assert o1.partition_orderings[0].boundaries_aligned_with(
+        _two_key_range_scheme(context).partition_orderings[0], context.br()
     )
 
-    o_strict = _two_key_order_scheme(context, strict_boundaries=True)
-    assert o_strict.orderings[0].strict_boundaries
-    assert not o1.orderings[0].boundaries_aligned_with(
-        o_strict.orderings[0], context.br()
+    o_strict = _two_key_range_scheme(context, strict_boundaries=True)
+    assert o_strict.partition_orderings[0].strict_boundaries
+    assert not o1.partition_orderings[0].boundaries_aligned_with(
+        o_strict.partition_orderings[0], context.br()
     )
-    assert o_strict.orderings[0].boundaries_aligned_with(
-        _two_key_order_scheme(context, strict_boundaries=True).orderings[0],
+    assert o_strict.partition_orderings[0].boundaries_aligned_with(
+        _two_key_range_scheme(
+            context, strict_boundaries=True
+        ).partition_orderings[0],
         context.br(),
     )
 
     with pytest.raises(TypeError, match="OrderKey"):
-        OrderScheme(
+        RangeScheme(
             [
-                Ordering(
+                PartitionOrdering(
                     [
                         (
                             0,
@@ -188,12 +255,12 @@ def test_order_scheme(context: Context) -> None:
         )
 
     with pytest.raises(ValueError, match="empty"):
-        OrderScheme([])
+        RangeScheme([])
 
 
-def test_order_scheme_multiple_orderings(context: Context) -> None:
-    """OrderScheme stores orderings valid for the same stream."""
-    first = Ordering(
+def test_range_scheme_multiple_orderings(context: Context) -> None:
+    """RangeScheme stores partition orderings valid for the same stream."""
+    first = PartitionOrdering(
         [OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)],
         _make_boundaries(
             context,
@@ -207,7 +274,7 @@ def test_order_scheme_multiple_orderings(context: Context) -> None:
         ),
         strict_boundaries=True,
     )
-    second = Ordering(
+    second = PartitionOrdering(
         [OrderKey(2, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER)],
         _make_boundaries(
             context,
@@ -220,63 +287,63 @@ def test_order_scheme_multiple_orderings(context: Context) -> None:
             ),
         ),
     )
-    scheme = OrderScheme([first, second])
+    scheme = RangeScheme([first, second])
 
-    assert len(scheme.orderings) == 2
-    assert scheme.orderings[0].keys == first.keys
-    assert scheme.orderings[0].strict_boundaries == first.strict_boundaries
-    assert scheme.orderings[0].locally_ordered == first.locally_ordered
-    assert scheme.orderings[0].num_boundaries == first.num_boundaries
-    assert scheme.orderings[1].keys == second.keys
+    assert len(scheme.partition_orderings) == 2
+    assert scheme.partition_orderings[0].keys == first.keys
+    assert (
+        scheme.partition_orderings[0].strict_boundaries
+        == first.strict_boundaries
+    )
+    assert scheme.partition_orderings[0].num_boundaries == first.num_boundaries
+    assert scheme.partition_orderings[1].keys == second.keys
 
 
-def test_order_scheme_get_boundaries(context: Context) -> None:
-    scheme = _two_key_order_scheme(context)
-    ordering = scheme.orderings[0]
-    chunk = ordering.get_boundaries(context.br())
+def test_range_scheme_get_boundaries(context: Context) -> None:
+    scheme = _two_key_range_scheme(context)
+    partition_ordering = scheme.partition_orderings[0]
+    chunk = partition_ordering.get_boundaries(context.br())
     assert chunk.table_view().num_columns() == 2
     assert chunk.table_view().num_rows() == 1
-    scheme2 = OrderScheme(
+    scheme2 = RangeScheme(
         [
-            Ordering(
-                ordering.keys,
+            PartitionOrdering(
+                partition_ordering.keys,
                 chunk,
-                strict_boundaries=ordering.strict_boundaries,
+                strict_boundaries=partition_ordering.strict_boundaries,
             )
         ]
     )
-    assert scheme2.orderings[0].boundaries_aligned_with(
-        scheme.orderings[0], context.br()
+    assert scheme2.partition_orderings[0].boundaries_aligned_with(
+        scheme.partition_orderings[0], context.br()
     )
 
 
-def test_ordering_with_keys(context: Context) -> None:
+def test_partition_ordering_with_keys(context: Context) -> None:
     """with_keys shares boundaries and updates column indices."""
-    o1 = _two_key_order_scheme(context)
-    ordering = o1.orderings[0]
+    o1 = _two_key_range_scheme(context)
+    partition_ordering = o1.partition_orderings[0]
     new_keys = [
         OrderKey(5, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),
         OrderKey(3, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER),
     ]
-    ordering2 = ordering.with_keys(new_keys)
+    ordering2 = partition_ordering.with_keys(new_keys)
     assert ordering2.keys[0].column_index == 5
     assert ordering2.keys[1].column_index == 3
-    assert ordering2.num_boundaries == ordering.num_boundaries
-    assert ordering2.strict_boundaries == ordering.strict_boundaries
-    assert ordering2.locally_ordered == ordering.locally_ordered
+    assert ordering2.num_boundaries == partition_ordering.num_boundaries
+    assert ordering2.strict_boundaries == partition_ordering.strict_boundaries
     # Schemes with different key indices but shared boundaries are boundary-aligned
-    assert ordering.boundaries_aligned_with(ordering2, context.br())
+    assert partition_ordering.boundaries_aligned_with(ordering2, context.br())
 
-
-def test_ordering_with_locally_ordered(context: Context) -> None:
-    """with_locally_ordered shares boundaries and updates local row-order metadata."""
-    ordering = _two_key_order_scheme(context).orderings[0]
-    unordered = ordering.with_locally_ordered(locally_ordered=False)
-    assert unordered.keys == ordering.keys
-    assert unordered.num_boundaries == ordering.num_boundaries
-    assert unordered.strict_boundaries == ordering.strict_boundaries
-    assert not unordered.locally_ordered
-    assert ordering.boundaries_aligned_with(unordered, context.br())
+    with pytest.raises(ValueError, match="preserve ordering semantics"):
+        partition_ordering.with_keys(
+            [
+                OrderKey(
+                    5, plc.types.Order.DESCENDING, plc.types.NullOrder.BEFORE
+                ),
+                new_keys[1],
+            ]
+        )
 
 
 @pytest.mark.parametrize(
@@ -287,33 +354,34 @@ def test_ordering_with_locally_ordered(context: Context) -> None:
         ([None], [None]),
     ],
 )
-def test_ordering_as_strict(
+def test_partition_ordering_with_strict_boundaries(
     context: Context,
     int_values: list[int | None],
     string_values: list[str | None],
 ) -> None:
-    """as_strict shares boundaries and marks them strict."""
-    ordering = _two_key_ordering_from_boundary_values(
+    """with_strict_boundaries shares boundaries and marks them strict."""
+    partition_ordering = _two_key_partition_ordering(
         context, int_values, string_values
     )
-    strict_ordering = ordering.as_strict()
-    strict_ordering2 = _two_key_ordering_from_boundary_values(
+    strict_ordering = partition_ordering.with_strict_boundaries()
+    strict_ordering2 = _two_key_partition_ordering(
         context,
         int_values,
         string_values,
         strict_boundaries=True,
     )
-    assert strict_ordering.keys == ordering.keys
-    assert strict_ordering.num_boundaries == ordering.num_boundaries
+    assert strict_ordering.keys == partition_ordering.keys
+    assert strict_ordering.num_boundaries == partition_ordering.num_boundaries
     assert strict_ordering.strict_boundaries
-    assert strict_ordering.locally_ordered == ordering.locally_ordered
-    assert not ordering.boundaries_aligned_with(strict_ordering, context.br())
+    assert not partition_ordering.boundaries_aligned_with(
+        strict_ordering, context.br()
+    )
     assert strict_ordering.boundaries_aligned_with(
         strict_ordering2, context.br()
     )
 
 
-def test_ordering_boundaries_aligned_with(context: Context) -> None:
+def test_partition_ordering_boundaries_aligned_with(context: Context) -> None:
     """Boundary comparison ignores key indices but checks values and ordering."""
     df = plc.Table(
         [
@@ -329,8 +397,8 @@ def test_ordering_boundaries_aligned_with(context: Context) -> None:
         OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),
         OrderKey(1, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER),
     ]
-    o1 = Ordering(keys, _make_boundaries(context, df))
-    o2 = Ordering(keys, _make_boundaries(context, df))
+    o1 = PartitionOrdering(keys, _make_boundaries(context, df))
+    o2 = PartitionOrdering(keys, _make_boundaries(context, df))
     assert o1.boundaries_aligned_with(o2, context.br())
 
     # Different key column indices but same boundary values → still aligned
@@ -338,7 +406,7 @@ def test_ordering_boundaries_aligned_with(context: Context) -> None:
         OrderKey(2, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),
         OrderKey(3, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER),
     ]
-    o_shifted = Ordering(shifted_keys, _make_boundaries(context, df))
+    o_shifted = PartitionOrdering(shifted_keys, _make_boundaries(context, df))
     assert o1.boundaries_aligned_with(o_shifted, context.br())
 
     # Different boundary values → not aligned (shape matches, values differ)
@@ -352,27 +420,20 @@ def test_ordering_boundaries_aligned_with(context: Context) -> None:
             ),
         ]
     )
-    o3 = Ordering(keys, _make_boundaries(context, df_diff))
+    o3 = PartitionOrdering(keys, _make_boundaries(context, df_diff))
     assert not o1.boundaries_aligned_with(o3, context.br())
 
     # Different strict_boundaries → not aligned
-    o_strict = Ordering(
+    o_strict = PartitionOrdering(
         keys,
         _make_boundaries(context, df),
         strict_boundaries=True,
     )
     assert not o1.boundaries_aligned_with(o_strict, context.br())
 
-    o_unordered = Ordering(
-        keys,
-        _make_boundaries(context, df),
-        locally_ordered=False,
-    )
-    assert o1.boundaries_aligned_with(o_unordered, context.br())
 
-
-def test_order_scheme_key_column_mismatch(context: Context) -> None:
-    """OrderScheme rejects key/column count mismatch."""
+def test_range_scheme_key_column_mismatch(context: Context) -> None:
+    """RangeScheme rejects key/column count mismatch."""
     boundaries = _make_boundaries(
         context,
         plc.Table(
@@ -384,9 +445,9 @@ def test_order_scheme_key_column_mismatch(context: Context) -> None:
         ),
     )
     with pytest.raises(ValueError, match="keys must match"):
-        OrderScheme(
+        RangeScheme(
             [
-                Ordering(
+                PartitionOrdering(
                     [
                         OrderKey(
                             0,
@@ -425,20 +486,20 @@ def test_partitioning_scenarios(context: Context) -> None:
     assert p_twostage.local == HashScheme((0,), 8)
 
     # Order-based partitioning (range partitioned / sorted)
-    order_scheme = _two_key_order_scheme(context)
-    p_ordered = Partitioning(order_scheme, "inherit")
-    assert isinstance(p_ordered.inter_rank, OrderScheme)
-    assert p_ordered.inter_rank.orderings[0].boundaries_aligned_with(
-        order_scheme.orderings[0], context.br()
+    range_scheme = _two_key_range_scheme(context)
+    p_ordered = Partitioning(range_scheme, "inherit")
+    assert isinstance(p_ordered.inter_rank, RangeScheme)
+    assert p_ordered.inter_rank.partition_orderings[0].boundaries_aligned_with(
+        range_scheme.partition_orderings[0], context.br()
     )
     assert p_ordered.local == "inherit"
 
     # Mixed: inter_rank=Order, local=Hash
     p_mixed = Partitioning(
-        _two_key_order_scheme(context),
+        _two_key_range_scheme(context),
         HashScheme((1,), 8),
     )
-    assert isinstance(p_mixed.inter_rank, OrderScheme)
+    assert isinstance(p_mixed.inter_rank, RangeScheme)
     assert isinstance(p_mixed.local, HashScheme)
 
     # Repr
@@ -455,6 +516,7 @@ def test_channel_metadata() -> None:
     # Basic construction
     m = ChannelMetadata(local_count=4)
     assert m.local_count == 4
+    assert m.row_orderings == ()
     assert not m.duplicated
 
     # With partitioning and duplicated
@@ -463,6 +525,14 @@ def test_channel_metadata() -> None:
     assert m_full.partitioning.inter_rank == HashScheme((0,), 16)
     assert m_full.partitioning.local == "inherit"
     assert m_full.duplicated
+
+    key = OrderKey(1, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
+    row_ordering = RowOrdering(
+        [key], RowOrderingScope.RANK_LOCAL, group_keys=(0,)
+    )
+    m_ordered = ChannelMetadata(local_count=4, row_orderings=(row_ordering,))
+    assert m_ordered.row_orderings == (row_ordering,)
+    assert "row_orderings" in repr(m_ordered)
 
     # Field comparisons (ChannelMetadata.__eq__ removed)
     m2 = ChannelMetadata(local_count=4)
@@ -476,24 +546,41 @@ def test_channel_metadata() -> None:
         ChannelMetadata(local_count=-1)
 
 
-def test_message_roundtrip() -> None:
-    """Test ChannelMetadata can round-trip through Message."""
+def test_message_roundtrip(context: Context) -> None:
+    """Test ChannelMetadata can be copied and moved through Message."""
+    key = OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
+    row_ordering = RowOrdering([key], RowOrderingScope.GLOBAL)
     m = ChannelMetadata(
         local_count=4,
         partitioning=Partitioning(HashScheme((0,), 16), "inherit"),
+        row_orderings=(row_ordering,),
         duplicated=True,
     )
     msg_m = Message(99, m)
     assert msg_m.sequence_number == 99
+
+    assert msg_m.copy_cost() == 0
+    reservation, _ = context.br().reserve(
+        MemoryType.DEVICE, 0, allow_overbooking=True
+    )
+    msg_copy = msg_m.copy(reservation)
+    copied_m = ChannelMetadata.from_message(msg_copy)
+    assert copied_m.local_count == 4
+    assert copied_m.duplicated
+    assert copied_m.partitioning.inter_rank == HashScheme((0,), 16)
+    assert copied_m.row_orderings == (row_ordering,)
+    assert not msg_m.empty()
+
     got_m = ChannelMetadata.from_message(msg_m)
     assert got_m.local_count == 4
     assert got_m.duplicated
     assert got_m.partitioning.inter_rank == HashScheme((0,), 16)
+    assert got_m.row_orderings == (row_ordering,)
     assert msg_m.empty()
 
 
-def test_message_roundtrip_with_order_scheme(context: Context) -> None:
-    """Test ChannelMetadata with OrderScheme can round-trip through Message."""
+def test_message_roundtrip_with_range_scheme(context: Context) -> None:
+    """Test ChannelMetadata with RangeScheme can round-trip through Message."""
     table = plc.Table(
         [
             plc.Column.from_iterable_of_py(
@@ -505,30 +592,23 @@ def test_message_roundtrip_with_order_scheme(context: Context) -> None:
         ]
     )
     boundaries = _make_boundaries(context, table)
-    order_scheme = OrderScheme(
+    keys = (
+        OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),
+        OrderKey(1, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER),
+    )
+    range_scheme = RangeScheme(
         [
-            Ordering(
-                [
-                    OrderKey(
-                        0,
-                        plc.types.Order.ASCENDING,
-                        plc.types.NullOrder.BEFORE,
-                    ),
-                    OrderKey(
-                        1,
-                        plc.types.Order.DESCENDING,
-                        plc.types.NullOrder.AFTER,
-                    ),
-                ],
+            PartitionOrdering(
+                keys,
                 boundaries,
                 strict_boundaries=True,
-                locally_ordered=False,
             )
         ]
     )
     m = ChannelMetadata(
         local_count=8,
-        partitioning=Partitioning(order_scheme, "inherit"),
+        partitioning=Partitioning(range_scheme, "inherit"),
+        row_orderings=(RowOrdering(keys, RowOrderingScope.GLOBAL),),
         duplicated=True,
     )
     msg_m = Message(42, m)
@@ -536,35 +616,34 @@ def test_message_roundtrip_with_order_scheme(context: Context) -> None:
     got_m = ChannelMetadata.from_message(msg_m)
     assert got_m.local_count == 8
     assert got_m.duplicated
-    assert isinstance(got_m.partitioning.inter_rank, OrderScheme)
-    ordering = got_m.partitioning.inter_rank.orderings[0]
-    assert ordering.keys == (
-        OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),
-        OrderKey(1, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER),
-    )
+    assert isinstance(got_m.partitioning.inter_rank, RangeScheme)
+    partition_ordering = got_m.partitioning.inter_rank.partition_orderings[0]
+    assert partition_ordering.keys == keys
     assert got_m.partitioning.local == "inherit"
-    assert ordering.strict_boundaries
-    assert not ordering.locally_ordered
-    assert ordering.num_boundaries == 2
-    assert got_m.partitioning.inter_rank.orderings[0].boundaries_aligned_with(
-        order_scheme.orderings[0], context.br()
+    assert partition_ordering.strict_boundaries
+    assert partition_ordering.num_boundaries == 2
+    assert got_m.row_orderings == (RowOrdering(keys, RowOrderingScope.GLOBAL),)
+    assert got_m.partitioning.inter_rank.partition_orderings[
+        0
+    ].boundaries_aligned_with(
+        range_scheme.partition_orderings[0], context.br()
     )
     assert msg_m.empty()
 
 
-def test_order_scheme_roundtrip_from_metadata(context: Context) -> None:
-    """An OrderScheme read back from ChannelMetadata can be re-used in a new Partitioning."""
+def test_range_scheme_roundtrip_from_metadata(context: Context) -> None:
+    """A range scheme read from metadata can be used in new partitioning."""
     src = ChannelMetadata(
         local_count=1,
-        partitioning=Partitioning(_two_key_order_scheme(context), "inherit"),
+        partitioning=Partitioning(_two_key_range_scheme(context), "inherit"),
     )
     scheme = src.partitioning.inter_rank
-    assert isinstance(scheme, OrderScheme)
+    assert isinstance(scheme, RangeScheme)
 
     p2 = Partitioning(scheme, None)
-    assert isinstance(p2.inter_rank, OrderScheme)
-    assert p2.inter_rank.orderings[0].boundaries_aligned_with(
-        _two_key_order_scheme(context).orderings[0], context.br()
+    assert isinstance(p2.inter_rank, RangeScheme)
+    assert p2.inter_rank.partition_orderings[0].boundaries_aligned_with(
+        _two_key_range_scheme(context).partition_orderings[0], context.br()
     )
 
 
@@ -583,6 +662,9 @@ def test_access_after_move_raises() -> None:
 
     with pytest.raises(ValueError, match="uninitialized"):
         _ = m.partitioning
+
+    with pytest.raises(ValueError, match="uninitialized"):
+        _ = m.row_orderings
 
     with pytest.raises(ValueError, match="uninitialized"):
         _ = m.duplicated

@@ -14,7 +14,7 @@ import polars as pl
 import pylibcudf as plc
 from cudf_streaming.channel_metadata import (
     OrderKey,
-    Ordering,
+    PartitionOrdering,
 )
 from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.streaming.core.message import Message
@@ -54,9 +54,8 @@ def _make_ordering(
     order: plc.types.Order = plc.types.Order.ASCENDING,
     null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
     strict: bool = True,
-    locally_ordered: bool = True,
     stream: Stream,
-) -> Ordering:
+) -> PartitionOrdering:
     boundary_rows: list[_Boundary] = (
         boundary if isinstance(boundary, list) else [boundary]
     )
@@ -72,7 +71,7 @@ def _make_ordering(
         ),
         stream,
     )
-    return Ordering(
+    return PartitionOrdering(
         [
             OrderKey(
                 index,
@@ -88,7 +87,6 @@ def _make_ordering(
             br=context.br(),
         ),
         strict_boundaries=strict,
-        locally_ordered=locally_ordered,
     )
 
 
@@ -118,10 +116,11 @@ async def _adjust_and_collect(
     context: Context,
     comm: Communicator,
     input_df: pl.DataFrame | list[pl.DataFrame],
-    input_ordering: Ordering,
-    output_ordering: Ordering,
+    input_ordering: PartitionOrdering,
+    output_ordering: PartitionOrdering,
     *,
     collective_id: int,
+    input_rows_ordered: bool = True,
 ) -> dict[int, pl.DataFrame]:
     """Run adjustment and collect output chunks by partition ID."""
     ch_in = context.create_channel()
@@ -169,6 +168,7 @@ async def _adjust_and_collect(
                 input_ordering,
                 output_ordering,
                 collective_id=collective_id,
+                input_rows_ordered=input_rows_ordered,
             ),
             _consume(),
         )
@@ -189,8 +189,8 @@ def _assert_partition_output(
 async def _adjust_direct(
     context: Context,
     comm: Communicator,
-    input_ordering: Ordering,
-    output_ordering: Ordering,
+    input_ordering: PartitionOrdering,
+    output_ordering: PartitionOrdering,
     *,
     collective_id: int,
 ) -> None:
@@ -210,6 +210,7 @@ async def _adjust_direct(
             input_ordering,
             output_ordering,
             collective_id=collective_id,
+            input_rows_ordered=True,
         )
 
 
@@ -545,12 +546,7 @@ def test_adjust_ordering_locally_sorts_unordered_input(
         pytest.skip("This test covers local chunk sorting.")
 
     stream = context.br().stream_pool.get_stream()
-    input_ordering = _make_ordering(
-        context,
-        4,
-        locally_ordered=False,
-        stream=stream,
-    )
+    input_ordering = _make_ordering(context, 4, stream=stream)
     output_ordering = _make_ordering(context, 4, stream=stream)
     with reserve_op_id() as op_id:
         output = asyncio.run(
@@ -561,6 +557,7 @@ def test_adjust_ordering_locally_sorts_unordered_input(
                 input_ordering,
                 output_ordering,
                 collective_id=op_id,
+                input_rows_ordered=False,
             )
         )
 
@@ -577,12 +574,7 @@ def test_adjust_ordering_concatenates_locally_unordered_chunks(
         pytest.skip("This test covers local chunk sorting.")
 
     stream = context.br().stream_pool.get_stream()
-    input_ordering = _make_ordering(
-        context,
-        [2, 4, 6],
-        locally_ordered=False,
-        stream=stream,
-    )
+    input_ordering = _make_ordering(context, [2, 4, 6], stream=stream)
     output_ordering = _make_ordering(context, 4, stream=stream)
     with reserve_op_id() as op_id:
         output = asyncio.run(
@@ -593,6 +585,7 @@ def test_adjust_ordering_concatenates_locally_unordered_chunks(
                 input_ordering,
                 output_ordering,
                 collective_id=op_id,
+                input_rows_ordered=False,
             )
         )
 

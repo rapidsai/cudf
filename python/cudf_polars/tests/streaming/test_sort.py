@@ -11,7 +11,7 @@ import pytest
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.channel_metadata import OrderKey, OrderScheme
+from cudf_streaming.channel_metadata import OrderKey, RangeScheme
 from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.streaming.core.message import Message
 
@@ -20,7 +20,7 @@ from cudf_polars.dsl.ir import Empty, IRExecutionContext
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.collectives.ordering import (
-    extract_orderscheme_partitioning,
+    extract_range_partitioning,
 )
 from cudf_polars.streaming.actor_graph.utils import gather_in_task_group
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -190,7 +190,7 @@ async def _send_frames(context, ch, frames) -> None:
     await ch.drain(context)
 
 
-def _run_extract_orderscheme_partitioning(
+def _run_extract_range_partitioning(
     spmd_engine,
     schema_ir,
     order_keys,
@@ -210,7 +210,7 @@ def _run_extract_orderscheme_partitioning(
             )
             _, result = await gather_in_task_group(
                 _send_frames(context, ch, frames),
-                extract_orderscheme_partitioning(
+                extract_range_partitioning(
                     context, comm, schema_ir, ir_context, ch, order_keys, op_id
                 ),
             )
@@ -256,8 +256,8 @@ def _only_ordering(partitioning, order_keys):
     assert partitioning is not None
     assert partitioning.local == "inherit"
     inter_rank = partitioning.inter_rank
-    assert isinstance(inter_rank, OrderScheme)
-    (ordering,) = inter_rank.orderings
+    assert isinstance(inter_rank, RangeScheme)
+    (ordering,) = inter_rank.partition_orderings
     assert ordering.keys == tuple(order_keys)
     return ordering
 
@@ -275,7 +275,7 @@ def _boundary_values(context, ordering, name: str = "key") -> list[object]:
 
 @pytest.mark.spmd
 @pytest.mark.parametrize("n_chunks", [2, 4])
-def test_extract_orderscheme_partitioning(spmd_engine, n_chunks) -> None:
+def test_extract_range_partitioning(spmd_engine, n_chunks) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
 
@@ -289,9 +289,7 @@ def test_extract_orderscheme_partitioning(spmd_engine, n_chunks) -> None:
         for start in [key_start + i * n_rows]
     ]
 
-    result = _run_extract_orderscheme_partitioning(
-        spmd_engine, schema_ir, order_keys, frames
-    )
+    result = _run_extract_range_partitioning(spmd_engine, schema_ir, order_keys, frames)
 
     assert len(result.chunks) == n_chunks
     ordering = _only_ordering(result.partitioning, order_keys)
@@ -308,7 +306,7 @@ def test_extract_orderscheme_partitioning(spmd_engine, n_chunks) -> None:
 
 
 @pytest.mark.spmd
-def test_extract_orderscheme_partitioning_projects_order_keys(spmd_engine) -> None:
+def test_extract_range_partitioning_projects_order_keys(spmd_engine) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
 
@@ -331,9 +329,7 @@ def test_extract_orderscheme_partitioning_projects_order_keys(spmd_engine) -> No
         for start in [key_start + i * n_rows]
     ]
 
-    result = _run_extract_orderscheme_partitioning(
-        spmd_engine, schema_ir, order_keys, frames
-    )
+    result = _run_extract_range_partitioning(spmd_engine, schema_ir, order_keys, frames)
 
     assert len(result.chunks) == n_chunks
     ordering = _only_ordering(result.partitioning, order_keys)
@@ -357,12 +353,12 @@ def test_extract_orderscheme_partitioning_projects_order_keys(spmd_engine) -> No
 
 
 @pytest.mark.spmd
-def test_extract_orderscheme_partitioning_unsorted(spmd_engine) -> None:
+def test_extract_range_partitioning_unsorted(spmd_engine) -> None:
     context = spmd_engine.context
 
     order_keys = [OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)]
     schema_ir = Empty({"key": DataType(pl.Int32())})
-    result = _run_extract_orderscheme_partitioning(
+    result = _run_extract_range_partitioning(
         spmd_engine,
         schema_ir,
         order_keys,
@@ -378,7 +374,7 @@ def test_extract_orderscheme_partitioning_unsorted(spmd_engine) -> None:
 
 
 @pytest.mark.spmd
-def test_extract_orderscheme_partitioning_single_chunk(spmd_engine) -> None:
+def test_extract_range_partitioning_single_chunk(spmd_engine) -> None:
     """One chunk on a single rank → num_partitions == 1 < 2 → None."""
     context = spmd_engine.context
     comm = spmd_engine.comm
@@ -388,7 +384,7 @@ def test_extract_orderscheme_partitioning_single_chunk(spmd_engine) -> None:
 
     order_keys = [OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)]
     schema_ir = Empty({"key": DataType(pl.Int32())})
-    result = _run_extract_orderscheme_partitioning(
+    result = _run_extract_range_partitioning(
         spmd_engine, schema_ir, order_keys, [_key_frame(range(4))]
     )
 
@@ -400,7 +396,7 @@ def test_extract_orderscheme_partitioning_single_chunk(spmd_engine) -> None:
 
 
 @pytest.mark.spmd
-def test_extract_orderscheme_partitioning_preserves_empty_replay_chunks(
+def test_extract_range_partitioning_preserves_empty_replay_chunks(
     spmd_engine,
 ) -> None:
     """Empty chunks are replayed but excluded from boundary extraction."""
@@ -411,7 +407,7 @@ def test_extract_orderscheme_partitioning_preserves_empty_replay_chunks(
     key_start = comm.rank * 2 * n_rows
     order_keys = [OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)]
     schema_ir = Empty({"key": DataType(pl.Int32())})
-    result = _run_extract_orderscheme_partitioning(
+    result = _run_extract_range_partitioning(
         spmd_engine,
         schema_ir,
         order_keys,
@@ -435,13 +431,13 @@ def test_extract_orderscheme_partitioning_preserves_empty_replay_chunks(
 
 
 @pytest.mark.spmd
-def test_extract_orderscheme_partitioning_all_empty(spmd_engine) -> None:
+def test_extract_range_partitioning_all_empty(spmd_engine) -> None:
     """All-empty input is replayed without extracted partitioning."""
     context = spmd_engine.context
     order_keys = [OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)]
     schema_ir = Empty({"key": DataType(pl.Int32())})
 
-    result = _run_extract_orderscheme_partitioning(
+    result = _run_extract_range_partitioning(
         spmd_engine,
         schema_ir,
         order_keys,
@@ -457,7 +453,7 @@ def test_extract_orderscheme_partitioning_all_empty(spmd_engine) -> None:
 
 
 @pytest.mark.spmd
-def test_extract_orderscheme_partitioning_descending(spmd_engine) -> None:
+def test_extract_range_partitioning_descending(spmd_engine) -> None:
     """Boundary values and strictness are correct for descending sort order."""
     context = spmd_engine.context
     comm = spmd_engine.comm
@@ -470,7 +466,7 @@ def test_extract_orderscheme_partitioning_descending(spmd_engine) -> None:
     order_keys = [OrderKey(0, plc.types.Order.DESCENDING, plc.types.NullOrder.AFTER)]
     schema_ir = Empty({"key": DataType(pl.Int32())})
 
-    result = _run_extract_orderscheme_partitioning(
+    result = _run_extract_range_partitioning(
         spmd_engine,
         schema_ir,
         order_keys,

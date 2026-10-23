@@ -66,6 +66,7 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
 )
+from cudf_polars.streaming.actor_graph.ordering import remap_row_orderings
 from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
@@ -432,6 +433,7 @@ async def _allgather_and_broadcast(
             ir, metadata_in.partitioning, context=context
         ),
         duplicated=metadata_in.duplicated,
+        row_orderings=remap_row_orderings(ir, metadata_in.row_orderings),
     )
     await send_metadata(ch_out, context, metadata_out)
 
@@ -647,6 +649,7 @@ async def _shuffle_and_reassemble(
             ir, metadata_in.partitioning, context=context
         ),
         duplicated=False,
+        row_orderings=remap_row_orderings(ir, metadata_in.row_orderings),
     )
     await send_metadata(ch_out, context, metadata_out)
 
@@ -787,6 +790,7 @@ async def over_actor(
                     ir, metadata_in.partitioning, context=context
                 ),
                 duplicated=metadata_in.duplicated,
+                row_orderings=remap_row_orderings(ir, metadata_in.row_orderings),
             )
             await chunkwise_evaluate(
                 context,

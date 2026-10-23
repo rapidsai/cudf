@@ -20,10 +20,12 @@ from cudf_streaming.bloom_filter import BloomFilter
 from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
-    Ordering,
     OrderKey,
-    OrderScheme,
     Partitioning,
+    PartitionOrdering,
+    RangeScheme,
+    RowOrdering,
+    RowOrderingScope,
 )
 from cudf_streaming.partition import (
     partition_and_pack as actor_partition_and_pack,
@@ -50,9 +52,11 @@ __all__ = [
     "ChannelMetadata",
     "HashScheme",
     "OrderKey",
-    "OrderScheme",
-    "Ordering",
+    "PartitionOrdering",
     "Partitioning",
+    "RangeScheme",
+    "RowOrdering",
+    "RowOrderingScope",
     "TableChunk",
     "actor_partition_and_pack",
     "actor_unpack_and_concat",

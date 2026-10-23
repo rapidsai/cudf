@@ -14,6 +14,7 @@ from cudf_polars.dsl.ir import (
     Distinct,
     Filter,
     GroupBy,
+    HConcat,
     HStack,
     Join,
     Projection,
@@ -99,6 +100,16 @@ def _(node: HStack) -> Mapping[str, ColumnBinding]:
         item.name: ColumnBinding(0, item.value.name)
         for item in node.columns
         if isinstance(item.value, expr.Col)
+    }
+
+
+@column_domain_bindings.register(HConcat)
+def _(node: HConcat) -> Mapping[str, ColumnBinding]:
+    return {
+        name: ColumnBinding(child_index, name)
+        for child_index, child in enumerate(node.children)
+        for name in child.schema
+        if name in node.schema
     }
 
 

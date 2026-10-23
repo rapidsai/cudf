@@ -26,6 +26,7 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
 )
+from cudf_polars.streaming.actor_graph.ordering import remap_row_orderings
 from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
@@ -290,6 +291,7 @@ async def rolling_actor(
                     context=context,
                 ),
                 duplicated=metadata_in.duplicated,
+                row_orderings=remap_row_orderings(ir, metadata_in.row_orderings),
             ),
         )
         if tracer is not None and metadata_in.duplicated:

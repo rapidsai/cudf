@@ -5,12 +5,18 @@
 from __future__ import annotations
 
 import math
+from functools import partial
 from typing import TYPE_CHECKING
 
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.channel_metadata import ChannelMetadata, Partitioning
+from cudf_streaming.channel_metadata import (
+    ChannelMetadata,
+    Partitioning,
+    RowOrdering,
+    RowOrderingScope,
+)
 from cudf_streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
@@ -26,7 +32,7 @@ from cudf_polars.dsl.utils.naming import names_to_indices, unique_names
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
 from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.actor_graph.collectives.sort_utils import (
-    build_order_scheme,
+    build_range_scheme,
     compute_sort_boundaries,
     find_sort_splits,
     select_local_split_candidates,
@@ -41,6 +47,7 @@ from cudf_polars.streaming.actor_graph.nodes import (
     default_node_single,
     shutdown_on_error,
 )
+from cudf_polars.streaming.actor_graph.ordering import satisfies_row_ordering
 from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
@@ -49,7 +56,6 @@ from cudf_polars.streaming.actor_graph.utils import (
     _sample_chunks,
     allgather_reduce,
     chunk_to_frame,
-    chunkwise_evaluate,
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
@@ -66,7 +72,7 @@ from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from cudf_streaming.channel_metadata import OrderKey, Ordering
+    from cudf_streaming.channel_metadata import OrderKey, PartitionOrdering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
@@ -94,7 +100,17 @@ async def _simple_top_or_bottom_k(
     await send_metadata(
         ch_out,
         context,
-        ChannelMetadata(local_count=1, partitioning=None, duplicated=True),
+        ChannelMetadata(
+            local_count=1,
+            partitioning=None,
+            duplicated=True,
+            row_orderings=(
+                RowOrdering(
+                    sort_to_order_keys(ir),
+                    RowOrderingScope.GLOBAL,
+                ),
+            ),
+        ),
     )
 
     chunks: list[TableChunk] = []
@@ -377,15 +393,35 @@ async def _extract_partitions_and_send(
 
 
 def _can_sort_chunkwise(
-    ordering: Ordering | None, order_keys: Sequence[OrderKey]
+    ordering: PartitionOrdering | None,
+    order_keys: Sequence[OrderKey],
+    metadata: ChannelMetadata,
+    nranks: int,
 ) -> bool:
     """Return true when ordering avoids a global sort."""
     if ordering is None:
         return False
     keys = tuple(ordering.keys)
-    return keys == tuple(order_keys[: len(keys)]) and (
-        len(keys) == len(order_keys) or ordering.strict_boundaries
+    return (
+        keys == tuple(order_keys[: len(keys)])
+        and (len(keys) == len(order_keys) or ordering.strict_boundaries)
+        and satisfies_row_ordering(
+            metadata,
+            RowOrdering(tuple(order_keys), RowOrderingScope.RANK_LOCAL),
+            nranks=nranks,
+        )
     )
+
+
+def _sort_row_orderings(
+    ir: Sort, child_metadatas: Sequence[ChannelMetadata]
+) -> tuple[RowOrdering, ...]:
+    """Return the ordering established by a single-partition sort."""
+    (metadata,) = child_metadatas
+    scope = (
+        RowOrderingScope.GLOBAL if metadata.duplicated else RowOrderingScope.RANK_LOCAL
+    )
+    return (RowOrdering(sort_to_order_keys(ir), scope),)
 
 
 async def _global_sort(
@@ -407,9 +443,10 @@ async def _global_sort(
     output_metadata = ChannelMetadata(
         local_count=max(1, num_partitions // comm.nranks),
         partitioning=Partitioning(
-            build_order_scheme(context, sort_to_order_keys(ir), sort_boundaries_df),
+            build_range_scheme(context, sort_to_order_keys(ir), sort_boundaries_df),
             "inherit",
         ),
+        row_orderings=(RowOrdering(sort_to_order_keys(ir), RowOrderingScope.GLOBAL),),
     )
     await send_metadata(ch_out, context, output_metadata)
 
@@ -462,7 +499,7 @@ async def sort_actor(
     ) as actor_scope:
         tracer = actor_scope.tracer
         ir_context = actor_scope.require_ir_context()
-        # TODO: Skip sort if OrderScheme metadata is present and compatible.
+        # TODO: Skip sort if RangeScheme metadata is present and compatible.
         metadata_in = await recv_metadata(ch_in, context)
 
         if ir.zlice is not None:
@@ -489,18 +526,19 @@ async def sort_actor(
         ordering = partitioning.get_ordering(
             level="local" if metadata_in.duplicated else "flat"
         )
-        if _can_sort_chunkwise(ordering, order_keys):
+        if _can_sort_chunkwise(ordering, order_keys, metadata_in, comm.nranks):
             if tracer is not None:
                 tracer.decision = "already_sorted"
-            await chunkwise_evaluate(
-                context,
-                ir,
-                ir_context,
-                ch_out,
-                ch_in,
-                metadata_in,
-                tracer=tracer,
-            )
+            await send_metadata(ch_out, context, metadata_in)
+            while (msg := await ch_in.recv(context)) is not None:
+                await send_chunk(
+                    context,
+                    ch_out,
+                    TableChunk.from_message(msg, br=context.br()),
+                    msg.sequence_number,
+                    tracer=tracer,
+                )
+            await ch_out.drain(context)
             return
 
         sampled_chunks, num_partitions = await _sample_chunks_for_size_estimate(
@@ -580,6 +618,7 @@ def _sort_rapidsmpf_network(ir: Sort, rec: SubNetGenerator) -> tuple[dict, dict]
                 ir_context,
                 channels[ir].reserve_input_slot(),
                 channels[ir.children[0]].reserve_output_slot(),
+                row_ordering_callback=partial(_sort_row_orderings, ir),
             )
         ]
         return nodes, channels

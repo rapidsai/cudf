@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.channel_metadata import OrderKey, OrderScheme, Ordering
+from cudf_streaming.channel_metadata import OrderKey, PartitionOrdering, RangeScheme
 from cudf_streaming.table_chunk import TableChunk
 
 from cudf_polars.containers import Column, DataFrame, DataType
@@ -430,13 +430,13 @@ def sort_to_order_keys(ir: Sort) -> list[OrderKey]:
     ]
 
 
-def build_order_scheme(
+def build_range_scheme(
     context: Context,
     order_keys: list[OrderKey],
     sort_boundaries_df: DataFrame,
-) -> OrderScheme:
+) -> RangeScheme:
     """
-    Build the ``OrderScheme`` metadata describing a range-partitioned sort output.
+    Build the ``RangeScheme`` metadata describing a range-partitioned sort output.
 
     Parameters
     ----------
@@ -451,7 +451,7 @@ def build_order_scheme(
 
     Returns
     -------
-    A single-``Ordering`` scheme over the boundary keys, with strict boundaries
+    A single-``PartitionOrdering`` scheme over the boundary keys, with strict boundaries
     when there are no boundaries or no two boundaries share the same key.
     """
     n_keys = len(order_keys)
@@ -477,6 +477,10 @@ def build_order_scheme(
     boundaries_chunk = TableChunk.from_pylibcudf_table(
         by_table, stream, exclusive_view=False, br=context.br()
     )
-    return OrderScheme(
-        [Ordering(order_keys, boundaries_chunk, strict_boundaries=strict_boundaries)]
+    return RangeScheme(
+        [
+            PartitionOrdering(
+                order_keys, boundaries_chunk, strict_boundaries=strict_boundaries
+            )
+        ]
     )

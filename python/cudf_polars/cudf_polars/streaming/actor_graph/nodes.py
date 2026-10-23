@@ -24,14 +24,17 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
 )
-from cudf_polars.streaming.actor_graph.hconcat import build_hconcat_partitioning
+from cudf_polars.streaming.actor_graph.hconcat import (
+    build_hconcat_partitioning,
+    build_hconcat_row_orderings,
+)
+from cudf_polars.streaming.actor_graph.ordering import remap_row_orderings
 from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     _leading_order_keys,
     chunk_to_frame,
     chunkwise_evaluate,
-    clear_local_ordering,
     empty_table_chunk,
     gather_in_task_group,
     make_spill_function,
@@ -45,7 +48,7 @@ from cudf_polars.streaming.actor_graph.utils import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from cudf_streaming.channel_metadata import Partitioning
+    from cudf_streaming.channel_metadata import Partitioning, RowOrdering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
@@ -58,6 +61,10 @@ if TYPE_CHECKING:
         [Sequence[ChannelMetadata], Context],
         Partitioning | None,
     ]
+    type RowOrderingCallback = Callable[
+        [Sequence[ChannelMetadata]],
+        tuple[RowOrdering, ...],
+    ]
 
 
 @define_actor()
@@ -67,6 +74,8 @@ async def default_node_single(
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
+    *,
+    row_ordering_callback: RowOrderingCallback | None = None,
 ) -> None:
     """
     Single-channel default node for rapidsmpf.
@@ -83,6 +92,8 @@ async def default_node_single(
         The output Channel[TableChunk].
     ch_in
         The input Channel[TableChunk].
+    row_ordering_callback
+        Optional callback for building output row ordering from child metadata.
 
     Notes
     -----
@@ -102,12 +113,15 @@ async def default_node_single(
         partitioning = maybe_remap_partitioning(
             ir, metadata_in.partitioning, context=context
         )
-        if not ir.preserves_output_order:
-            partitioning = clear_local_ordering(partitioning)
         metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
             partitioning=partitioning,
             duplicated=metadata_in.duplicated,
+            row_orderings=(
+                row_ordering_callback((metadata_in,))
+                if row_ordering_callback is not None
+                else remap_row_orderings(ir, metadata_in.row_orderings)
+            ),
         )
         # Process chunks (handle empty input for aggregation-like operations)
         await chunkwise_evaluate(
@@ -132,6 +146,7 @@ async def default_node_multi(
     chs_in: tuple[Channel[TableChunk], ...],
     *,
     partitioning_callback: PartitioningCallback | None = None,
+    row_ordering_callback: RowOrderingCallback | None = None,
 ) -> None:
     """
     Pointwise node for rapidsmpf.
@@ -151,6 +166,9 @@ async def default_node_multi(
     partitioning_callback
         Optional callback for building output partitioning from child metadata.
         When None, no partitioning metadata is preserved.
+    row_ordering_callback
+        Optional callback for building output row ordering from child metadata.
+        When None, no row ordering metadata is preserved.
     """
     async with shutdown_on_error(
         context,
@@ -179,10 +197,16 @@ async def default_node_multi(
             duplicated = duplicated and md_child.duplicated
         if partitioning_callback is not None:
             partitioning = partitioning_callback(child_metadatas, context)
+        row_orderings = (
+            row_ordering_callback(child_metadatas)
+            if row_ordering_callback is not None
+            else ()
+        )
         metadata = ChannelMetadata(
             local_count=local_count,
             partitioning=partitioning,
             duplicated=duplicated,
+            row_orderings=row_orderings,
         )
         await send_metadata(ch_out, context, metadata)
         if tracer is not None and duplicated:
@@ -596,6 +620,11 @@ def _(
                 tuple(channels[c].reserve_output_slot() for c in ir.children),
                 partitioning_callback=(
                     partial(build_hconcat_partitioning, ir)
+                    if isinstance(ir, HConcat) and ir.streaming_safe
+                    else None
+                ),
+                row_ordering_callback=(
+                    partial(build_hconcat_row_orderings, ir)
                     if isinstance(ir, HConcat) and ir.streaming_safe
                     else None
                 ),

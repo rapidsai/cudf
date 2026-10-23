@@ -18,51 +18,168 @@
 #include <algorithm>
 #include <memory>
 #include <stdexcept>
+#include <unordered_set>
 #include <utility>
 
 namespace cudf_streaming {
 namespace {
 
-void validate_ordering(ordering const& ordering)
+void validate_order_key(order_key const& key)
 {
   RAPIDSMPF_EXPECTS(
-    !ordering.keys.empty(), "ordering: keys must not be empty", std::invalid_argument);
+    key.column_index >= 0, "order_key: column index must be non-negative", std::invalid_argument);
+  RAPIDSMPF_EXPECTS(key.order == cudf::order::ASCENDING || key.order == cudf::order::DESCENDING,
+                    "order_key: invalid sort order",
+                    std::invalid_argument);
   RAPIDSMPF_EXPECTS(
-    ordering.boundaries != nullptr, "ordering: boundaries must not be null", std::invalid_argument);
+    key.null_order == cudf::null_order::BEFORE || key.null_order == cudf::null_order::AFTER,
+    "order_key: invalid null order",
+    std::invalid_argument);
+}
+
+void validate_hash_scheme(hash_scheme const& scheme)
+{
+  RAPIDSMPF_EXPECTS(!scheme.column_indices.empty(),
+                    "hash_scheme: columns must not be empty",
+                    std::invalid_argument);
+  RAPIDSMPF_EXPECTS(
+    scheme.modulus > 0, "hash_scheme: modulus must be positive", std::invalid_argument);
+  std::unordered_set<cudf::size_type> columns;
+  for (auto const index : scheme.column_indices) {
+    RAPIDSMPF_EXPECTS(
+      index >= 0, "hash_scheme: column indices must be non-negative", std::invalid_argument);
+    RAPIDSMPF_EXPECTS(columns.insert(index).second,
+                      "hash_scheme: column indices must be unique",
+                      std::invalid_argument);
+  }
+}
+
+void validate_partition_ordering(partition_ordering const& ordering)
+{
+  RAPIDSMPF_EXPECTS(
+    !ordering.keys.empty(), "partition_ordering: keys must not be empty", std::invalid_argument);
+  RAPIDSMPF_EXPECTS(ordering.boundaries != nullptr,
+                    "partition_ordering: boundaries must not be null",
+                    std::invalid_argument);
   RAPIDSMPF_EXPECTS(ordering.boundaries->is_available(),
-                    "ordering: boundaries must be device-resident",
+                    "partition_ordering: boundaries must be device-resident",
                     std::invalid_argument);
   RAPIDSMPF_EXPECTS(
     ordering.keys.size() == static_cast<std::size_t>(ordering.boundaries->shape().second),
-    "ordering: number of keys must match number of boundary columns",
+    "partition_ordering: number of keys must match number of boundary columns",
     std::invalid_argument);
+  std::unordered_set<cudf::size_type> columns;
+  for (auto const& key : ordering.keys) {
+    validate_order_key(key);
+    RAPIDSMPF_EXPECTS(columns.insert(key.column_index).second,
+                      "partition_ordering: key column indices must be unique",
+                      std::invalid_argument);
+  }
+}
+
+void validate_range_scheme(range_scheme const& scheme)
+{
+  RAPIDSMPF_EXPECTS(!scheme.partition_orderings.empty(),
+                    "range_scheme: partition_orderings must not be empty",
+                    std::invalid_argument);
+  for (auto const& ordering : scheme.partition_orderings) {
+    validate_partition_ordering(ordering);
+  }
+}
+
+void validate_row_ordering(row_ordering const& ordering)
+{
+  RAPIDSMPF_EXPECTS(!ordering.order_keys.empty(),
+                    "row_ordering: order_keys must not be empty",
+                    std::invalid_argument);
+  RAPIDSMPF_EXPECTS(ordering.scope == row_ordering_scope::GLOBAL ||
+                      ordering.scope == row_ordering_scope::RANK_LOCAL,
+                    "row_ordering: invalid scope",
+                    std::invalid_argument);
+
+  RAPIDSMPF_EXPECTS(std::is_sorted(ordering.group_keys.begin(), ordering.group_keys.end()),
+                    "row_ordering: group key indices must be sorted",
+                    std::invalid_argument);
+  std::unordered_set<cudf::size_type> columns;
+  for (auto const index : ordering.group_keys) {
+    RAPIDSMPF_EXPECTS(
+      index >= 0, "row_ordering: group key indices must be non-negative", std::invalid_argument);
+    RAPIDSMPF_EXPECTS(columns.insert(index).second,
+                      "row_ordering: group key indices must be unique",
+                      std::invalid_argument);
+  }
+  for (auto const& key : ordering.order_keys) {
+    validate_order_key(key);
+    RAPIDSMPF_EXPECTS(columns.insert(key.column_index).second,
+                      "row_ordering: group and order key indices must be unique",
+                      std::invalid_argument);
+  }
+}
+
+void validate_channel_metadata(channel_metadata const& metadata)
+{
+  auto validate_spec = [](partitioning_spec const& spec) {
+    switch (spec.type) {
+      case partitioning_spec::type::NONE:
+      case partitioning_spec::type::INHERIT:
+        RAPIDSMPF_EXPECTS(!spec.hash.has_value() && !spec.range.has_value(),
+                          "partitioning_spec: NONE and INHERIT must not carry a scheme",
+                          std::invalid_argument);
+        break;
+      case partitioning_spec::type::HASH:
+        RAPIDSMPF_EXPECTS(spec.hash.has_value() && !spec.range.has_value(),
+                          "partitioning_spec: HASH requires only a hash scheme",
+                          std::invalid_argument);
+        validate_hash_scheme(*spec.hash);
+        break;
+      case partitioning_spec::type::RANGE:
+        RAPIDSMPF_EXPECTS(!spec.hash.has_value() && spec.range.has_value(),
+                          "partitioning_spec: RANGE requires only a range scheme",
+                          std::invalid_argument);
+        validate_range_scheme(*spec.range);
+        break;
+      default: throw std::invalid_argument("partitioning_spec: invalid type");
+    }
+  };
+  validate_spec(metadata.partitioning.inter_rank);
+  validate_spec(metadata.partitioning.local);
+  for (auto const& ordering : metadata.row_orderings) {
+    validate_row_ordering(ordering);
+  }
 }
 
 }  // namespace
 
-ordering::ordering(std::vector<order_key> keys,
-                   std::shared_ptr<table_chunk> boundaries,
-                   bool strict_boundaries,
-                   bool locally_ordered)
-  : keys{std::move(keys)},
-    boundaries{std::move(boundaries)},
-    strict_boundaries{strict_boundaries},
-    locally_ordered{locally_ordered}
+hash_scheme::hash_scheme(std::vector<cudf::size_type> column_indices, int modulus)
+  : column_indices{std::move(column_indices)}, modulus{modulus}
 {
-  validate_ordering(*this);
+  validate_hash_scheme(*this);
 }
 
-ordering ordering::with_keys(std::vector<order_key> new_keys) const
+partition_ordering::partition_ordering(std::vector<order_key> keys,
+                                       std::shared_ptr<table_chunk> boundaries,
+                                       bool strict_boundaries)
+  : keys{std::move(keys)}, boundaries{std::move(boundaries)}, strict_boundaries{strict_boundaries}
 {
-  return ordering{std::move(new_keys), boundaries, strict_boundaries, locally_ordered};
+  validate_partition_ordering(*this);
 }
 
-ordering ordering::with_locally_ordered(bool locally_ordered) const
+partition_ordering partition_ordering::with_keys(std::vector<order_key> new_keys) const
 {
-  return ordering{keys, boundaries, strict_boundaries, locally_ordered};
+  RAPIDSMPF_EXPECTS(new_keys.size() == keys.size(),
+                    "partition_ordering: replacement keys must preserve key count",
+                    std::invalid_argument);
+  for (std::size_t i = 0; i < keys.size(); ++i) {
+    RAPIDSMPF_EXPECTS(
+      new_keys[i].order == keys[i].order && new_keys[i].null_order == keys[i].null_order,
+      "partition_ordering: replacement keys must preserve ordering semantics",
+      std::invalid_argument);
+  }
+  return partition_ordering{std::move(new_keys), boundaries, strict_boundaries};
 }
 
-bool ordering::boundaries_aligned_with(ordering const& other, rapidsmpf::BufferResource& br) const
+bool partition_ordering::boundaries_aligned_with(partition_ordering const& other,
+                                                 rapidsmpf::BufferResource& br) const
 {
   if (strict_boundaries != other.strict_boundaries ||
       boundaries->shape() != other.boundaries->shape()) {
@@ -97,34 +214,51 @@ bool ordering::boundaries_aligned_with(ordering const& other, rapidsmpf::BufferR
   return true;
 }
 
-order_scheme::order_scheme(std::vector<order_key> keys,
-                           std::shared_ptr<table_chunk> boundaries,
-                           bool strict_boundaries,
-                           bool locally_ordered)
-  : order_scheme(std::vector<ordering>{
-      ordering{std::move(keys), std::move(boundaries), strict_boundaries, locally_ordered}})
+range_scheme::range_scheme(std::vector<partition_ordering> partition_orderings)
+  : partition_orderings{std::move(partition_orderings)}
 {
+  validate_range_scheme(*this);
 }
 
-order_scheme::order_scheme(std::vector<ordering> orderings) : orderings{std::move(orderings)}
+row_ordering::row_ordering(std::vector<order_key> order_keys,
+                           row_ordering_scope scope,
+                           std::vector<cudf::size_type> group_keys)
+  : order_keys{std::move(order_keys)}, scope{scope}, group_keys{std::move(group_keys)}
 {
-  RAPIDSMPF_EXPECTS(
-    !this->orderings.empty(), "order_scheme: orderings must not be empty", std::invalid_argument);
-  for (auto const& ordering : this->orderings) {
-    RAPIDSMPF_EXPECTS(!ordering.keys.empty(),
-                      "order_scheme: ordering entries must not be empty",
-                      std::invalid_argument);
-  }
+  std::sort(this->group_keys.begin(), this->group_keys.end());
+  validate_row_ordering(*this);
 }
 
-partitioning_spec partitioning_spec::from_order(order_scheme o)
+partitioning_spec partitioning_spec::from_range(range_scheme r)
 {
-  return {.type = type::ORDER, .hash = std::nullopt, .order = std::move(o)};
+  validate_range_scheme(r);
+  return {.type = type::RANGE, .hash = std::nullopt, .range = std::move(r)};
+}
+
+partitioning_spec partitioning_spec::from_hash(hash_scheme h)
+{
+  validate_hash_scheme(h);
+  return {.type = type::HASH, .hash = std::move(h), .range = std::nullopt};
+}
+
+channel_metadata::channel_metadata(std::uint64_t local_count,
+                                   struct partitioning partitioning,
+                                   bool duplicated,
+                                   std::vector<row_ordering> row_orderings)
+  : local_count{local_count},
+    partitioning{std::move(partitioning)},
+    duplicated{duplicated},
+    row_orderings{std::move(row_orderings)}
+{
+  validate_channel_metadata(*this);
 }
 
 rapidsmpf::streaming::Message to_message(std::uint64_t sequence_number,
                                          std::unique_ptr<channel_metadata> m)
 {
+  RAPIDSMPF_EXPECTS(
+    m != nullptr, "channel_metadata: message payload must not be null", std::invalid_argument);
+  validate_channel_metadata(*m);
   return rapidsmpf::streaming::Message{
     sequence_number,
     std::move(m),
@@ -132,6 +266,7 @@ rapidsmpf::streaming::Message to_message(std::uint64_t sequence_number,
     rapidsmpf::streaming::Message::Callbacks{
       .copy = [](rapidsmpf::streaming::Message const& msg,
                  rapidsmpf::MemoryReservation& /* reservation */) -> rapidsmpf::streaming::Message {
+        validate_channel_metadata(msg.get<channel_metadata>());
         auto copy = std::make_unique<channel_metadata>(msg.get<channel_metadata>());
         return rapidsmpf::streaming::Message{
           msg.sequence_number(), std::move(copy), rapidsmpf::ContentDescription{}, msg.callbacks()};
