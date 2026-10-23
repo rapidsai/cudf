@@ -164,3 +164,23 @@ TYPED_TEST(DictionaryFactoriesUnsignedIndicesTest, WidenAboveSignedLimit)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), expected_indices);
   EXPECT_EQ(view.null_count(), 1);
 }
+
+TYPED_TEST(DictionaryFactoriesUnsignedIndicesTest, SameWidthAtSignedLimit)
+{
+  using IndexType          = TypeParam;
+  using SignedType         = cuda::std::make_signed_t<IndexType>;
+  auto constexpr max_index = std::numeric_limits<SignedType>::max();
+  auto key_values          = cuda::counting_iterator<int32_t>(0);
+  auto keys =
+    cudf::test::fixed_width_column_wrapper<int32_t>(key_values, key_values + max_index + 1);
+  auto indices = cudf::test::fixed_width_column_wrapper<IndexType>(
+    {static_cast<IndexType>(max_index), IndexType{0}, IndexType{1}}, {1, 0, 1});
+
+  auto dictionary = cudf::make_dictionary_column(keys.release(), indices.release());
+  cudf::dictionary_column_view view(dictionary->view());
+
+  auto expected_indices =
+    cudf::test::fixed_width_column_wrapper<SignedType>({max_index, SignedType{0}, SignedType{1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), expected_indices);
+  EXPECT_EQ(view.null_count(), 1);
+}
