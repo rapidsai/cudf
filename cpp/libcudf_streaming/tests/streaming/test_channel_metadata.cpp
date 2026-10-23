@@ -169,11 +169,12 @@ class StreamingChannelMetadataGPU : public ::testing::Test {
   {
     rmm::device_buffer buf(vals.data(), vals.size() * sizeof(int32_t), stream);
     stream.sync();
-    auto col = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
-                                              static_cast<cudf::size_type>(vals.size()),
-                                              std::move(buf),
-                                              rmm::device_buffer{},
-                                              0);
+    auto col =
+      std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+                                     static_cast<cudf::size_type>(vals.size()),
+                                     std::move(buf),
+                                     cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED),
+                                     0);
     std::vector<std::unique_ptr<cudf::column>> cols;
     cols.push_back(std::move(col));
     return std::make_shared<table_chunk>(std::make_unique<cudf::table>(std::move(cols)), stream);
@@ -212,6 +213,26 @@ TEST_F(StreamingChannelMetadataGPU, OrderingReplaceLocallyOrdered)
   EXPECT_EQ(o2.strict_boundaries, o1.strict_boundaries);
   EXPECT_FALSE(o2.locally_ordered);
   EXPECT_EQ(o2.boundaries.get(), b.get());
+}
+
+TEST_F(StreamingChannelMetadataGPU, OrderingAsStrict)
+{
+  order_key k0{0, cudf::order::ASCENDING, cudf::null_order::BEFORE};
+  ordering input({k0},
+                 make_chunk({100, 100, 200}),
+                 /*strict_boundaries=*/false,
+                 /*locally_ordered=*/false);
+  ordering expected({k0},
+                    make_chunk({100, 200}),
+                    /*strict_boundaries=*/true,
+                    /*locally_ordered=*/false);
+
+  auto result = input.as_strict(*br);
+
+  EXPECT_EQ(result.keys, input.keys);
+  EXPECT_TRUE(result.strict_boundaries);
+  EXPECT_FALSE(result.locally_ordered);
+  EXPECT_TRUE(result.boundaries_aligned_with(expected, *br));
 }
 
 TEST_F(StreamingChannelMetadataGPU, OrderSchemeMultipleOrderings)

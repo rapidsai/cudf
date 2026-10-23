@@ -12,6 +12,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/type_traits>
 #include <cuda/stream>
 
 namespace cudf {
@@ -51,7 +52,7 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
   auto keys_copy = std::make_unique<column>(keys_column, stream, mr);
   auto indices_copy =
     type_dispatcher(indices_column.type(), dispatch_create_indices{}, indices_column, stream, mr);
-  rmm::device_buffer null_mask{0, stream, mr};
+  auto null_mask  = cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED, stream, mr);
   auto null_count = indices_column.null_count();
   if (null_count) null_mask = detail::copy_bitmask(indices_column, stream, mr);
 
@@ -68,7 +69,7 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
 
 std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_column,
                                                std::unique_ptr<column> indices_column,
-                                               rmm::device_buffer&& null_mask,
+                                               cuda::device_buffer<cudf::bitmask_type>&& null_mask,
                                                size_type null_count)
 {
   CUDF_EXPECTS(!keys_column->has_nulls(), "keys column must not have nulls", std::invalid_argument);
@@ -100,7 +101,7 @@ struct make_signed_fn {
   constexpr cudf::type_id operator()()
     requires(is_index_type<T>())
   {
-    return cudf::type_to_id<std::make_signed_t<T>>();
+    return cudf::type_to_id<cuda::std::make_signed_t<T>>();
   }
   template <typename T>
   constexpr cudf::type_id operator()()
@@ -130,8 +131,11 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
   auto indices_column = [&] {
     // If the types match, then just commandeer the column's data buffer.
     if (new_type_id == indices_type.id()) {
-      return std::make_unique<column>(
-        indices_type, indices_size, std::move(*(contents.data.release())), rmm::device_buffer{}, 0);
+      return std::make_unique<column>(indices_type,
+                                      indices_size,
+                                      std::move(*(contents.data.release())),
+                                      cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED),
+                                      0);
     }
     // If the new type does not match, then convert the data.
     cudf::column_view cast_view{indices_type, indices_size, contents.data->data(), nullptr, 0};

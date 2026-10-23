@@ -25,19 +25,13 @@ from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Distinct, GroupBy, Select
 from cudf_polars.dsl.utils.naming import names_to_indices, unique_names
-from cudf_polars.streaming.actor_graph.collectives.ordering import (
-    _partition_range,
-    adjust_ordering,
-)
+from cudf_polars.streaming.actor_graph.collectives.ordering import adjust_ordering
 from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
     ir_context_for_node,
 )
-from cudf_polars.streaming.actor_graph.tracing import (
-    send_chunk,
-    trace_channel,
-)
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     MAX_ROWS_PER_PARTITION,
     ChannelManager,
@@ -58,8 +52,14 @@ from cudf_polars.streaming.actor_graph.utils import (
     shutdown_channels_on_error,
     shutdown_on_error,
 )
-from cudf_polars.streaming.groupby import _has_stable_sorted_agg, combine, decompose
+from cudf_polars.streaming.groupby import (
+    _has_order_sensitive_agg,
+    _has_stable_sorted_agg,
+    combine,
+    decompose,
+)
 from cudf_polars.streaming.repartition import Repartition
+from cudf_polars.streaming.utils import partition_range
 
 if TYPE_CHECKING:
     from cudf_streaming.channel_metadata import Ordering
@@ -582,7 +582,7 @@ async def _ordered_adjust_reduce(
         partial_input_ordering = partial_input_ordering.with_locally_ordered(
             locally_ordered=False
         )
-    partial_output_ordering = partial_input_ordering.as_strict()
+    partial_output_ordering = partial_input_ordering.as_strict(context.br())
     ch_local = context.create_channel()
     ch_adjusted = context.create_channel()
     adjusted_metadata = _adjusted_ordering_metadata(
@@ -698,7 +698,11 @@ def _key_indices(
 
 def _maintain_order(ir: GroupBy | Distinct) -> bool:
     if isinstance(ir, GroupBy):
-        return ir.maintain_order or _has_stable_sorted_agg(ir.agg_requests)
+        return (
+            ir.maintain_order
+            or _has_stable_sorted_agg(ir.agg_requests)
+            or _has_order_sensitive_agg(ir.agg_requests)
+        )
     else:
         return ir.stable or ir.keep in (
             plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
@@ -708,7 +712,7 @@ def _maintain_order(ir: GroupBy | Distinct) -> bool:
 
 def _partition_count_for_rank(rank: int, nranks: int, npartitions: int) -> int:
     """Return the contiguous output-partition count owned by one rank."""
-    start, stop = _partition_range(rank, nranks, npartitions)
+    start, stop = partition_range(rank, nranks, npartitions)
     return stop - start
 
 
@@ -876,10 +880,14 @@ async def groupby_actor(
         The collective IDs.
     """
     async with shutdown_on_error(
-        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
-    ) as tracer:
-        ch_in = trace_channel(ch_in, tracer)
-        ch_out = trace_channel(ch_out, tracer)
+        context,
+        chs_in=(ch_in,),
+        chs_out=(ch_out,),
+        trace_ir=ir,
+        ir_context=ir_context,
+    ) as actor_scope:
+        tracer = actor_scope.tracer
+        ir_context = actor_scope.require_ir_context()
         metadata_in = await recv_metadata(ch_in, context)
 
         nranks = comm.nranks

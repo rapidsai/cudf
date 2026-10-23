@@ -28,6 +28,7 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+#include <cuda/buffer>
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/stream>
@@ -141,8 +142,11 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
     ngram_generator_fn{d_strings, ngrams, d_separator}, ngrams_count, stream, mr);
 
   // make the output strings column from the offsets and chars column
-  return cudf::make_strings_column(
-    ngrams_count, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
+  return cudf::make_strings_column(ngrams_count,
+                                   std::move(offsets_column),
+                                   chars.release(),
+                                   0,
+                                   cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 }
 
 }  // namespace detail
@@ -266,7 +270,8 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
   auto [offsets, total_ngrams] = [&] {
-    auto counts               = rmm::device_uvector<cudf::size_type>(input.size(), stream);
+    auto counts = cuda::device_buffer<cudf::size_type>(
+      stream, cudf::get_current_device_resource_ref(), input.size(), cuda::no_init);
     auto const avg_char_bytes = (input.chars_size(stream) / (input.size() - input.null_count()));
     auto const tile_size      = (avg_char_bytes < AVG_CHAR_BYTES_THRESHOLD)
                                   ? 1                         // thread per row
@@ -287,11 +292,17 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   auto [offsets_column, chars] =
     cudf::strings::detail::make_strings_children(generator, input.size(), total_ngrams, stream, mr);
 
-  auto output = cudf::make_strings_column(
-    total_ngrams, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
+  auto output = cudf::make_strings_column(total_ngrams,
+                                          std::move(offsets_column),
+                                          chars.release(),
+                                          0,
+                                          cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 
-  return make_lists_column(
-    input.size(), std::move(offsets), std::move(output), 0, rmm::device_buffer{});
+  return make_lists_column(input.size(),
+                           std::move(offsets),
+                           std::move(output),
+                           0,
+                           cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 }
 
 namespace {
@@ -373,7 +384,8 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
 
   // build offsets column by computing the number of ngrams per string
   auto [offsets, total_ngrams] = [&] {
-    auto counts = rmm::device_uvector<cudf::size_type>(input.size(), stream);
+    auto counts = cuda::device_buffer<cudf::size_type>(
+      stream, cudf::get_current_device_resource_ref(), input.size(), cuda::no_init);
     count_char_ngrams_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.get()>>>(
       *d_strings, ngrams, cudf::detail::warp_size, counts.data());
     CUDF_CUDA_TRY(cudaGetLastError());
@@ -393,8 +405,11 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
     *d_strings, ngrams, seed, d_offsets, d_hashes);
   CUDF_CUDA_TRY(cudaGetLastError());
 
-  return make_lists_column(
-    input.size(), std::move(offsets), std::move(hashes), 0, rmm::device_buffer{});
+  return make_lists_column(input.size(),
+                           std::move(offsets),
+                           std::move(hashes),
+                           0,
+                           cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 }
 
 }  // namespace detail
