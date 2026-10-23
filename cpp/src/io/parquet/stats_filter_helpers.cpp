@@ -138,8 +138,9 @@ ast::expression const& stats_expression_converter::push_nan_guard(size_type col_
   auto const& literal    = _tree.push(literal_ref);
   auto const& is_nan_lit = _tree.push(ast::operation{ast_operator::NOT_EQUAL, literal, literal});
   auto const& has_nan    = _tree.push(ast::column_reference{col_index * stats_cols_per_column + 3});
-  auto const& nan_matches =
-    _tree.push(ast::operation{ast_operator::NULL_LOGICAL_OR, is_nan_lit, has_nan});
+  // Neither a `NaN` literal nor a `NaN` value can match in an all-null chunk, so it is still pruned
+  auto const& nan_matches = push_non_null_guard(
+    col_index, _tree.push(ast::operation{ast_operator::NULL_LOGICAL_OR, is_nan_lit, has_nan}));
 
   // Null-aware so that a chunk known to be NaN-free is decided by `stats_expr` alone, while one
   // whose NaN count is unknown is kept unless `stats_expr` is true anyway.

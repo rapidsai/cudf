@@ -440,8 +440,9 @@ class stats_expression_converter final : public parquet_expression_simplifier {
                                                            ast::expression const& stats_expr);
 
   /**
-   * @brief Returns `(is_nan(literal) OR has_nan) OR stats_expr` for a floating-point column, so
-   * that a predicate a `NaN` satisfies keeps a chunk that may hold one, and `stats_expr` otherwise
+   * @brief Returns `(not_all_null AND (is_nan(literal) OR has_nan)) OR stats_expr` for a
+   * floating-point column, so that a predicate a `NaN` satisfies keeps a chunk that may hold one,
+   * and `stats_expr` otherwise
    *
    * The min and max exclude `NaN`s, so they cannot answer such a predicate on their own. The
    * statistics' NaN count tells whether a chunk holds any.
