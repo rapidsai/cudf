@@ -44,8 +44,9 @@ public class VariantUtils {
       throw new IllegalArgumentException(
           "prior Variant status row count must match the value row count");
     }
-    if (priorStatus.getNullCount() != 0) {
-      throw new IllegalArgumentException("prior Variant status must be non-nullable");
+    if (priorStatus.getValid() != null) {
+      throw new IllegalArgumentException(
+          "prior Variant status must not have a validity buffer, even when all rows are valid");
     }
   }
 
@@ -128,6 +129,9 @@ public class VariantUtils {
    * physical-type mismatch, and malformed input. The status column is initialized to
    * {@link VariantOperationStatus#SUCCESS} before the native cast.
    *
+   * <p>Supported target types and decoding semantics match
+   * {@link #castVariantValue(ColumnView, DType)}.
+   *
    * @param valueBytes LIST&lt;UINT8&gt; column of raw Variant-encoded values
    * @param targetType decoded output type
    * @return owning value and status columns
@@ -148,9 +152,13 @@ public class VariantUtils {
    * incoming status is not {@link VariantOperationStatus#SUCCESS} are not decoded; their status is
    * propagated and their value is null.
    *
+   * <p>Supported target types and decoding semantics match
+   * {@link #castVariantValue(ColumnView, DType)}.
+   *
    * @param valueBytes LIST&lt;UINT8&gt; column of raw Variant-encoded values
    * @param targetType decoded output type
-   * @param priorStatus non-nullable UINT8 status column aligned with {@code valueBytes}
+   * @param priorStatus UINT8 status column aligned with {@code valueBytes}, with no validity
+   *                    buffer (an all-valid mask is also rejected)
    * @return owning value and final status columns
    */
   public static VariantOperationResult castVariantValueWithStatus(

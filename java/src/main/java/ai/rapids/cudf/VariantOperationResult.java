@@ -11,7 +11,9 @@ package ai.rapids.cudf;
  * <p>The value and status columns have the same row count. The status column is a non-nullable
  * {@link DType#UINT8} column containing IDs defined by {@link VariantOperationStatus}. Both columns
  * are owned by this result and remain valid until it is closed. Callers must not close the returned
- * columns separately.
+ * columns separately unless they first increment their reference counts with
+ * {@link ColumnVector#incRefCount()}. A retained reference must then be closed separately.
+ * Closing this result more than once has no effect.
  */
 @Experimental
 public final class VariantOperationResult implements AutoCloseable {

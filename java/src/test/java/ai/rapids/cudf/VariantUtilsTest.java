@@ -19,9 +19,12 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class VariantUtilsTest extends CudfTestBase {
@@ -808,6 +811,114 @@ public class VariantUtilsTest extends CudfTestBase {
       assertColumnsAreEqual(expectedBoolStatus, boolResult.getStatus());
       assertColumnsAreEqual(expectedStrings, stringResult.getValue());
       assertColumnsAreEqual(expectedStringStatus, stringResult.getStatus());
+    }
+  }
+
+  @Test
+  void castFloatingPointStatusesUseTheirNativePaths() {
+    try (ColumnVector values = ColumnVector.fromLists(
+             BINARY_TYPE,
+             VariantEncoder.float32(1.25f),
+             VariantEncoder.float64(-2.5),
+             VariantEncoder.nullValue(),
+             bytes(VariantEncoder.simple(0x07), 0x01),
+             null);
+         VariantOperationResult floats =
+             VariantUtils.castVariantValueWithStatus(values, DType.FLOAT32);
+         VariantOperationResult doubles =
+             VariantUtils.castVariantValueWithStatus(values, DType.FLOAT64);
+         ColumnVector expectedFloats =
+             ColumnVector.fromBoxedFloats(1.25f, null, null, null, null);
+         ColumnVector expectedDoubles =
+             ColumnVector.fromBoxedDoubles(null, -2.5, null, null, null);
+         ColumnVector expectedFloatStatus = ColumnVector.fromUnsignedBytes(
+             statusId(VariantOperationStatus.SUCCESS),
+             statusId(VariantOperationStatus.TYPE_MISMATCH),
+             statusId(VariantOperationStatus.VARIANT_NULL),
+             statusId(VariantOperationStatus.TYPE_MISMATCH),
+             statusId(VariantOperationStatus.ROW_NULL));
+         ColumnVector expectedDoubleStatus = ColumnVector.fromUnsignedBytes(
+             statusId(VariantOperationStatus.TYPE_MISMATCH),
+             statusId(VariantOperationStatus.SUCCESS),
+             statusId(VariantOperationStatus.VARIANT_NULL),
+             statusId(VariantOperationStatus.MALFORMED_VARIANT),
+             statusId(VariantOperationStatus.ROW_NULL))) {
+      assertColumnsAreEqual(expectedFloats, floats.getValue());
+      assertColumnsAreEqual(expectedDoubles, doubles.getValue());
+      assertColumnsAreEqual(expectedFloatStatus, floats.getStatus());
+      assertColumnsAreEqual(expectedDoubleStatus, doubles.getStatus());
+    }
+  }
+
+  @Test
+  void variantPriorStatusRejectsAllValidMasks() {
+    try (ColumnVector values = ColumnVector.fromLists(
+             BINARY_TYPE, VariantEncoder.int32(7), VariantEncoder.int32(8));
+         ColumnVector data = ColumnVector.fromUnsignedBytes((byte) 0, (byte) 0);
+         ColumnVector maskOwner =
+             ColumnVector.fromBoxedUnsignedBytes((byte) 0, (byte) 0, null);
+         ColumnView allValidMaskedStatus = new ColumnView(
+             DType.UINT8, 2, Optional.of(0L), data.getData(), maskOwner.getValid());
+         ColumnView slicedStatus = allValidMaskedStatus.sliceAsViews(1, 2)[0];
+         ColumnView slicedValues = values.sliceAsViews(1, 2)[0]) {
+      assertEquals(0, allValidMaskedStatus.getNullCount());
+      assertNotNull(allValidMaskedStatus.getValid());
+      assertEquals(0, slicedStatus.getNullCount());
+      assertNotNull(slicedStatus.getValid());
+      assertThrows(IllegalArgumentException.class,
+          () -> VariantUtils.castVariantValueWithStatus(values, DType.INT32, allValidMaskedStatus));
+      assertThrows(IllegalArgumentException.class,
+          () -> VariantUtils.castVariantValueWithStatus(slicedValues, DType.INT32, slicedStatus));
+    }
+  }
+
+  @Test
+  void variantPriorStatusSupportsNonzeroOffsetAndEmptyInputs() {
+    try (ColumnVector values = ColumnVector.fromLists(
+             BINARY_TYPE, VariantEncoder.int32(0), VariantEncoder.int32(7),
+             VariantEncoder.int32(8), VariantEncoder.int32(9));
+         ColumnVector status = ColumnVector.fromUnsignedBytes(
+             statusId(VariantOperationStatus.TYPE_MISMATCH),
+             statusId(VariantOperationStatus.SUCCESS),
+             statusId(VariantOperationStatus.MISSING_PATH),
+             statusId(VariantOperationStatus.SUCCESS));
+         ColumnView slicedValues = values.sliceAsViews(1, 4)[0];
+         ColumnView slicedStatus = status.sliceAsViews(1, 4)[0];
+         VariantOperationResult sliced =
+             VariantUtils.castVariantValueWithStatus(slicedValues, DType.INT32, slicedStatus);
+         ColumnVector expectedValues = ColumnVector.fromBoxedInts(7, null, 9);
+         ColumnVector expectedStatus = ColumnVector.fromUnsignedBytes(
+             statusId(VariantOperationStatus.SUCCESS),
+             statusId(VariantOperationStatus.MISSING_PATH),
+             statusId(VariantOperationStatus.SUCCESS));
+         ColumnVector emptyValues = ColumnVector.fromLists(BINARY_TYPE);
+         ColumnVector emptyStatus = ColumnVector.fromUnsignedBytes();
+         VariantOperationResult empty =
+             VariantUtils.castVariantValueWithStatus(emptyValues, DType.INT32, emptyStatus)) {
+      assertColumnsAreEqual(expectedValues, sliced.getValue());
+      assertColumnsAreEqual(expectedStatus, sliced.getStatus());
+      assertColumnsAreEqual(expectedStatus, slicedStatus);
+      assertEquals(0, empty.getValue().getRowCount());
+      assertEquals(0, empty.getStatus().getRowCount());
+      assertNull(empty.getStatus().getValid());
+    }
+  }
+
+  @Test
+  void variantResultCloseIsIdempotentAndRetainedColumnsRemainValid() {
+    try (ColumnVector values = ColumnVector.fromLists(BINARY_TYPE, VariantEncoder.int32(7));
+         VariantOperationResult result =
+             VariantUtils.castVariantValueWithStatus(values, DType.INT32);
+         ColumnVector retainedValue = result.getValue().incRefCount();
+         ColumnVector retainedStatus = result.getStatus().incRefCount();
+         ColumnVector expectedValue = ColumnVector.fromInts(7);
+         ColumnVector expectedStatus = ColumnVector.fromUnsignedBytes((byte) 0)) {
+      result.close();
+      result.close();
+      assertEquals(1, retainedValue.getRefCount());
+      assertEquals(1, retainedStatus.getRefCount());
+      assertColumnsAreEqual(expectedValue, retainedValue);
+      assertColumnsAreEqual(expectedStatus, retainedStatus);
     }
   }
 
