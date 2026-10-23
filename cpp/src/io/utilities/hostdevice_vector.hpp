@@ -89,6 +89,12 @@ class hostdevice_vector {
   operator cudf::host_span<T>() { return host_span<T>(host_ptr(), size(), true); }
   operator cudf::host_span<T const>() const { return host_span<T const>(host_ptr(), size(), true); }
 
+  // Implicit conversion to `std::span` would silently drop `is_device_accessible()`
+  template <typename U>
+  operator std::span<U>() = delete;
+  template <typename U>
+  operator std::span<U>() const = delete;
+
   operator cudf::device_span<T>() { return cudf::device_span<T>(device_ptr(), size()); }
   operator cudf::device_span<T const>() const
   {

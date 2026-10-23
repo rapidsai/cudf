@@ -227,15 +227,11 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
     return host_span<T>{base::data(), base::size(), base::get_allocator().is_device_accessible()};
   }
 
-  [[nodiscard]] operator std::span<T const>() const noexcept
-  {
-    return std::span<T const>(base::data(), base::size());
-  }
-
-  [[nodiscard]] operator std::span<T>() noexcept
-  {
-    return std::span<T>(base::data(), base::size());
-  }
+  // Implicit conversion to `std::span` would silently drop `is_device_accessible()`
+  template <typename U>
+  operator std::span<U>() = delete;
+  template <typename U>
+  operator std::span<U>() const = delete;
 };
 
 }  // namespace detail
