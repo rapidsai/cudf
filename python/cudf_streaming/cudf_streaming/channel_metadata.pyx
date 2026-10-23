@@ -154,16 +154,14 @@ cdef class Ordering:
         ret._handle = move(ordering)
         return ret
 
-    def as_strict(self) -> Ordering:
-        """Return an equivalent ``Ordering`` with strict boundaries."""
-        return Ordering.from_cpp(
-            cpp_Ordering(
-                self._handle.keys,
-                self._handle.boundaries,
-                True,
-                self._handle.locally_ordered,
-            )
-        )
+    def as_strict(self, BufferResource br not None) -> Ordering:
+        """Return an equivalent ``Ordering`` with strict boundaries.
+
+        Duplicate boundaries are removed when converting a non-strict ordering.
+        """
+        if self.strict_boundaries:
+            return self
+        return Ordering.from_cpp(self._handle.as_strict(deref(br.ptr())))
 
     @property
     def keys(self) -> tuple:
