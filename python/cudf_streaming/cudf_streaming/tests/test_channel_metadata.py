@@ -435,6 +435,15 @@ def test_partitioning_scenarios(context: Context) -> None:
     assert Partitioning(None, None).inter_rank is None
     assert Partitioning(None, None).local is None
 
+    row_ordering = RowOrdering(
+        (OrderKey(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE),),
+        RowOrderingScope.GLOBAL,
+    )
+    p_ordered_rows = Partitioning(row_orderings=(row_ordering,))
+    assert p_ordered_rows.inter_rank is None
+    assert p_ordered_rows.local is None
+    assert p_ordered_rows.row_orderings == (row_ordering,)
+
     # Direct global shuffle: inter_rank=Hash, local=Aligned
     p_global = Partitioning(HashScheme((0,), 16), "inherit")
     assert p_global.inter_rank == HashScheme((0,), 16)
@@ -476,7 +485,7 @@ def test_channel_metadata() -> None:
     # Basic construction
     m = ChannelMetadata(local_count=4)
     assert m.local_count == 4
-    assert m.row_orderings == ()
+    assert m.partitioning.row_orderings == ()
     assert not m.duplicated
 
     # With partitioning and duplicated
@@ -506,9 +515,10 @@ def test_message_roundtrip(context: Context) -> None:
     )
     m = ChannelMetadata(
         local_count=4,
-        partitioning=Partitioning(HashScheme((0,), 16), "inherit"),
+        partitioning=Partitioning(
+            HashScheme((0,), 16), "inherit", row_orderings=(row_ordering,)
+        ),
         duplicated=True,
-        row_orderings=(row_ordering,),
     )
     msg_m = Message(99, m)
     assert msg_m.sequence_number == 99
@@ -517,13 +527,13 @@ def test_message_roundtrip(context: Context) -> None:
         MemoryType.DEVICE, 0, allow_overbooking=True
     )
     copied_m = ChannelMetadata.from_message(msg_m.copy(reservation))
-    assert copied_m.row_orderings == (row_ordering,)
+    assert copied_m.partitioning.row_orderings == (row_ordering,)
 
     got_m = ChannelMetadata.from_message(msg_m)
     assert got_m.local_count == 4
     assert got_m.duplicated
     assert got_m.partitioning.inter_rank == HashScheme((0,), 16)
-    assert got_m.row_orderings == (row_ordering,)
+    assert got_m.partitioning.row_orderings == (row_ordering,)
     assert msg_m.empty()
 
 
@@ -621,9 +631,6 @@ def test_access_after_move_raises() -> None:
 
     with pytest.raises(ValueError, match="uninitialized"):
         _ = m.duplicated
-
-    with pytest.raises(ValueError, match="uninitialized"):
-        _ = m.row_orderings
 
     with pytest.raises(ValueError, match="uninitialized"):
         repr(m)

@@ -376,7 +376,7 @@ cdef object _from_spec(const cpp_PartitioningSpec& spec):
 
 cdef class Partitioning:
     """
-    Hierarchical partitioning metadata for a data stream.
+    Partitioning and row-ordering metadata for a data stream.
 
     Parameters
     ----------
@@ -386,11 +386,17 @@ cdef class Partitioning:
     local
         Distribution within a rank. Can be a HashScheme, OrderScheme, None,
         or 'inherit'.
+    row_orderings
+        Row-ordering guarantees for the stream (default: none).
     """
 
-    def __init__(self, inter_rank=None, local=None):
+    def __init__(self, inter_rank=None, local=None, *, object row_orderings=()):
+        cdef vector[cpp_RowOrdering] cpp_row_orderings
         _apply_spec(self._handle.inter_rank, inter_rank)
         _apply_spec(self._handle.local, local)
+        for ordering in row_orderings:
+            cpp_row_orderings.push_back((<RowOrdering?>ordering)._handle)
+        self._handle.row_orderings = move(cpp_row_orderings)
 
     @staticmethod
     cdef Partitioning from_cpp(cpp_Partitioning data):
@@ -408,8 +414,21 @@ cdef class Partitioning:
         """Intra-rank (local) partitioning spec."""
         return _from_spec(self._handle.local)
 
+    @property
+    def row_orderings(self) -> tuple:
+        """Row-ordering guarantees for the stream."""
+        cdef int i
+        cdef int n = self._handle.row_orderings.size()
+        return tuple(
+            RowOrdering.from_cpp(self._handle.row_orderings[i])
+            for i in range(n)
+        )
+
     def __repr__(self):
-        return f"Partitioning(inter_rank={self.inter_rank!r}, local={self.local!r})"
+        return (
+            f"Partitioning(inter_rank={self.inter_rank!r}, "
+            f"local={self.local!r}, row_orderings={self.row_orderings!r})"
+        )
 
 
 cdef class ChannelMetadata:
@@ -424,8 +443,6 @@ cdef class ChannelMetadata:
         How the data is partitioned (default: no partitioning).
     duplicated
         Whether data is duplicated on all workers (default: False).
-    row_orderings
-        Row-ordering guarantees for the stream (default: none).
     """
 
     def __init__(
@@ -434,21 +451,15 @@ cdef class ChannelMetadata:
         *,
         partitioning: Partitioning | None = None,
         bint duplicated = False,
-        object row_orderings=(),
     ):
         if local_count < 0:
             raise ValueError(f"local_count must be non-negative, got {local_count}")
 
         cdef cpp_Partitioning part
-        cdef vector[cpp_RowOrdering] cpp_row_orderings
         if partitioning is not None:
             part = (<Partitioning?>partitioning)._handle
-        for ordering in row_orderings:
-            cpp_row_orderings.push_back((<RowOrdering?>ordering)._handle)
 
-        self._handle = make_unique[cpp_ChannelMetadata](
-            local_count, part, duplicated, move(cpp_row_orderings)
-        )
+        self._handle = make_unique[cpp_ChannelMetadata](local_count, part, duplicated)
 
     def __dealloc__(self):
         with nogil:
@@ -497,7 +508,7 @@ cdef class ChannelMetadata:
 
     @property
     def partitioning(self) -> Partitioning:
-        """How the data is partitioned."""
+        """Partitioning and row-ordering metadata for the stream."""
         return Partitioning.from_cpp(self.handle_ptr().partitioning)
 
     @property
@@ -505,22 +516,11 @@ cdef class ChannelMetadata:
         """Whether data is duplicated on all workers."""
         return self.handle_ptr().duplicated
 
-    @property
-    def row_orderings(self) -> tuple:
-        """Row-ordering guarantees for the stream."""
-        cdef int i
-        cdef int n = self.handle_ptr().row_orderings.size()
-        return tuple(
-            RowOrdering.from_cpp(self.handle_ptr().row_orderings[i])
-            for i in range(n)
-        )
-
     def __repr__(self):
         return (
             f"ChannelMetadata(local_count={self.local_count}, "
             f"partitioning={self.partitioning!r}, "
-            f"duplicated={self.duplicated}, "
-            f"row_orderings={self.row_orderings!r})"
+            f"duplicated={self.duplicated})"
         )
 
     cdef unique_ptr[cpp_ChannelMetadata] release_handle(self):

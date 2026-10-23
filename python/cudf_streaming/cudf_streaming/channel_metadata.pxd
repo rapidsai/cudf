@@ -110,6 +110,7 @@ cdef extern from "<cudf_streaming/channel_metadata.hpp>" \
     cdef cppclass cpp_Partitioning "cudf_streaming::partitioning":
         cpp_PartitioningSpec inter_rank
         cpp_PartitioningSpec local
+        vector[cpp_RowOrdering] row_orderings
         cpp_Partitioning() except +ex_handler
         cpp_Partitioning(const cpp_Partitioning&) except +ex_handler
 
@@ -120,10 +121,8 @@ cdef extern from "<cudf_streaming/channel_metadata.hpp>" \
         cpp_ChannelMetadata(
             uint64_t,
             cpp_Partitioning,
-            bool_t,
-            vector[cpp_RowOrdering]
+            bool_t
         ) except +ex_handler
-        vector[cpp_RowOrdering] row_orderings
 
     cpp_Message cpp_to_message_channel_metadata \
         "cudf_streaming::to_message"(

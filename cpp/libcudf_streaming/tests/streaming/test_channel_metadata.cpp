@@ -139,7 +139,7 @@ TEST_F(StreamingChannelMetadata, ChannelMetadata)
   channel_metadata m_minimal{4};
   EXPECT_EQ(m_minimal.local_count, 4);
   EXPECT_FALSE(m_minimal.duplicated);
-  EXPECT_TRUE(m_minimal.row_orderings.empty());
+  EXPECT_TRUE(m_minimal.partitioning.row_orderings.empty());
 
   // Equality - create fresh partitionings and move them
   channel_metadata m_same{
@@ -162,9 +162,9 @@ TEST_F(StreamingChannelMetadata, MessageRoundTrip)
   order_key key{1, cudf::order::ASCENDING, cudf::null_order::BEFORE};
   row_ordering expected{{key}, row_ordering_scope::RANK_LOCAL, {0}};
   // channel_metadata round-trip
-  partitioning part{partitioning_spec::from_hash(hash_scheme{{0}, 16}),
-                    partitioning_spec::inherit()};
-  auto m     = std::make_unique<channel_metadata>(4, std::move(part), false, std::vector{expected});
+  partitioning part{
+    partitioning_spec::from_hash(hash_scheme{{0}, 16}), partitioning_spec::inherit(), {expected}};
+  auto m     = std::make_unique<channel_metadata>(4, std::move(part), false);
   auto msg_m = to_message(99, std::move(m));
   EXPECT_EQ(msg_m.sequence_number(), 99);
   EXPECT_TRUE(msg_m.holds<channel_metadata>());
@@ -172,8 +172,8 @@ TEST_F(StreamingChannelMetadata, MessageRoundTrip)
   EXPECT_EQ(released.local_count, 4);
   EXPECT_FALSE(released.duplicated);
   EXPECT_EQ(released.partitioning.inter_rank.hash->modulus, 16);
-  ASSERT_EQ(released.row_orderings.size(), 1);
-  EXPECT_EQ(released.row_orderings.front(), expected);
+  ASSERT_EQ(released.partitioning.row_orderings.size(), 1);
+  EXPECT_EQ(released.partitioning.row_orderings.front(), expected);
   EXPECT_TRUE(msg_m.empty());
 }
 

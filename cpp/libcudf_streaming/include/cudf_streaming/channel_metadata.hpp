@@ -61,9 +61,14 @@ struct order_key {
 
 /**
  * @brief Scope of a row-ordering guarantee.
+ *
+ * `GLOBAL` describes the logical stream. For partitioned data, the
+ * rank-ordered concatenation of FIFO streams is ordered. For duplicated data,
+ * each rank contains an ordered copy of the same logical stream.
+ * `RANK_LOCAL` makes no ordering guarantee between ranks.
  */
 enum class row_ordering_scope : std::uint8_t {
-  GLOBAL,      ///< The rank-ordered concatenation of FIFO streams is ordered.
+  GLOBAL,      ///< The logical stream is ordered.
   RANK_LOCAL,  ///< Each rank's FIFO stream is ordered independently.
 };
 
@@ -277,7 +282,7 @@ struct partitioning_spec {
 };
 
 /**
- * @brief Hierarchical partitioning metadata for a data stream.
+ * @brief Partitioning and row-ordering metadata for a data stream.
  *
  * Describes how data flowing through a channel is partitioned at multiple
  * levels of the system hierarchy. Each level corresponds to a communicator
@@ -289,26 +294,28 @@ struct partitioning_spec {
  * - `local`: Distribution within a rank, corresponding to a single-rank
  *   communicator. Operations at this level repartition data locally without
  *   network communication.
+ * - `row_orderings`: Independent row-ordering guarantees for the stream. These
+ *   guarantees do not require either partitioning level to have a known scheme.
  */
 struct partitioning {
   /// Distribution across ranks (corresponds to primary communicator).
   partitioning_spec inter_rank;
   /// Distribution within a rank (corresponds to local/single communicator).
   partitioning_spec local;
+  /// Row-ordering guarantees for the stream.
+  std::vector<row_ordering> row_orderings;
 };
 
 /**
  * @brief Channel-level metadata describing the data stream.
  *
- * Contains information about chunk counts, partitioning, duplication, and row
- * ordering for the data flowing through a channel. Each row ordering is an
- * independent guarantee.
+ * Contains information about chunk counts, partitioning, and duplication for
+ * the data flowing through a channel.
  */
 struct channel_metadata {
-  std::uint64_t local_count{};              ///< Local chunk-count estimate for this rank.
-  struct partitioning partitioning;         ///< How the data is partitioned.
-  bool duplicated{};                        ///< Whether data is duplicated on all workers.
-  std::vector<row_ordering> row_orderings;  ///< Row-ordering guarantees for the stream.
+  std::uint64_t local_count{};       ///< Local chunk-count estimate for this rank.
+  struct partitioning partitioning;  ///< How the data is partitioned.
+  bool duplicated{};                 ///< Whether data is duplicated on all workers.
 
   /// @brief Default constructor.
   channel_metadata() = default;
@@ -319,16 +326,11 @@ struct channel_metadata {
    * @param local_count Local chunk count.
    * @param partitioning Partitioning metadata (default: no partitioning).
    * @param duplicated Whether data is duplicated (default: false).
-   * @param row_orderings Row-ordering guarantees (default: none).
    */
   channel_metadata(std::uint64_t local_count,
-                   struct partitioning partitioning        = {},
-                   bool duplicated                         = false,
-                   std::vector<row_ordering> row_orderings = {})
-    : local_count(local_count),
-      partitioning(std::move(partitioning)),
-      duplicated(duplicated),
-      row_orderings(std::move(row_orderings))
+                   struct partitioning partitioning = {},
+                   bool duplicated                  = false)
+    : local_count(local_count), partitioning(std::move(partitioning)), duplicated(duplicated)
   {
   }
 };
