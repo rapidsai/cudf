@@ -399,7 +399,8 @@ cdef class Partitioning:
         Distribution within a rank. Can be a HashScheme, OrderScheme, None,
         or 'inherit'.
     row_orderings
-        Row-ordering guarantees for the stream (default: none).
+        Independent row-ordering guarantees for the stream. Producers are
+        responsible for ensuring that every guarantee is valid (default: none).
     """
 
     def __init__(self, inter_rank=None, local=None, *, object row_orderings=()):

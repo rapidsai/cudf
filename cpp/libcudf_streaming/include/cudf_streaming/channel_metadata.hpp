@@ -313,6 +313,7 @@ struct partitioning_spec {
  *   network communication.
  * - `row_orderings`: Independent row-ordering guarantees for the stream. These
  *   guarantees do not require either partitioning level to have a known scheme.
+ *   Producers are responsible for ensuring that every guarantee is valid.
  */
 struct partitioning {
   /// Distribution across ranks (corresponds to primary communicator).
