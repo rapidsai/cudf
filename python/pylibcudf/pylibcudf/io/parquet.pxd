@@ -83,9 +83,9 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter)
     cpdef ParquetReaderOptionsBuilder case_sensitive_names(self, bool val)
     cpdef ParquetReaderOptionsBuilder prepend_source_index_column(self, bool val)
-    cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width)
     cpdef ParquetReaderOptionsBuilder output_dict_columns(self, bool val)
     cpdef ParquetReaderOptionsBuilder dictionary32_columns(self, list col_names)
+    cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width)
     cpdef ParquetReaderOptions build(self)
 
 

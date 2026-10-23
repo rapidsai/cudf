@@ -384,25 +384,14 @@ cdef class ParquetReaderOptions:
         """
         return self.c_obj.is_enabled_prepend_source_index_column()
 
-    cpdef bool is_enabled_output_dict_columns(self):
-        """
-        Returns whether flat string columns are read as DICTIONARY32 columns.
-
-        Returns
-        -------
-        bool
-            Whether flat string columns are read as DICTIONARY32 columns
-        """
-        return self.c_obj.is_enabled_output_dict_columns()
-
     cpdef void enable_output_dict_columns(self, bool val):
         """
-        Sets whether to read all flat string columns as DICTIONARY32 columns.
+        Sets whether to return flat string columns as DICTIONARY32 columns.
 
         Parameters
         ----------
         val : bool
-            Enables reading all flat string columns as DICTIONARY32 columns
+            Enables returning flat string columns as DICTIONARY32 columns
 
         Raises
         ------
@@ -416,17 +405,16 @@ cdef class ParquetReaderOptions:
         """
         self.c_obj.enable_output_dict_columns(val)
 
-    cpdef list get_dictionary32_columns(self):
+    cpdef bool is_enabled_output_dict_columns(self):
         """
-        Returns names of top-level string columns read as DICTIONARY32 columns.
+        Returns whether flat string columns are returned as DICTIONARY32 columns.
 
         Returns
         -------
-        list[str]
-            Names of top-level string columns read as DICTIONARY32 columns
+        bool
+            Whether flat string columns are returned as DICTIONARY32 columns
         """
-        cdef vector[string] names = self.c_obj.get_dictionary32_columns()
-        return [name.decode() for name in names]
+        return self.c_obj.is_enabled_output_dict_columns()
 
     cpdef void set_dictionary32_columns(self, list col_names: list[str]):
         """
@@ -453,6 +441,18 @@ cdef class ParquetReaderOptions:
         None
         """
         self.c_obj.set_dictionary32_columns(_encode_dictionary32_columns(col_names))
+
+    cpdef list get_dictionary32_columns(self):
+        """
+        Returns names of top-level string columns read as DICTIONARY32 columns.
+
+        Returns
+        -------
+        list[str]
+            Names of top-level string columns read as DICTIONARY32 columns
+        """
+        cdef vector[string] names = self.c_obj.get_dictionary32_columns()
+        return [name.decode() for name in names]
 
 
 cdef class ParquetReaderOptionsBuilder:
@@ -686,32 +686,15 @@ cdef class ParquetReaderOptionsBuilder:
         self.c_obj.prepend_source_index_column(val)
         return self
 
-    cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width):
-        """
-        Sets the decimal width used to cast all decimal columns.
-
-        Parameters
-        ----------
-        width : TypeId
-            The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which
-            all decimal columns should be cast.
-
-        Returns
-        -------
-        ParquetReaderOptionsBuilder
-        """
-        self.c_obj.decimal_width(width)
-        return self
-
     cpdef ParquetReaderOptionsBuilder output_dict_columns(self, bool val):
         """
-        Sets whether to read all flat string columns as DICTIONARY32 columns.
+        Sets whether to return flat string columns as DICTIONARY32 columns.
 
         Parameters
         ----------
         val : bool
-            ``True`` to read all flat string columns as DICTIONARY32
-            columns, ``False`` otherwise (default).
+            ``True`` to return flat string columns as DICTIONARY32 columns,
+            ``False`` otherwise (default).
 
         Raises
         ------
@@ -753,6 +736,23 @@ cdef class ParquetReaderOptionsBuilder:
         ParquetReaderOptionsBuilder
         """
         self.c_obj.dictionary32_columns(_encode_dictionary32_columns(col_names))
+        return self
+
+    cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width):
+        """
+        Sets the decimal width used to cast all decimal columns.
+
+        Parameters
+        ----------
+        width : TypeId
+            The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which
+            all decimal columns should be cast.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.decimal_width(width)
         return self
 
     cpdef ParquetReaderOptions build(self):
