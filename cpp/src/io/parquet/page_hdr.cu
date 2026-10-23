@@ -36,6 +36,9 @@ auto constexpr build_string_dict_index_block_size = 2 * cudf::detail::warp_size;
 // Default value chosen for best balance between memory usage, occupancy and performance.
 constexpr int string_dict_index_window_size = 4096;
 
+// Maximum dictionary entries parsed per batch by each warp.
+constexpr int dictionary_batch_size = 64;
+
 namespace cg = cooperative_groups;
 
 /**
@@ -864,6 +867,31 @@ struct decode_from_page_data_fn {
 };
 
 /**
+ * @brief Shared state for parsing one chunk's BYTE_ARRAY dictionary.
+ *
+ * One lane parses length prefixes and stages entry metadata; the warp
+ * uses that metadata to write string descriptors.
+ */
+struct parser_state {
+  int cursor;        ///< Page-relative byte offset of the next length prefix.
+  int parsed;        ///< Number of entries whose descriptors have been written.
+  int batch;         ///< Number of entries parsed in the current batch.
+  int window_start;  ///< Page-relative byte offset of window[0]; may be negative.
+  int window_bytes;  ///< Active window size in bytes, including leading padding.
+  bool invalid;      ///< Whether parsing detected a truncated prefix or string.
+  cuda::std::array<int, dictionary_batch_size> offsets;  ///< Page-relative character-data offsets.
+  cuda::std::array<int, dictionary_batch_size> lengths;  ///< String lengths in bytes.
+};
+
+// Subset of ColumnChunkDesc fields used by this kernel
+struct dictionary_metadata {
+  PageInfo const* dict_page;
+  string_index_pair* str_dict_index;
+  Type physical_type;
+  int32_t type_length;
+};
+
+/**
  * @brief Build string pointer/length descriptors for each chunk's dictionary entries.
  *
  * Each warp handles one chunk using its own shared metadata, parser state, and window.
@@ -884,38 +912,12 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
                                        int32_t num_chunks,
                                        kernel_error::pointer error_code)
 {
-  constexpr int dictionary_batch_size = 64;
-  constexpr int warp_size             = cudf::detail::warp_size;
-  constexpr int load_size             = sizeof(int4);
-  constexpr int num_warps_per_block   = build_string_dict_index_block_size / warp_size;
+  constexpr int warp_size           = cudf::detail::warp_size;
+  constexpr int load_size           = sizeof(int4);
+  constexpr int num_warps_per_block = build_string_dict_index_block_size / warp_size;
 
   static_assert(string_dict_index_window_size % load_size == 0);
 
-  /**
-   * @brief Shared state for parsing one chunk's BYTE_ARRAY dictionary.
-   *
-   * One lane parses length prefixes and stages entry metadata; the warp
-   * uses that metadata to write string descriptors.
-   */
-  struct parser_state {
-    int cursor;        ///< Page-relative byte offset of the next length prefix.
-    int parsed;        ///< Number of entries whose descriptors have been written.
-    int batch;         ///< Number of entries parsed in the current batch.
-    int window_start;  ///< Page-relative byte offset of window[0]; may be negative.
-    int window_bytes;  ///< Active window size in bytes, including leading padding.
-    bool invalid;      ///< Whether parsing detected a truncated prefix or string.
-    cuda::std::array<int, dictionary_batch_size>
-      offsets;  ///< Page-relative character-data offsets.
-    cuda::std::array<int, dictionary_batch_size> lengths;  ///< String lengths in bytes.
-  };
-
-  // Subset of ColumnChunkDesc fields used by this kernel
-  struct dictionary_metadata {
-    PageInfo const* dict_page;
-    string_index_pair* str_dict_index;
-    Type physical_type;
-    int32_t type_length;
-  };
   __shared__ cuda::std::array<dictionary_metadata, num_warps_per_block> dict_metadata;
   __shared__ cuda::std::array<parser_state, num_warps_per_block> states;
   __shared__ __align__(16)
