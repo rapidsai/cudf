@@ -336,7 +336,10 @@ template <typename = void>
 [[deprecated("Use the overload that takes std::span.")]] [[nodiscard]] std::vector<
   std::unique_ptr<cudf::io::datasource::buffer>>
 fetch_footers_to_host(
-  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources);
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources)
+{
+  return fetch_footers_to_host(std::span{datasources.data(), datasources.size()});
+}
 
 /**
  * @copydoc fetch_page_indexes_to_host(std::span<std::reference_wrapper<cudf::io::datasource>
@@ -350,7 +353,12 @@ template <typename = void>
   std::unique_ptr<cudf::io::datasource::buffer>>
 fetch_page_indexes_to_host(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  cudf::host_span<byte_range_info const> page_index_bytes_per_source);
+  cudf::host_span<byte_range_info const> page_index_bytes_per_source)
+{
+  return fetch_page_indexes_to_host(
+    std::span{datasources.data(), datasources.size()},
+    std::span{page_index_bytes_per_source.data(), page_index_bytes_per_source.size()});
+}
 
 /**
  * @copydoc fetch_byte_ranges_to_device_async(std::span<std::reference_wrapper<cudf::io::datasource>
@@ -370,7 +378,15 @@ fetch_byte_ranges_to_device_async(
   cudf::host_span<std::vector<byte_range_info> const> byte_ranges_per_source,
   io_submission_policy policy,
   cuda::stream_ref stream   = cudf::get_default_stream(),
-  cudf::memory_resources mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref())
+{
+  return fetch_byte_ranges_to_device_async(
+    std::span{datasources.data(), datasources.size()},
+    std::span{byte_ranges_per_source.data(), byte_ranges_per_source.size()},
+    policy,
+    stream,
+    mr);
+}
 
 /**
  * @copydoc fetch_bloom_filters_to_device(cudf::io::datasource&, std::span<byte_range_info const>,
@@ -380,14 +396,21 @@ fetch_byte_ranges_to_device_async(
  * takes `std::span` instead.
  */
 template <typename = void>
-[[deprecated("Use the overload that takes std::span.")]] std::pair<
-  std::vector<cuda::device_buffer<uint8_t>>,
-  std::vector<cudf::device_span<uint8_t const>>>
-fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
-                              cudf::host_span<byte_range_info const> bloom_filter_byte_ranges,
-                              io_submission_policy policy,
-                              cuda::stream_ref stream   = cudf::get_default_stream(),
-                              cudf::memory_resources mr = cudf::get_current_device_resource_ref());
+[[deprecated("Use the overload that takes std::span.")]] std::
+  pair<std::vector<cuda::device_buffer<uint8_t>>, std::vector<cudf::device_span<uint8_t const>>>
+  fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
+                                cudf::host_span<byte_range_info const> bloom_filter_byte_ranges,
+                                io_submission_policy policy,
+                                cuda::stream_ref stream   = cudf::get_default_stream(),
+                                cudf::memory_resources mr = cudf::get_current_device_resource_ref())
+{
+  return fetch_bloom_filters_to_device(
+    datasource,
+    std::span{bloom_filter_byte_ranges.data(), bloom_filter_byte_ranges.size()},
+    policy,
+    stream,
+    mr);
+}
 
 /**
  * @copydoc fetch_bloom_filters_to_device(std::span<std::reference_wrapper<cudf::io::datasource>
@@ -406,7 +429,15 @@ fetch_bloom_filters_to_device(
   cudf::host_span<std::vector<byte_range_info> const> bloom_filter_byte_ranges_per_source,
   io_submission_policy policy,
   cuda::stream_ref stream   = cudf::get_default_stream(),
-  cudf::memory_resources mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref())
+{
+  return fetch_bloom_filters_to_device(std::span{datasources.data(), datasources.size()},
+                                       std::span{bloom_filter_byte_ranges_per_source.data(),
+                                                 bloom_filter_byte_ranges_per_source.size()},
+                                       policy,
+                                       stream,
+                                       mr);
+}
 
 /** @} */  // end of group
 }  // namespace io::parquet
