@@ -22,7 +22,8 @@ public class VariantUtils {
   // cpp/src/io/parquet/experimental/variant_extract.cu:is_variant_castable.
   private static final List<DType> SUPPORTED_TYPES = Arrays.asList(
       DType.STRING, DType.INT8, DType.INT16, DType.INT32, DType.INT64,
-      DType.FLOAT32, DType.FLOAT64, DType.BOOL8);
+      DType.FLOAT32, DType.FLOAT64, DType.BOOL8,
+      DType.TIMESTAMP_MICROSECONDS, DType.TIMESTAMP_NANOSECONDS);
 
   private VariantUtils() {}
 
@@ -60,6 +61,8 @@ public class VariantUtils {
    * the value blob is empty, or its header is unrecognized. An encoded Variant null is represented
    * by a valid {@link VariantLogicalType#NULL_VALUE} row. Only the header byte is inspected, so a
    * recognized header is classified even if the remaining payload is truncated.
+   * Timestamp logical IDs distinguish timezone-adjusted from NTZ encodings, but do not distinguish
+   * microsecond from nanosecond units.
    *
    * <p>This API mirrors an experimental libcudf API and is subject to change.
    *
@@ -74,10 +77,13 @@ public class VariantUtils {
   /**
    * Decode raw Variant-encoded value bytes into {@code targetType}. Supported target types are
    * {@link DType#STRING}, {@link DType#INT8}, {@link DType#INT16}, {@link DType#INT32},
-   * {@link DType#INT64}, {@link DType#FLOAT32}, {@link DType#FLOAT64}, and {@link DType#BOOL8}.
-   * Decoding requires the encoded physical type to exactly match {@code targetType}; no numeric
-   * conversions are performed. Input nulls, encoded Variant nulls, and physical-type mismatches
-   * produce null output rows.
+   * {@link DType#INT64}, {@link DType#FLOAT32}, {@link DType#FLOAT64}, {@link DType#BOOL8},
+   * {@link DType#TIMESTAMP_MICROSECONDS}, and {@link DType#TIMESTAMP_NANOSECONDS}.
+   * Non-timestamp decoding requires the encoded physical type to exactly match {@code targetType};
+   * no numeric conversions are performed. Timestamp targets accept both timezone-adjusted and NTZ
+   * encodings of the same unit and preserve the signed 64-bit payload unchanged. No timezone or
+   * unit conversion is performed. Input nulls, encoded Variant nulls, physical-type mismatches,
+   * and truncated timestamp payloads produce null output rows.
    */
   public static ColumnVector castVariantValue(ColumnView valueBytes, DType targetType) {
     Objects.requireNonNull(valueBytes, "valueBytes");
@@ -89,11 +95,14 @@ public class VariantUtils {
   /**
    * Extract a Variant field and decode it into {@code targetType} in one native call.
    * Supported target types are {@link DType#STRING}, {@link DType#INT8}, {@link DType#INT16},
-   * {@link DType#INT32}, {@link DType#INT64}, {@link DType#FLOAT32}, {@link DType#FLOAT64}, and
-   * {@link DType#BOOL8}.
-   * Decoding requires the encoded physical type to exactly match {@code targetType}; no numeric
-   * conversions are performed. Missing fields, input nulls, encoded Variant nulls, and
-   * physical-type mismatches produce null output rows.
+   * {@link DType#INT32}, {@link DType#INT64}, {@link DType#FLOAT32}, {@link DType#FLOAT64},
+   * {@link DType#BOOL8}, {@link DType#TIMESTAMP_MICROSECONDS}, and
+   * {@link DType#TIMESTAMP_NANOSECONDS}.
+   * Non-timestamp decoding requires the encoded physical type to exactly match {@code targetType};
+   * no numeric conversions are performed. Timestamp targets accept both timezone-adjusted and NTZ
+   * encodings of the same unit and preserve the signed 64-bit payload unchanged. No timezone or
+   * unit conversion is performed. Missing fields, input nulls, encoded Variant nulls,
+   * physical-type mismatches, and truncated timestamp payloads produce null output rows.
    *
    * @param variantStruct Variant materialization: STRUCT(metadata LIST&lt;UINT8&gt;,
    *                      value LIST&lt;UINT8&gt;, optional shredded children...)
