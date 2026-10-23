@@ -90,7 +90,7 @@ enum class io_submission_policy : int8_t {
  * footer, or has an invalid footer length.
  */
 [[nodiscard]] std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
-  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources);
+  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources);
 
 /**
  * @brief Fetches a host buffer of Parquet page index from the input data source
@@ -118,8 +118,8 @@ enum class io_submission_policy : int8_t {
  * @throw std::out_of_range if any page index byte range is out of range for its datasource
  */
 [[nodiscard]] std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
-  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  cudf::host_span<byte_range_info const> page_index_bytes_per_source);
+  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  std::span<byte_range_info const> page_index_bytes_per_source);
 
 /**
  * @brief Fetches a list of byte ranges from a datasource into device buffers
@@ -163,8 +163,8 @@ std::tuple<std::vector<rmm::device_buffer>,
            std::vector<std::vector<cudf::device_span<uint8_t const>>>,
            std::future<void>>
 fetch_byte_ranges_to_device_async(
-  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  cudf::host_span<std::vector<byte_range_info> const> byte_ranges_per_source,
+  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  std::span<std::vector<byte_range_info> const> byte_ranges_per_source,
   io_submission_policy policy,
   cuda::stream_ref stream   = cudf::get_default_stream(),
   cudf::memory_resources mr = cudf::get_current_device_resource_ref());
@@ -186,7 +186,7 @@ fetch_byte_ranges_to_device_async(
  */
 std::pair<std::vector<cuda::device_buffer<uint8_t>>, std::vector<cudf::device_span<uint8_t const>>>
 fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
-                              cudf::host_span<byte_range_info const> bloom_filter_byte_ranges,
+                              std::span<byte_range_info const> bloom_filter_byte_ranges,
                               io_submission_policy policy,
                               cuda::stream_ref stream   = cudf::get_default_stream(),
                               cudf::memory_resources mr = cudf::get_current_device_resource_ref());
@@ -209,8 +209,8 @@ fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
 std::pair<std::vector<cuda::device_buffer<uint8_t>>,
           std::vector<std::vector<cudf::device_span<uint8_t const>>>>
 fetch_bloom_filters_to_device(
-  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  cudf::host_span<std::vector<byte_range_info> const> bloom_filter_byte_ranges_per_source,
+  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  std::span<std::vector<byte_range_info> const> bloom_filter_byte_ranges_per_source,
   io_submission_policy policy,
   cuda::stream_ref stream   = cudf::get_default_stream(),
   cudf::memory_resources mr = cudf::get_current_device_resource_ref());
@@ -266,8 +266,8 @@ std::tuple<std::vector<rmm::device_buffer>,
            std::vector<std::vector<cudf::device_span<uint8_t const>>>,
            std::future<void>>
 fetch_byte_ranges_to_device_async(
-  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  cudf::host_span<std::vector<byte_range_info> const> byte_ranges_per_source,
+  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  std::span<std::vector<byte_range_info> const> byte_ranges_per_source,
   cuda::stream_ref stream   = cudf::get_default_stream(),
   cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
@@ -293,7 +293,7 @@ fetch_byte_ranges_to_device_async(
 [[deprecated("Use the overload that takes io_submission_policy.")]]
 std::pair<std::vector<cuda::device_buffer<uint8_t>>, std::vector<cudf::device_span<uint8_t const>>>
 fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
-                              cudf::host_span<byte_range_info const> bloom_filter_byte_ranges,
+                              std::span<byte_range_info const> bloom_filter_byte_ranges,
                               cuda::stream_ref stream   = cudf::get_default_stream(),
                               cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
@@ -320,8 +320,8 @@ fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
 std::pair<std::vector<cuda::device_buffer<uint8_t>>,
           std::vector<std::vector<cudf::device_span<uint8_t const>>>>
 fetch_bloom_filters_to_device(
-  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  cudf::host_span<std::vector<byte_range_info> const> bloom_filter_byte_ranges_per_source,
+  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  std::span<std::vector<byte_range_info> const> bloom_filter_byte_ranges_per_source,
   cuda::stream_ref stream   = cudf::get_default_stream(),
   cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
