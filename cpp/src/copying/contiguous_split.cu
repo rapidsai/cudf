@@ -994,9 +994,8 @@ struct size_of_helper {
     return 0;
   }
 
-  template <typename T>
+  template <cudf::concepts::string_view T>
   constexpr int __device__ operator()() const
-    requires(!cudf::concepts::fixed_width<T> && cudf::concepts::string_view<T>)
   {
     return sizeof(cudf::device_storage_type_t<int8_t>);
   }

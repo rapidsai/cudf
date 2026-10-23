@@ -43,7 +43,6 @@ struct tabulator {
 
   template <typename U>
   static T __device__ multiply(U x, size_type times)
-    requires(!cudf::concepts::duration<U>)
   {
     return x * static_cast<T>(times);
   }

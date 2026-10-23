@@ -45,7 +45,6 @@ struct str_cudf_column_scalar_fn {
   }
 
   template <typename T>
-    requires(!cudf::concepts::arithmetic<T>)
   std::string operator()(cudf::column_view /* col */,
                          cudf::size_type /* index */,
                          cuda::stream_ref /* stream */,
@@ -73,8 +72,7 @@ struct cudf_column_data_size_fn {
   }
 
   // compound type specialization except string
-  template <typename T>
-    requires(!cudf::concepts::string_view<T> && cudf::concepts::compound<T>)
+  template <cudf::concepts::compound T>
   std::size_t operator()(cudf::column_view const& col, cuda::stream_ref)
   {
     // compound types (except string) ie. list, dict, structs dont have a

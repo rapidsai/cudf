@@ -273,7 +273,6 @@ struct column_sorted_order_fn {
   }
 
   template <typename T>
-    requires(not cuda::std::totally_ordered<T>)
   void operator()(column_view const&, mutable_column_view&, bool, null_order, cuda::stream_ref)
   {
     CUDF_FAIL("Column type must be relationally comparable");

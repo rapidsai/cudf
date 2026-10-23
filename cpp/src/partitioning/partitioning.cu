@@ -867,7 +867,6 @@ struct IdentityHash {
 
   template <typename return_type = result_type>
   CUDF_HOST_DEVICE constexpr return_type operator()(Key const& key) const
-    requires(!cudf::concepts::arithmetic<Key>)
   {
     CUDF_UNREACHABLE("IdentityHash does not support this data type");
   }
