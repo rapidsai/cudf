@@ -862,4 +862,108 @@ fetch_bloom_filters_to_device(
     datasources, bloom_filter_byte_ranges_per_source, io_submission_policy::SERIALIZE, stream, mr);
 }
 
+template <typename>
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources)
+{
+  return fetch_footers_to_host(std::span{datasources.data(), datasources.size()});
+}
+
+template std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host<>(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources);
+
+template <typename>
+std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<byte_range_info const> page_index_bytes_per_source)
+{
+  return fetch_page_indexes_to_host(
+    std::span{datasources.data(), datasources.size()},
+    std::span{page_index_bytes_per_source.data(), page_index_bytes_per_source.size()});
+}
+
+template std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to_host<>(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<byte_range_info const> page_index_bytes_per_source);
+
+template <typename>
+std::tuple<std::vector<rmm::device_buffer>,
+           std::vector<std::vector<cudf::device_span<uint8_t const>>>,
+           std::future<void>>
+fetch_byte_ranges_to_device_async(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<std::vector<byte_range_info> const> byte_ranges_per_source,
+  io_submission_policy policy,
+  cuda::stream_ref stream,
+  cudf::memory_resources mr)
+{
+  return fetch_byte_ranges_to_device_async(
+    std::span{datasources.data(), datasources.size()},
+    std::span{byte_ranges_per_source.data(), byte_ranges_per_source.size()},
+    policy,
+    stream,
+    mr);
+}
+
+template std::tuple<std::vector<rmm::device_buffer>,
+                    std::vector<std::vector<cudf::device_span<uint8_t const>>>,
+                    std::future<void>>
+fetch_byte_ranges_to_device_async<>(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<std::vector<byte_range_info> const> byte_ranges_per_source,
+  io_submission_policy policy,
+  cuda::stream_ref stream,
+  cudf::memory_resources mr);
+
+template <typename>
+std::pair<std::vector<cuda::device_buffer<uint8_t>>, std::vector<cudf::device_span<uint8_t const>>>
+fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
+                              cudf::host_span<byte_range_info const> bloom_filter_byte_ranges,
+                              io_submission_policy policy,
+                              cuda::stream_ref stream,
+                              cudf::memory_resources mr)
+{
+  return fetch_bloom_filters_to_device(
+    datasource,
+    std::span{bloom_filter_byte_ranges.data(), bloom_filter_byte_ranges.size()},
+    policy,
+    stream,
+    mr);
+}
+
+template std::pair<std::vector<cuda::device_buffer<uint8_t>>,
+                   std::vector<cudf::device_span<uint8_t const>>>
+fetch_bloom_filters_to_device<>(cudf::io::datasource& datasource,
+                                cudf::host_span<byte_range_info const> bloom_filter_byte_ranges,
+                                io_submission_policy policy,
+                                cuda::stream_ref stream,
+                                cudf::memory_resources mr);
+
+template <typename>
+std::pair<std::vector<cuda::device_buffer<uint8_t>>,
+          std::vector<std::vector<cudf::device_span<uint8_t const>>>>
+fetch_bloom_filters_to_device(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<std::vector<byte_range_info> const> bloom_filter_byte_ranges_per_source,
+  io_submission_policy policy,
+  cuda::stream_ref stream,
+  cudf::memory_resources mr)
+{
+  return fetch_bloom_filters_to_device(std::span{datasources.data(), datasources.size()},
+                                       std::span{bloom_filter_byte_ranges_per_source.data(),
+                                                 bloom_filter_byte_ranges_per_source.size()},
+                                       policy,
+                                       stream,
+                                       mr);
+}
+
+template std::pair<std::vector<cuda::device_buffer<uint8_t>>,
+                   std::vector<std::vector<cudf::device_span<uint8_t const>>>>
+fetch_bloom_filters_to_device<>(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<std::vector<byte_range_info> const> bloom_filter_byte_ranges_per_source,
+  io_submission_policy policy,
+  cuda::stream_ref stream,
+  cudf::memory_resources mr);
+
 }  // namespace cudf::io::parquet
