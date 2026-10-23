@@ -9,9 +9,9 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 from cudf_streaming.channel_metadata import (
     OrderKey,
-    PartitionOrdering,
+    OrderScheme,
+    Ordering,
     Partitioning,
-    RangeScheme,
 )
 from cudf_streaming.table_chunk import TableChunk
 
@@ -71,7 +71,7 @@ def _get_ordering_candidates(
         assert request.keys, "Order partitioning requests must have at least one key."
         key = request.keys[0]
         assert key.name in ir.schema, (
-            f"Ordering key {key.name!r} must be present in scan schema."
+            f"Ordering request key {key.name!r} must be present in scan schema."
         )
         (column_index,) = names_to_indices((key.name,), ir.schema)
         candidate = (key.name, OrderKey(column_index, key.order, key.null_order))
@@ -98,7 +98,7 @@ def _get_rank_parquet_info_map(
     fetched = _prefetch_parquet_footers_for_paths(paths)
     rank_parquet_info_map = {info.path: info for info in fetched}
     assert all(path in rank_parquet_info_map for path in paths), (
-        "Parquet footer metadata must contain all rank-local scan paths."
+        "Ordering footer metadata must contain all rank-local scan paths."
     )
     return rank_parquet_info_map
 
@@ -296,9 +296,9 @@ def _partitioning_from_task_bounds(
                 candidate_bounds, global_chunk_count, stream
             )
         return Partitioning(
-            inter_rank=RangeScheme(
+            inter_rank=OrderScheme(
                 [
-                    PartitionOrdering(
+                    Ordering(
                         [key],
                         TableChunk.from_pylibcudf_table(
                             ordering_boundaries,
@@ -307,6 +307,7 @@ def _partitioning_from_task_bounds(
                             br=context.br(),
                         ),
                         strict_boundaries=strict,
+                        locally_ordered=False,
                     )
                 ]
             ),
@@ -367,9 +368,9 @@ async def parquet_metadata_ordering(
         )
 
     # StreamingScan emits one output chunk per scan task, so task-bound rows
-    # also line up with the global chunk count used by range metadata.
+    # also line up with the global chunk count used by Ordering metadata.
     assert global_task_bounds.num_rows() == 2 * global_chunk_count, (
-        "Task bounds must contain first/last rows for every scan task."
+        "Ordering task bounds must contain first/last rows for every scan task."
     )
     return _partitioning_from_task_bounds(
         context, candidates, global_task_bounds, global_chunk_count, stream

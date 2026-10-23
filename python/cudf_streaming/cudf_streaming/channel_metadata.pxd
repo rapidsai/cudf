@@ -35,31 +35,6 @@ cdef extern from "<cudf_streaming/channel_metadata.hpp>" \
         cpp_null_order null_order
         bool_t operator==(const cpp_OrderKey&) noexcept
 
-    cdef cppclass cpp_PartitionOrdering "cudf_streaming::partition_ordering":
-        cpp_PartitionOrdering() noexcept
-        cpp_PartitionOrdering(
-            vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t
-        ) except +ex_handler
-        cpp_PartitionOrdering(
-            vector[cpp_OrderKey], shared_ptr[cpp_TableChunk], bool_t
-        ) except +ex_handler
-        vector[cpp_OrderKey] keys
-        shared_ptr[cpp_TableChunk] boundaries
-        bool_t strict_boundaries
-        cpp_PartitionOrdering with_keys(
-            vector[cpp_OrderKey]
-        ) except +ex_handler
-        bool_t boundaries_aligned_with(
-            const cpp_PartitionOrdering&, const cpp_BufferResource&
-        ) except +ex_handler
-
-    cdef cppclass cpp_RangeScheme "cudf_streaming::range_scheme":
-        cpp_RangeScheme() noexcept
-        cpp_RangeScheme(
-            vector[cpp_PartitionOrdering]
-        ) except +ex_handler
-        vector[cpp_PartitionOrdering] partition_orderings
-
     cpdef enum class RowOrderingScope "cudf_streaming::row_ordering_scope"(uint8_t):
         GLOBAL
         RANK_LOCAL
@@ -74,16 +49,51 @@ cdef extern from "<cudf_streaming/channel_metadata.hpp>" \
         vector[int32_t] group_keys
         bool_t operator==(const cpp_RowOrdering&) noexcept
 
+    cdef cppclass cpp_Ordering "cudf_streaming::ordering":
+        cpp_Ordering() noexcept
+        cpp_Ordering(
+            vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t
+        ) except +ex_handler
+        cpp_Ordering(
+            vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t, bool_t
+        ) except +ex_handler
+        cpp_Ordering(
+            vector[cpp_OrderKey], shared_ptr[cpp_TableChunk], bool_t
+        ) except +ex_handler
+        cpp_Ordering(
+            vector[cpp_OrderKey], shared_ptr[cpp_TableChunk], bool_t, bool_t
+        ) except +ex_handler
+        vector[cpp_OrderKey] keys
+        shared_ptr[cpp_TableChunk] boundaries
+        bool_t strict_boundaries
+        bool_t locally_ordered
+        cpp_Ordering with_keys(vector[cpp_OrderKey]) except +ex_handler
+        cpp_Ordering with_locally_ordered(bool_t) except +ex_handler
+        bool_t boundaries_aligned_with(
+            const cpp_Ordering&, const cpp_BufferResource&
+        ) except +ex_handler
+
+    cdef cppclass cpp_OrderScheme "cudf_streaming::order_scheme":
+        cpp_OrderScheme() noexcept
+        cpp_OrderScheme(
+            vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t
+        ) except +ex_handler
+        cpp_OrderScheme(
+            vector[cpp_OrderKey], unique_ptr[cpp_TableChunk], bool_t, bool_t
+        ) except +ex_handler
+        cpp_OrderScheme(vector[cpp_Ordering]) except +ex_handler
+        vector[cpp_Ordering] orderings
+
     cdef cppclass cpp_PartitioningSpec "cudf_streaming::partitioning_spec":
         enum cpp_Type "cudf_streaming::partitioning_spec::type":
             NONE "cudf_streaming::partitioning_spec::type::NONE"
             INHERIT "cudf_streaming::partitioning_spec::type::INHERIT"
             HASH "cudf_streaming::partitioning_spec::type::HASH"
-            RANGE "cudf_streaming::partitioning_spec::type::RANGE"
+            ORDER "cudf_streaming::partitioning_spec::type::ORDER"
 
         cpp_Type type
         optional[cpp_HashScheme] hash
-        optional[cpp_RangeScheme] range
+        optional[cpp_OrderScheme] order
 
         @staticmethod
         cpp_PartitioningSpec none()
@@ -95,7 +105,7 @@ cdef extern from "<cudf_streaming/channel_metadata.hpp>" \
         cpp_PartitioningSpec from_hash(cpp_HashScheme)
 
         @staticmethod
-        cpp_PartitioningSpec from_range(cpp_RangeScheme)
+        cpp_PartitioningSpec from_order(cpp_OrderScheme)
 
     cdef cppclass cpp_Partitioning "cudf_streaming::partitioning":
         cpp_PartitioningSpec inter_rank
@@ -135,25 +145,25 @@ cdef class OrderKey:
     cdef OrderKey from_cpp(cpp_OrderKey key)
 
 
-cdef class PartitionOrdering:
-    cdef cpp_PartitionOrdering _handle
-
-    @staticmethod
-    cdef PartitionOrdering from_cpp(cpp_PartitionOrdering ordering)
-
-
-cdef class RangeScheme:
-    cdef cpp_RangeScheme _handle
-
-    @staticmethod
-    cdef RangeScheme from_cpp(cpp_RangeScheme scheme)
-
-
 cdef class RowOrdering:
     cdef cpp_RowOrdering _handle
 
     @staticmethod
     cdef RowOrdering from_cpp(cpp_RowOrdering ordering)
+
+
+cdef class Ordering:
+    cdef cpp_Ordering _handle
+
+    @staticmethod
+    cdef Ordering from_cpp(cpp_Ordering ordering)
+
+
+cdef class OrderScheme:
+    cdef cpp_OrderScheme _handle
+
+    @staticmethod
+    cdef OrderScheme from_cpp(cpp_OrderScheme scheme)
 
 
 cdef class Partitioning:

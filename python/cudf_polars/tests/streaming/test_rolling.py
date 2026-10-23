@@ -12,7 +12,7 @@ import pytest
 import polars as pl
 from polars.testing import assert_frame_equal
 
-from cudf_streaming.channel_metadata import RangeScheme, RowOrderingScope
+from cudf_streaming.channel_metadata import OrderScheme
 
 from cudf_polars import Translator
 from cudf_polars.engine.core import all_gather_host_data
@@ -127,14 +127,11 @@ def test_rolling_preserves_index_ordering_metadata(spmd_engine_factory) -> None:
 
     metadata = metadata_collector[0]
     assert metadata.partitioning is not None
-    assert isinstance(metadata.partitioning.inter_rank, RangeScheme)
+    assert isinstance(metadata.partitioning.inter_rank, OrderScheme)
     assert metadata.partitioning.local == "inherit"
-    (ordering,) = metadata.partitioning.inter_rank.partition_orderings
+    (ordering,) = metadata.partitioning.inter_rank.orderings
     assert tuple(key.column_index for key in ordering.keys) == (0,)
     assert ordering.strict_boundaries is True
-    (row_ordering,) = metadata.row_orderings
-    assert tuple(key.column_index for key in row_ordering.order_keys) == (0,)
-    assert row_ordering.scope == RowOrderingScope.GLOBAL
 
 
 def test_fixed_size_rolling_with_ordered_passthrough_metadata(
@@ -167,14 +164,11 @@ def test_fixed_size_rolling_with_ordered_passthrough_metadata(
 
     metadata = metadata_collector[0]
     assert metadata.partitioning is not None
-    assert isinstance(metadata.partitioning.inter_rank, RangeScheme)
+    assert isinstance(metadata.partitioning.inter_rank, OrderScheme)
     assert metadata.partitioning.local == "inherit"
-    (ordering,) = metadata.partitioning.inter_rank.partition_orderings
+    (ordering,) = metadata.partitioning.inter_rank.orderings
     assert tuple(key.column_index for key in ordering.keys) == (0,)
     assert ordering.strict_boundaries is True
-    (row_ordering,) = metadata.row_orderings
-    assert tuple(key.column_index for key in row_ordering.order_keys) == (0,)
-    assert row_ordering.scope == RowOrderingScope.GLOBAL
 
 
 @pytest.mark.parametrize(

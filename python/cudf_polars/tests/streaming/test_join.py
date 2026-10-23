@@ -14,8 +14,8 @@ import polars as pl
 import pylibcudf as plc
 from cudf_streaming.channel_metadata import (
     OrderKey,
-    PartitionOrdering,
-    RangeScheme,
+    OrderScheme,
+    Ordering,
 )
 from cudf_streaming.table_chunk import TableChunk
 
@@ -218,9 +218,9 @@ def _order_partitioning(
         br=spmd_engine.context.br(),
     )
     return NormalizedPartitioning(
-        RangeScheme(
+        OrderScheme(
             [
-                PartitionOrdering(
+                Ordering(
                     [OrderKey(index, order, null_order) for index in key_indices],
                     chunk,
                     strict_boundaries=True,
@@ -259,12 +259,12 @@ def test_ordered_join_after_set_sorted_inputs(spmd_engine_factory):
     metadata = _set_sorted_join_metadata(spmd_engine_factory)
 
     assert metadata.partitioning is not None
-    assert isinstance(metadata.partitioning.inter_rank, RangeScheme)
+    assert isinstance(metadata.partitioning.inter_rank, OrderScheme)
     assert metadata.partitioning.local == "inherit"
-    (ordering,) = metadata.partitioning.inter_rank.partition_orderings
+    (ordering,) = metadata.partitioning.inter_rank.orderings
     assert tuple(key.column_index for key in ordering.keys) == (0,)
     assert ordering.strict_boundaries is True
-    assert metadata.row_orderings == ()
+    assert ordering.locally_ordered is False
 
 
 def test_ordered_join_strategy_matches_exact_ordering_width(spmd_engine):

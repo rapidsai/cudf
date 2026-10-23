@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Over IR node for streaming window expressions."""
 
@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, ClassVar, cast
 
 from cudf_polars.dsl.expr import Agg, Col, Len, NamedExpr
 from cudf_polars.dsl.ir import IR, GroupBy, Select
-from cudf_polars.dsl.utils.column_domain import ColumnBinding, column_domain_bindings
 from cudf_polars.dsl.utils.naming import names_to_indices, unique_names
 from cudf_polars.streaming.groupby import combine, decompose
 
@@ -138,7 +137,6 @@ class Over(IR):
     """Window over() IR node for the streaming runtime."""
 
     __slots__ = ("exprs", "is_scalar", "key_indices")
-    _preserves_output_order: ClassVar[bool] = True
     _non_child: ClassVar[tuple[str, ...]] = (
         "schema",
         "key_indices",
@@ -178,16 +176,6 @@ class Over(IR):
         # At evaluation time Over is just a Select with should_broadcast=True;
         # the window-specific work lives in the GroupedWindow expressions.
         return Select.do_evaluate(exprs, True, df, context=context)  # noqa: FBT003
-
-
-@column_domain_bindings.register(Over)
-def _(node: Over) -> dict[str, ColumnBinding]:
-    """Return direct input-column bindings for Over output."""
-    return {
-        item.name: ColumnBinding(0, item.value.name)
-        for item in node.exprs
-        if isinstance(item.value, Col)
-    }
 
 
 def _is_scalar_grouped_window(expr: GroupedWindow) -> bool:
