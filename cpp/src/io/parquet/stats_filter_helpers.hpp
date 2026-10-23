@@ -242,7 +242,8 @@ class stats_caster_base {
         if constexpr (cudf::is_floating_point<T>()) {
           if (std::isnan(val[index])) {
             val[index] = T{};  // No non-empty nulls
-            return set_to_null();
+            set_to_null();
+            return;
           }
         }
       }
