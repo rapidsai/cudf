@@ -116,7 +116,6 @@ class row_lexicographic_comparator {
     __device__ weak_ordering operator()(column_device_view const&,
                                         size_type,
                                         size_type) const noexcept
-      requires(not cudf::concepts::arithmetic<Element>)
     {
       CUDF_UNREACHABLE("Primitive lexicographic comparison requires numeric columns.");
     }

@@ -54,7 +54,6 @@ class element_hasher {
 
   // @cond
   template <typename T>
-    requires(not column_device_view::has_element_accessor<T>())
   __device__ result_type operator()(result_type, column_device_view const&, size_type) const
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");

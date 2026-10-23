@@ -201,7 +201,6 @@ struct alignas(16) base_normalator {
  private:
   struct integer_sizeof_fn {
     template <typename T>
-      requires(not cudf::concepts::integral_not_bool<T>)
     CUDF_HOST_DEVICE std::size_t operator()() const
     {
 #ifndef __CUDA_ARCH__

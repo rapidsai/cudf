@@ -67,7 +67,6 @@ struct DeviceSum {
 
   template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
-    requires(not cudf::concepts::timestamp<T> and not cudf::concepts::fixed_point<T>)
   {
     return T{0};
   }
@@ -96,7 +95,6 @@ struct DeviceCount {
 
   template <typename T>
   CUDF_HOST_DEVICE inline T operator()(T const&, T const& rhs)
-    requires(not cudf::concepts::timestamp<T>)
   {
     return rhs + T{1};
   }
@@ -122,7 +120,6 @@ struct DeviceMin {
   template <typename T>
   CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs)
     -> decltype(cudf::detail::min(lhs, rhs))
-    requires(not cudf::concepts::fixed_width<T>)
   {
     return cudf::detail::min(lhs, rhs);
   }
@@ -180,7 +177,6 @@ struct DeviceMax {
   template <typename T>
   CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs)
     -> decltype(cudf::detail::max(lhs, rhs))
-    requires(not cudf::concepts::fixed_width<T>)
   {
     return cudf::detail::max(lhs, rhs);
   }
@@ -237,7 +233,6 @@ struct DeviceProduct {
 
   template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
-    requires(not cudf::concepts::fixed_point<T>)
   {
     return T{1};
   }
@@ -285,7 +280,6 @@ struct DeviceBitAnd {
 
   template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
-    requires(not cuda::std::integral<T>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Bitwise AND is only supported for integral types.");
@@ -314,7 +308,6 @@ struct DeviceBitOr {
 
   template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
-    requires(not cuda::std::integral<T>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Bitwise OR is only supported for integral types.");
@@ -343,7 +336,6 @@ struct DeviceBitXor {
 
   template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
-    requires(not cuda::std::integral<T>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Bitwise XOR is only supported for integral types.");

@@ -221,7 +221,6 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  */
 template <typename Element>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
-  requires(not cuda::std::floating_point<Element>)
 {
   return detail::compare_elements(lhs, rhs);
 }
@@ -251,7 +250,6 @@ __device__ bool equality_compare(Element lhs, Element rhs)
  */
 template <typename Element>
 __device__ bool equality_compare(Element const lhs, Element const rhs)
-  requires(not cuda::std::floating_point<Element>)
 {
   return lhs == rhs;
 }

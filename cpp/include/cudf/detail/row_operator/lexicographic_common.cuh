@@ -55,7 +55,6 @@ struct sorting_physical_element_comparator {
   template <typename Element>
   __device__ constexpr cudf::detail::weak_ordering operator()(Element const lhs,
                                                               Element const rhs) const noexcept
-    requires(not cuda::std::floating_point<Element>)
   {
     return cudf::detail::compare_elements(lhs, rhs);
   }

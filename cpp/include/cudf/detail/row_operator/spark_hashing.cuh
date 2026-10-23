@@ -93,7 +93,6 @@ class spark_device_row_hasher {
     }
 
     template <typename T>
-      requires(not cudf::concepts::nested<T>)
     __device__ result_type operator()(column_device_view const& col,
                                       size_type row_index) const noexcept
     {

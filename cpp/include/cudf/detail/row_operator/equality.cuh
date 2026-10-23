@@ -68,7 +68,6 @@ struct nan_equal_physical_equality_comparator {
    */
   template <typename Element>
   __device__ constexpr bool operator()(Element const lhs, Element const rhs) const noexcept
-    requires(not cuda::std::floating_point<Element>)
   {
     return lhs == rhs;
   }

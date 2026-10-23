@@ -86,7 +86,6 @@ class element_hasher {
   template <typename T>
   __device__ result_type operator()(column_device_view const& col,
                                     size_type row_index) const noexcept
-    requires(not column_device_view::has_element_accessor<T>())
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
@@ -155,7 +154,6 @@ class device_row_hasher {
     template <typename T>
     __device__ result_type operator()(column_device_view const& col,
                                       size_type row_index) const noexcept
-      requires(not cudf::concepts::nested<T> and not cudf::concepts::dictionary<T>)
     {
       return _element_hasher.template operator()<T>(col, row_index);
     }

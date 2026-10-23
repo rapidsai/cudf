@@ -209,7 +209,6 @@ class device_row_comparator {
     template <typename KeyType>
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type const, size_type const) const noexcept
-      requires(not cuda::std::totally_ordered<KeyType>)
     {
       CUDF_UNREACHABLE("Key types are not comparable");
     }

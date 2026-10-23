@@ -71,7 +71,6 @@ struct input_indexalator : base_normalator<input_indexalator, cudf::size_type> {
       return static_cast<cudf::size_type>(*static_cast<T const*>(tp));
     }
     template <typename T>
-      requires(not cudf::concepts::integral_not_bool<T>)
     __device__ cudf::size_type operator()(void const*)
     {
       CUDF_UNREACHABLE("only integral types are supported");
@@ -170,7 +169,6 @@ struct output_indexalator : base_normalator<output_indexalator, cudf::size_type>
       (*static_cast<T*>(tp)) = static_cast<T>(value);
     }
     template <typename T>
-      requires(not cudf::concepts::integral_not_bool<T>)
     __device__ void operator()(void*, cudf::size_type const)
     {
       CUDF_UNREACHABLE("only index types are supported");

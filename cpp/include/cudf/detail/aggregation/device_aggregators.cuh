@@ -176,7 +176,6 @@ struct update_target_from_dictionary {
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
-    requires(!cudf::concepts::dictionary<Source>)
   {
     update_target_element<Source, k>{}(target, target_index, source, source_index);
   }
@@ -248,7 +247,6 @@ struct update_target_element<dictionary32, k> {
                                size_type,
                                column_device_view,
                                size_type) const noexcept
-      requires(not cudf::concepts::dictionary_key<KeysType>)
     {
     }
   };
@@ -291,7 +289,6 @@ struct update_target_element<dictionary32, k> {
                                size_type,
                                column_device_view,
                                size_type) const noexcept
-      requires(not cudf::concepts::dictionary_key<KeysType>)
     {
     }
   };

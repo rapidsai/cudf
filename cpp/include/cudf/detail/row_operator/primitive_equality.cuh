@@ -51,7 +51,6 @@ class element_equality_comparator {
 
   // @cond
   template <typename Element>
-    requires(not cuda::std::equality_comparable<Element>)
   __device__ bool operator()(column_device_view const&,
                              column_device_view const&,
                              size_type,

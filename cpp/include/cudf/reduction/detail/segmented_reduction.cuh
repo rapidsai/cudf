@@ -87,7 +87,6 @@ void segmented_reduce(InputIterator,
                       BinaryOp,
                       OutputType,
                       cuda::stream_ref)
-  requires(!(cudf::concepts::fixed_width<OutputType> && !cudf::concepts::fixed_point<OutputType>))
 {
   CUDF_FAIL(
     "Unsupported data types called on segmented_reduce. Only numeric and chrono types are "
