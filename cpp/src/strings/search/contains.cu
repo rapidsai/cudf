@@ -94,12 +94,6 @@ constexpr int LRB_CHUNK_BYTES = 4096;
 constexpr int LRB_CHUNK_SHIFT = 12;  // log2(LRB_CHUNK_BYTES)
 static_assert((1 << LRB_CHUNK_SHIFT) == LRB_CHUNK_BYTES);
 
-/// log2 of the number of chunk tasks per row of `bin`: rows in bin b have at most 2^b bytes.
-CUDF_HOST_DEVICE constexpr int lrb_chunk_shift(int bin)
-{
-  return bin > LRB_CHUNK_SHIFT ? bin - LRB_CHUNK_SHIFT : 0;
-}
-
 /**
  * @brief Rows of at most this many bytes are searched thread-per-row directly inside the
  * histogram pass and are never binned or scattered.
@@ -388,7 +382,8 @@ CUDF_KERNEL void lrb_search_kernel(column_device_view const d_strings,
   auto const bin_count = d_hist[lane];
   if (!warp.any(bin_count != 0)) { return; }  // every row was resolved in the histogram pass
   auto const rows_per_task = cudf::detail::warp_size / lrb_threads_per_row(lane);
-  auto const chunk_shift   = lrb_chunk_shift(lane);  // chunk tasks per row = 1 << chunk_shift
+  // log2 of the chunk tasks per row of this lane's bin: rows in bin b have at most 2^b bytes
+  auto const chunk_shift = cuda::std::max(lane - LRB_CHUNK_SHIFT, 0);
   auto const bin_tasks =
     static_cast<int64_t>(cudf::util::div_rounding_up_safe(bin_count, rows_per_task)) << chunk_shift;
   auto const tasks_incl  = cg::inclusive_scan(warp, bin_tasks);
@@ -410,7 +405,7 @@ CUDF_KERNEL void lrb_search_kernel(column_device_view const d_strings,
     auto const first    = warp.shfl(my_first, bin);
     auto const chunk    = static_cast<int>(warp.shfl(my_chunk, bin));
     auto const end      = warp.shfl(bin_start + bin_count, bin);
-    auto const chunked  = lrb_chunk_shift(bin) > 0;  // rows of this bin span several tasks
+    auto const chunked  = bin > LRB_CHUNK_SHIFT;  // rows of this bin span several tasks
     auto const G        = lrb_threads_per_row(bin);
     auto const slot     = first + lane / G;
     auto const row      = (slot < end) ? d_sorted[slot] : -1;
