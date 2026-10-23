@@ -264,7 +264,7 @@ struct flatten_functor {
   template <typename T, typename... Args>
   void operator()(Args&&...)
     requires(!cudf::concepts::fixed_width<T> && !cudf::concepts::string_view<T> &&
-             !cudf::concepts::list_view<T> && !cudf::concepts::struct_view<T>)
+             !cudf::concepts::nested<T>)
   {
     CUDF_FAIL("Unsupported column type in row_bit_count");
   }

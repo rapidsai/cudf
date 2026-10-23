@@ -38,8 +38,7 @@ struct find_index_fn {
                                      scalar const& key,
                                      cuda::stream_ref stream,
                                      rmm::device_async_resource_ref mr) const
-    requires(not cudf::concepts::dictionary<Element> and not cudf::concepts::list_view<Element> and
-             not cudf::concepts::struct_view<Element>)
+    requires(not cudf::concepts::dictionary<Element> and not cudf::concepts::nested<Element>)
   {
     auto const num_keys = input.keys_size();
     if (!key.is_valid(stream) || num_keys == 0) {
@@ -74,8 +73,7 @@ struct find_index_fn {
                                      scalar const&,
                                      cuda::stream_ref,
                                      rmm::device_async_resource_ref) const
-    requires(cudf::concepts::dictionary<Element> or cudf::concepts::list_view<Element> or
-             cudf::concepts::struct_view<Element>)
+    requires(cudf::concepts::dictionary<Element> or cudf::concepts::nested<Element>)
   {
     CUDF_FAIL(
       "dictionary, list_view, and struct_view columns cannot be the keys column of a dictionary");
