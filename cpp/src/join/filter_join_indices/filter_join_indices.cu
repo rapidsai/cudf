@@ -58,7 +58,7 @@ VectorPair full_to_left_join_indices(device_span<size_type const> left_indices,
                                      cuda::stream_ref stream,
                                      rmm::device_async_resource_ref mr)
 {
-  auto const keep = [left = left_indices.data()] __device__(std::size_t i) {
+  auto const keep = [left = left_indices.data()] __device__(std::size_t i) -> bool {
     return left[i] != JoinNoMatch;
   };
   auto const begin  = cuda::counting_iterator<std::size_t>{0};
@@ -156,7 +156,8 @@ filter_join_indices(cudf::table_view const& left,
   auto right_table = table_device_view::create(right, stream);
 
   // Allocate array to store predicate evaluation results
-  auto predicate_results = rmm::device_uvector<bool>(left_indices.size(), stream);
+  auto predicate_results = cuda::device_buffer<bool>(
+    stream, cudf::get_current_device_resource_ref(), left_indices.size(), cuda::no_init);
 
   // Configure kernel parameters with dynamic shared memory calculation
   int device_id;

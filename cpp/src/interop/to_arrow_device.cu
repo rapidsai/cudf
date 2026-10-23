@@ -27,7 +27,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/stream>
-#include <thrust/for_each.h>
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
@@ -66,6 +65,8 @@ int set_buffer(std::unique_ptr<T> device_buf, int64_t i, ArrowArray* out)
       return sizeof(typename T::value_type);
     } else if constexpr (is_device_uvector<T>::value) {
       return sizeof(typename T::value_type) * device_buf->size();
+    } else if constexpr (std::is_same_v<T, cuda::device_buffer<cudf::bitmask_type>>) {
+      return sizeof(bitmask_type) * device_buf->size();
     } else {
       return device_buf->size();
     }

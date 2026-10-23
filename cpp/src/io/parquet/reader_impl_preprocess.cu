@@ -17,6 +17,7 @@
 #include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
@@ -24,10 +25,8 @@
 
 #include <rmm/exec_policy.hpp>
 
-#include <cub/device/device_transform.cuh>
+#include <cuda/buffer>
 #include <cuda/iterator>
-#include <thrust/binary_search.h>
-#include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
@@ -41,6 +40,26 @@
 namespace cudf::io::parquet::detail {
 
 namespace {
+
+/**
+ * @brief Decide which nz map consumer, if any, can decode @p page.
+ *
+ * @param page Page to classify
+ * @param chunk Column chunk the page belongs to
+ * @return The page's nz map kind, or `NONE` if no consumer can decode it
+ */
+[[nodiscard]] nz_map_kind classify_nz_map_kind(PageInfo const& page, ColumnChunkDesc const& chunk)
+{
+  // DELTA_BINARY_PACKED is the only encoding with an nz map consumer today.
+  bool const has_consumer = BitAnd(page.kernel_mask, decode_kernel_mask::DELTA_BINARY) != 0;
+  if (!has_consumer) { return nz_map_kind::NONE; }
+
+  // Only flat (depth-1, non-repeated) columns have a consumer today. Lists and structs of delta
+  // leaves keep decoding their own levels.
+  bool const is_flat = chunk.max_level[level_type::REPETITION] == 0 && chunk.max_nesting_depth <= 1;
+  return is_flat ? nz_map_kind::DELTA_FLAT : nz_map_kind::NONE;
+}
+
 // Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
 // be treated as a string. Currently the only logical type that has special handling is DECIMAL.
 // Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
@@ -71,7 +90,8 @@ void reader_impl::build_string_dict_indices()
   auto& pass = *_pass_itm_data;
 
   // compute number of indices per chunk and a summed total
-  rmm::device_uvector<size_t> str_dict_index_count(pass.chunks.size() + 1, _stream);
+  cuda::device_buffer<size_t> str_dict_index_count(
+    _stream, cudf::get_current_device_resource_ref(), pass.chunks.size() + 1, cuda::no_init);
   thrust::fill(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
                str_dict_index_count.begin(),
                str_dict_index_count.end(),
@@ -90,7 +110,7 @@ void reader_impl::build_string_dict_indices()
   if (total_str_dict_indexes == 0) { return; }
 
   // convert to offsets
-  rmm::device_uvector<size_t>& str_dict_index_offsets = str_dict_index_count;
+  cuda::device_buffer<size_t>& str_dict_index_offsets = str_dict_index_count;
   thrust::exclusive_scan(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
                          str_dict_index_offsets.begin(),
                          str_dict_index_offsets.end(),
@@ -98,7 +118,7 @@ void reader_impl::build_string_dict_indices()
                          0);
 
   // allocate and distribute pointers
-  pass.str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
+  pass.str_dict_index = cudf::detail::make_zeroed_device_buffer_async<string_index_pair>(
     total_str_dict_indexes, _stream, cudf::get_current_device_resource_ref());
 
   auto iter = cuda::counting_iterator<size_t>{0};
@@ -297,20 +317,32 @@ void reader_impl::allocate_level_decode_space()
   std::vector<size_t> rep_level_sizes(num_pages);
 
   // Loop over pages to compute sizes
+  auto const page_mask     = subpass_page_mask_span();
   size_t total_memory_size = 0;
   for (size_t idx = 0; idx < num_pages; idx++) {
+    auto& page = pages[idx];
+    // Clear any selection left over from a previous subpass, on every page, including masked-out
+    // ones. A subpass's page array is filled by copying whole `PageInfo` structs out of
+    // `pass.pages`, so on the second and later subpasses of a pass these two fields can still hold
+    // what the previous subpass wrote, including a `nz_map` pointer into scratch that
+    // subpass has since released. The reset has to precede the page-mask `continue` below, or a
+    // masked-out page would keep that stale selection and carry the dangling pointer to the
+    // device.
+    page.map_kind = nz_map_kind::NONE;
+    page.nz_map   = nullptr;
+
     // Skip pages that are masked out - no need to allocate level decode space for them
-    auto const page_mask = subpass_page_mask_span();
     if (!page_mask.is_empty() && !page_mask[idx]) {
       def_level_sizes[idx] = 0;
       rep_level_sizes[idx] = 0;
       continue;
     }
 
-    auto const& p     = pages[idx];
-    auto const& chunk = pass.chunks[p.chunk_idx];
+    auto const& chunk = pass.chunks[page.chunk_idx];
+    // A masked-out page is never classified, so it is never selected and never allocated for.
+    if (_nz_map_enabled) { page.map_kind = classify_nz_map_kind(page, chunk); }
 
-    compute_page_level_decode_sizes(p,
+    compute_page_level_decode_sizes(page,
                                     chunk,
                                     pass.level_type_size,
                                     pass.skip_rows,
@@ -350,6 +382,75 @@ void reader_impl::allocate_level_decode_space()
                  "Repetition level size is not a multiple of the level type size");
     pages[idx].num_decoded_level_values =
       std::max(def_level_sizes[idx], rep_level_sizes[idx]) / pass.level_type_size;
+  }
+
+  // Nothing below can do anything with the nz map producer disabled: `classify_nz_map_kind` is not
+  // called in that case, so every page is `NONE`. Return before allocating or scanning anything.
+  if (!_nz_map_enabled) { return; }
+
+  // TODO: count the nz map scratch in the chunked-read budget, before the nz map producer is
+  // enabled by default.
+  //
+  // For now, both `level_decode_data` above and the allocations below are not tracked in the
+  // chunked-read budget. We will fix that once we start actually leveraging the nz map producer and
+  // therefore introduce some of the machinery that will be needed to calculate the memory usage.
+  //
+  // Hand out the out-of-line nz map scratch. There is exactly one for each mapped page, so most
+  // pages (those that do not use the nz map producer) have nothing here. This information is only
+  // needed on the host. On device, a non-null `PageInfo::nz_map` always indicates that state
+  // exists.
+  std::vector<size_t> nz_map_slot(num_pages, std::numeric_limits<size_t>::max());
+  size_t num_mapped = 0;
+  for (size_t idx = 0; idx < num_pages; ++idx) {
+    if (pages[idx].map_kind != nz_map_kind::NONE) { nz_map_slot[idx] = num_mapped++; }
+  }
+  if (num_mapped == 0) { return; }
+
+  subpass.nz_map_buf = cudf::detail::hostdevice_vector<page_nz_map>(num_mapped, _stream);
+
+  auto host_state = [&](size_t idx) -> page_nz_map* {
+    return nz_map_slot[idx] != std::numeric_limits<size_t>::max()
+             ? subpass.nz_map_buf.host_ptr(nz_map_slot[idx])
+             : nullptr;
+  };
+
+  // Point each mapped page at its scratch and size the flat valid-rank maps in a single walk.
+  // `PageInfo` travels to the device, so the page carries the device address while the seeding
+  // here goes through `host_state()`. A required page needs no map at all since its rank map is
+  // the identity, which the consumer synthesizes rather than reading. The sizes are stored rather
+  // than recomputed so that the loop below, which hands out the slices, cannot disagree with this
+  // one.
+  std::vector<size_t> flat_map_sizes(num_pages, 0);
+  size_t flat_nz_map_size = 0;
+  for (size_t idx = 0; idx < num_pages; ++idx) {
+    auto* const state = host_state(idx);
+    if (state == nullptr) { continue; }
+    auto& page  = pages[idx];
+    page.nz_map = subpass.nz_map_buf.device_ptr(nz_map_slot[idx]);
+    if (page.has_nz_map(nz_map_kind::DELTA_FLAT)) {
+      auto const& chunk = pass.chunks[page.chunk_idx];
+      state->nz_count   = page_nz_map::not_yet_produced;
+      if (chunk.max_level[level_type::DEFINITION] != 0) {
+        // The producer never indexes past `min(num_input_values, num_decoded_level_values)`, which
+        // is set above and is the smaller of the two for a sliced read. A page whose levels are
+        // entirely outside the row range decodes none, so it gets no slice at all; the producer
+        // takes that page's `def == nullptr` path and reports a zero count, and the consumer never
+        // reaches the map.
+        flat_map_sizes[idx] =
+          static_cast<size_t>(std::min(page.num_input_values, page.num_decoded_level_values)) *
+          sizeof(uint32_t);
+        flat_nz_map_size += flat_map_sizes[idx];
+      }
+    }
+  }
+  subpass.flat_nz_map_data = cuda::device_buffer<std::byte>{
+    _stream, cudf::get_current_device_resource_ref(), flat_nz_map_size, cuda::no_init};
+  auto* flat_nz_map_ptr = reinterpret_cast<uint8_t*>(subpass.flat_nz_map_data.data());
+  for (size_t idx = 0; idx < num_pages; ++idx) {
+    if (flat_map_sizes[idx] != 0) {
+      host_state(idx)->nz_idx = reinterpret_cast<uint32_t*>(flat_nz_map_ptr);
+      flat_nz_map_ptr += flat_map_sizes[idx];
+    }
   }
 }
 
@@ -435,7 +536,8 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
 
   // Compute the number of offsets per page on the GPU using batch_size from nesting info
   auto const num_pages = subpass.pages.size();
-  rmm::device_uvector<size_t> d_page_offset_counts(num_pages, _stream);
+  cuda::device_buffer<size_t> d_page_offset_counts(
+    _stream, cudf::get_current_device_resource_ref(), num_pages, cuda::no_init);
 
   thrust::transform(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_t>{0},
@@ -444,7 +546,8 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                     compute_page_offset_count{subpass.pages, pass.chunks, skip_rows, num_rows});
 
   // Compute prefix sum (exclusive scan) to get indices for each page
-  subpass.page_string_offset_indices = rmm::device_uvector<size_t>(num_pages, _stream);
+  subpass.page_string_offset_indices = cuda::device_buffer<size_t>(
+    _stream, cudf::get_current_device_resource_ref(), num_pages, cuda::no_init);
   thrust::exclusive_scan(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
                          d_page_offset_counts.begin(),
                          d_page_offset_counts.end(),
@@ -458,7 +561,8 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
                                                       _stream);
 
   // Allocate the string offset buffer
-  subpass.string_offset_buffer = rmm::device_uvector<uint32_t>(total_num_offsets, _stream, _mr);
+  subpass.string_offset_buffer =
+    cuda::device_buffer<uint32_t>(_stream, _mr, total_num_offsets, cuda::no_init);
 
   // Set the string offset buffer for non-dictionary, non-FLBA string columns
   for (size_t col_idx = 0; col_idx < pass.chunks.size(); ++col_idx) {
@@ -577,7 +681,7 @@ void reader_impl::read_compressed_data()
 
   // Zero out the vector before `decode_page_headers` as it may not write every byte of the buffer,
   // and`sort_pages` copies `PageInfo` as whole objects.
-  auto unsorted_pages = cudf::detail::make_zeroed_device_uvector_async<PageInfo>(
+  auto unsorted_pages = cudf::detail::make_zeroed_device_buffer_async<PageInfo>(
     total_pages, _stream, cudf::get_current_device_resource_ref());
 
   // decoding of column/page information
@@ -1033,7 +1137,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
                          [](auto& l, auto& r) { return l.nesting_depth < r.nesting_depth; }))
         .nesting_depth;
 
-    auto const d_cols_info = cudf::detail::make_device_uvector_async(
+    auto const d_cols_info = cudf::detail::make_device_buffer_async(
       h_cols_info, _stream, cudf::get_current_device_resource_ref());
 
     // Vector to store page sizes for each column at each depth
@@ -1056,7 +1160,8 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
         : num_keys_per_col * std::max<size_t>(1, max_keys_per_iter / num_keys_per_col);
 
     // Size iterator. Indexes pages by sorted order
-    rmm::device_uvector<size_t> size_input{num_keys_per_iter, _stream};
+    cuda::device_buffer<size_t> size_input(
+      _stream, cudf::get_current_device_resource_ref(), num_keys_per_iter, cuda::no_init);
 
     // To keep track of the starting key of an iteration
     size_t key_start = 0;
@@ -1195,7 +1300,8 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
 
   auto page_keys = make_page_key_iterator(subpass.pages);
 
-  rmm::device_uvector<size_t> d_col_sizes(_input_columns.size(), _stream);
+  cuda::device_buffer<size_t> d_col_sizes(
+    _stream, cudf::get_current_device_resource_ref(), _input_columns.size(), cuda::no_init);
 
   // use page_index to fetch page string sizes in the proper order
   auto val_iter = cuda::transform_iterator(subpass.pages.device_begin(),
@@ -1210,7 +1316,8 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
     cuda::make_tabulate_output_iterator(set_str_offset_fn{subpass.pages.device_ptr()}));
 
   // now sum up page sizes
-  rmm::device_uvector<int> reduce_keys(d_col_sizes.size(), _stream);
+  cuda::device_buffer<int> reduce_keys(
+    _stream, cudf::get_current_device_resource_ref(), d_col_sizes.size(), cuda::no_init);
   cudf::detail::reduce_by_key(page_keys,
                               page_keys + subpass.pages.size(),
                               val_iter,

@@ -38,8 +38,10 @@
 #include <functional>
 #include <future>
 #include <iterator>
+#include <limits>
 #include <numeric>
 #include <optional>
+#include <ranges>
 #include <regex>
 #include <span>
 #include <string_view>
@@ -534,23 +536,65 @@ metadata::metadata(datasource* source, bool read_page_indexes)
   auto const has_strings =
     std::ranges::any_of(schema, [](auto const& elem) { return elem.type == Type::BYTE_ARRAY; });
 
-  if (read_page_indexes and has_strings and not row_groups.empty() and
-      not row_groups.front().columns.empty()) {
-    // column index and offset index are encoded back to back.
-    // the first column of the first row group will have the first column index, the last
-    // column of the last row group will have the final offset index.
-    int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
-    auto const& last_col     = row_groups.back().columns.back();
-    int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+  // Column indexes are only used alongside offset indexes, skip if there are no offset indexes
+  auto const has_offset_index = [this] {
+    return std::ranges::any_of(
+      row_groups | std::views::transform(&RowGroup::columns) | std::views::join,
+      [](auto const& col) { return col.offset_index_offset > 0 and col.offset_index_length > 0; });
+  };
 
-    if (max_offset > min_offset) {
-      size_t const length     = max_offset - min_offset;
-      auto const page_idx_buf = source->host_read(min_offset, length);
-      setup_page_index({page_idx_buf->data(), length}, min_offset);
+  // Gather page index byte range info
+  auto const page_index_range = [&]() -> text::byte_range_info {
+    // Don't read page index if not required or if we don't have strings or only have column indexes
+    if (not read_page_indexes or not has_strings or not has_offset_index()) { return {}; }
+    try {
+      auto const range = page_index_byte_range();
+      if (std::cmp_less_equal(range.offset() + range.size(), source->size())) { return range; }
+    } catch (std::overflow_error const&) {
+      // Page indexes are optional so skip them if their byte range is invalid
     }
+    return {};
+  }();
+
+  // Setup page indexes if available
+  if (not page_index_range.is_empty()) {
+    auto const page_idx_buf = source->host_read(page_index_range.offset(), page_index_range.size());
+    setup_page_index({page_idx_buf->data(), page_idx_buf->size()}, page_index_range.offset());
   }
 
   sanitize_schema();
+}
+
+text::byte_range_info metadata::page_index_byte_range() const
+{
+  if (is_page_index_setup_) { return {}; }
+
+  if (row_groups.empty() or row_groups.front().columns.empty()) { return {}; }
+
+  // Scan all column chunks to compute the page index extent
+  int64_t min_offset = std::numeric_limits<int64_t>::max();
+  int64_t max_offset = 0;
+
+  // Helper to update the current page index extent
+  auto const update_extent = [&](int64_t offset, int32_t length) {
+    if (offset <= 0 or length <= 0) { return; }
+    auto const sum = cuda::add_overflow<int64_t>(offset, length);
+    CUDF_EXPECTS(not sum.overflow,
+                 "Encountered an invalid Parquet page index byte range",
+                 std::overflow_error);
+    min_offset = std::min(min_offset, offset);
+    max_offset = std::max(max_offset, sum.value);
+  };
+
+  for (auto const& row_group : row_groups) {
+    for (auto const& column : row_group.columns) {
+      update_extent(column.column_index_offset, column.column_index_length);
+      update_extent(column.offset_index_offset, column.offset_index_length);
+    }
+  }
+
+  if (max_offset <= min_offset) { return {}; }
+  return {min_offset, max_offset - min_offset};
 }
 
 void metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes, int64_t min_offset)
@@ -652,7 +696,7 @@ metadata::~metadata()
 }
 
 std::vector<metadata> aggregate_reader_metadata::metadatas_from_sources(
-  host_span<std::unique_ptr<datasource> const> sources, bool read_page_indexes)
+  std::span<std::unique_ptr<datasource> const> sources, bool read_page_indexes)
 {
   return parallel_construct_metadatas(sources, [read_page_indexes](auto const& source) {
     return metadata{source.get(), read_page_indexes};
@@ -668,7 +712,7 @@ aggregate_reader_metadata::collect_keyval_metadata() const
     std::transform(pfm.key_value_metadata.cbegin(),
                    pfm.key_value_metadata.cend(),
                    std::inserter(kv_map, kv_map.end()),
-                   [](auto const& kv) { return std::pair{kv.key, kv.value}; });
+                   [](auto const& kv) { return std::pair{kv.key, kv.value.value_or("")}; });
     return kv_map;
   });
 
@@ -1445,7 +1489,7 @@ std::unique_ptr<table> aggregate_reader_metadata::read_column_chunk_bounds(
                                          .has_is_null_operator = false};
 
   for (auto const& column_name : column_names) {
-    auto per_source_schema_indices = std::vector<int>(per_file_metadata.size());
+    auto schema_indices_per_source = std::vector<int>(per_file_metadata.size());
     auto dtype                     = data_type{type_id::EMPTY};
 
     for (auto src_idx = size_type{0}; std::cmp_less(src_idx, per_file_metadata.size()); ++src_idx) {
@@ -1462,13 +1506,12 @@ std::unique_ptr<table> aggregate_reader_metadata::read_column_chunk_bounds(
             column_name,
           std::invalid_argument);
       }
-      per_source_schema_indices[src_idx] = schema_idx;
+      schema_indices_per_source[src_idx] = schema_idx;
     }
 
-    auto [min_col, max_col, _] = cudf::type_dispatcher<dispatch_storage_type>(
-      dtype, stats_col, per_source_schema_indices, dtype, stream, mr);
-    columns.push_back(std::move(min_col));
-    columns.push_back(std::move(max_col));
+    std::ranges::move(cudf::type_dispatcher<dispatch_storage_type>(
+                        dtype, stats_col, schema_indices_per_source, dtype, stream, mr),
+                      std::back_inserter(columns));
   }
 
   return std::make_unique<table>(std::move(columns));
@@ -1512,6 +1555,15 @@ int aggregate_reader_metadata::map_schema_index(int schema_idx, int src_idx) con
 
   // Return the mapped schema idx.
   return schema_idx_map.at(schema_idx);
+}
+
+std::vector<int> aggregate_reader_metadata::map_schema_index_to_sources(int schema_idx) const
+{
+  auto schema_indices_per_source = std::vector<int>(per_file_metadata.size());
+  std::ranges::transform(std::views::iota(0, static_cast<int>(per_file_metadata.size())),
+                         schema_indices_per_source.begin(),
+                         [&](auto const src_idx) { return map_schema_index(schema_idx, src_idx); });
+  return schema_indices_per_source;
 }
 
 std::string aggregate_reader_metadata::get_pandas_index() const
@@ -2368,23 +2420,11 @@ aggregate_reader_metadata::select_columns(
 }
 
 std::vector<Type> aggregate_reader_metadata::get_parquet_types(
-  host_span<std::vector<size_type> const> row_group_indices,
-  host_span<int const> column_schemas) const
+  std::span<int const> column_schemas) const
 {
   std::vector<Type> parquet_types(column_schemas.size());
-  // Find a source with at least one row group
-  auto const src_iter =
-    std::ranges::find_if(row_group_indices, [](auto const& rg) { return rg.size() > 0; });
-  CUDF_EXPECTS(src_iter != row_group_indices.end(),
-               "Cannot determine Parquet types as no source has any selected row groups.",
-               std::invalid_argument);
-
-  // Source index
-  auto const src_index = std::distance(row_group_indices.begin(), src_iter);
-  // Use the first row group in this source
-  auto const first_row_group_index = row_group_indices[src_index].front();
   std::ranges::transform(column_schemas, parquet_types.begin(), [&](auto const schema_idx) {
-    return get_column_metadata(first_row_group_index, src_index, schema_idx).type;
+    return get_schema(schema_idx).type;
   });
 
   return parquet_types;

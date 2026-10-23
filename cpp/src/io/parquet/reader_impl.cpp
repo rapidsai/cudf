@@ -14,6 +14,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/io/parquet_schema.hpp>
@@ -24,13 +25,16 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/tuple>
+#include <cuda/stream>
 
 #include <algorithm>
 #include <bitset>
 #include <limits>
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -181,7 +185,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
   // Create an empty device vector to store the initial str offset for large string columns from for
   // string decoders.
-  auto initial_str_offsets = rmm::device_uvector<size_t>{0, _stream, _mr};
+  auto initial_str_offsets = cuda::device_buffer<size_t>{_stream, _mr, 0, cuda::no_init};
 
   pass.chunks.host_to_device_async(_stream);
   chunk_nested_valids.host_to_device_async(_stream);
@@ -192,16 +196,43 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
       cudf::detail::make_pinned_vector_async<size_t>(_input_columns.size(), _stream);
     std::ranges::fill(host_offsets_vector, std::numeric_limits<size_t>::max());
     // Initialize the initial string offsets vector from the host vector
-    initial_str_offsets = cudf::detail::make_device_uvector(host_offsets_vector, _stream, _mr);
+    initial_str_offsets = cudf::detail::make_device_buffer(host_offsets_vector, _stream, _mr);
     chunk_nested_str_data.host_to_device_async(_stream);
   }
 
   // create this before we fork streams
   kernel_error error_code(_stream);
 
-  // get the number of streams we need from the pool and tell them to wait on the H2D copies
+  // Both halves of the delta routing decision, taken in one walk so they cannot drift apart. The
+  // second is the complement of the skip that `decode_delta_binary_kernel` applies per page: if it
+  // ever came out false while some page still needed level decoding, that page would be decoded by
+  // neither kernel.
+  auto has_flat_nz_map     = false;
+  auto needs_level_decoder = false;
+  std::for_each(subpass.pages.host_begin(), subpass.pages.host_end(), [&](PageInfo const& page) {
+    auto const mapped = _nz_map_enabled && page.has_nz_map(nz_map_kind::DELTA_FLAT);
+    has_flat_nz_map |= mapped;
+    needs_level_decoder |=
+      BitAnd(page.kernel_mask, decode_kernel_mask::DELTA_BINARY) != 0 && not mapped;
+  });
+
+  // The producer and the consumer that reads its output share a stream, so the other decoders
+  // overlap with them rather than queueing behind them.
   int const nkernels = std::bitset<32>(kernel_mask).count();
-  auto streams       = cudf::detail::fork_streams(_stream, nkernels);
+  auto streams       = cudf::detail::fork_streams(_stream, nkernels + (has_flat_nz_map ? 1 : 0));
+  // Only forked when there is a map to produce. Without one there is nothing to order, and
+  // `decode_delta_binary` ignores the stream, so this stands in rather than aliasing a decoder's.
+  auto const nz_map_stream = has_flat_nz_map ? streams.back() : _stream;
+
+  if (has_flat_nz_map) {
+    precompute_flat_nz_map(subpass.pages,
+                           pass.chunks,
+                           subpass_page_mask_span(),
+                           skip_rows,
+                           num_rows,
+                           level_type_size,
+                           nz_map_stream);
+  }
 
   int s_idx = 0;
 
@@ -297,14 +328,18 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
 
   // launch delta binary decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BINARY) != 0) {
+    auto const delta_stream = streams[s_idx++];
     decode_delta_binary(subpass.pages,
                         pass.chunks,
                         num_rows,
                         skip_rows,
                         level_type_size,
                         subpass_page_mask_span(),
+                        has_flat_nz_map,
+                        needs_level_decoder,
                         error_code.data(),
-                        streams[s_idx++]);
+                        delta_stream,
+                        nz_map_stream);
   }
 
   // launch byte stream split decoder
@@ -395,7 +430,8 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   cudf::detail::join_streams(streams, _stream);
 
   // the delta_temp_buf in the subpass struct can be freed now
-  subpass.delta_temp_buf.release();
+  subpass.delta_temp_buf = cuda::device_buffer<uint8_t>(
+    _stream, subpass.delta_temp_buf.memory_resource(), 0, cuda::no_init);
 
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
@@ -1244,22 +1280,16 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
 std::vector<parquet::FileMetaData> read_parquet_footers(
   std::span<std::unique_ptr<datasource> const> sources)
 {
-  // Do not use arrow schema when only reading the parquet metadata.
-  constexpr auto use_arrow_schema = false;
-
-  // Do not select any columns when only reading the parquet metadata.
-  constexpr auto has_column_projection = false;
+  // Empty sources
+  if (sources.empty()) { return {}; }
 
   // Read page indexes if available here since we will want to reuse the raw metadata for later use.
   constexpr auto read_page_indexes = true;
 
-  // Parse the source dataset metadata
-  return aggregate_reader_metadata(
-           host_span<std::unique_ptr<datasource> const>{sources.data(), sources.size()},
-           use_arrow_schema,
-           has_column_projection,
-           read_page_indexes)
-    .get_parquet_metadatas();
+  // Parse sources into FileMetaData objects
+  return parallel_construct_metadatas(sources, [](auto const& source) {
+    return FileMetaData{metadata{source.get(), read_page_indexes}};
+  });
 }
 
 }  // namespace cudf::io::parquet::detail
