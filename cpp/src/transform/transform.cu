@@ -26,8 +26,8 @@
 
 #include <cudf_fragments.hpp>
 #include <jit/cache.hpp>
-#include <jit/column_views.hpp>
 #include <jit/helpers.hpp>
+#include <jit/output_columns.hpp>
 #include <jit/parser.hpp>
 #include <jit/reflect.hpp>
 #include <jit/row_ir.hpp>
@@ -40,10 +40,6 @@
 
 namespace cudf {
 namespace {
-
-column_view as_column_view(scalar_column_view const& scalar) { return scalar.as_column_view(); }
-
-column_view as_column_view(column_view const& column) { return column; }
 
 using jit::fixed_width_column;
 using jit::mutable_strings_column;
@@ -464,7 +460,7 @@ void perform_checks(std::variant<udf_source_type, lto_binary_type> source_type,
       return is_integral(c.type()) || is_floating_point(c.type());
     };
     static constexpr auto is_supported_input_type = [](auto const& c) {
-      auto col = std::visit([](auto& c) { return as_column_view(c); }, c);
+      auto col = std::visit([](auto& c) { return jit::as_column_view(c); }, c);
       return is_input_value_supported(col) ||
              (is_dictionary(col.type()) &&
               is_input_value_supported(col.child(dictionary_keys_column_index)));
@@ -498,7 +494,7 @@ void perform_checks(std::variant<udf_source_type, lto_binary_type> source_type,
     return is_fixed_width(c.type()) || c.type().id() == type_id::STRING || is_dictionary(c.type());
   };
   static constexpr auto is_supported_input_type = [&](auto const& c) {
-    auto col = std::visit([](auto const& c) { return as_column_view(c); }, c);
+    auto col = std::visit([](auto const& c) { return jit::as_column_view(c); }, c);
     return is_input_value_supported(col) ||
            (is_dictionary(col.type()) &&
             is_input_value_supported(col.child(dictionary_keys_column_index)));
@@ -1080,8 +1076,7 @@ struct transform_program::impl {
   {
   }
 
-  std::tuple<std::string, std::string, std::vector<std::string>, std::vector<std::string>>
-    reflection_;
+  jit::transform_reflection reflection_;
   udf_source_type source_type_;
   null_aware is_null_aware_;
   std::optional<void*> user_data_;

@@ -7,7 +7,7 @@
 
 #include <cudf/transform.hpp>
 
-#include <jit/column_views.hpp>
+#include <jit/output_columns.hpp>
 
 #include <memory>
 #include <span>
@@ -18,18 +18,33 @@
 
 namespace cudf::jit {
 
-using transform_reflection =
-  std::tuple<std::string, std::string, std::vector<std::string>, std::vector<std::string>>;
+struct transform_reflection {
+  std::string input_accessors;
+  std::string output_accessors;
+  std::vector<std::string> ptx_input_value_types;
+  std::vector<std::string> ptx_output_value_types;
+
+  bool operator==(transform_reflection const& other) const
+  {
+    return input_accessors == other.input_accessors && output_accessors == other.output_accessors &&
+           ptx_input_value_types == other.ptx_input_value_types &&
+           ptx_output_value_types == other.ptx_output_value_types;
+  }
+};
 
 /** @brief Reflects input/output accessors and PTX value types. */
 transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input_spec const> inputs,
-                             std::span<transform_output_spec const> outputs);
+                             std::span<transform_output_spec const> outputs,
+                             std::span<int32_t const> input_table_sources  = {},
+                             std::span<int32_t const> output_table_sources = {});
 
 /** @brief Reflects accessors and PTX value types from column storage. */
 transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input const> inputs,
-                             std::span<output_column const> outputs);
+                             std::span<output_column const> outputs,
+                             std::span<int32_t const> input_table_sources  = {},
+                             std::span<int32_t const> output_table_sources = {});
 
 /** @brief Derives input type specifications from columns or scalars. */
 std::vector<transform_input_spec> make_input_specs(std::span<transform_input const> inputs);
@@ -40,7 +55,7 @@ std::vector<transform_output_spec> make_output_specs(std::span<output_column con
 /** @brief Derives output type specifications from requested types and offsets. */
 std::vector<transform_output_spec> make_output_specs(
   std::span<transform_output const> outputs,
-  std::span<std::unique_ptr<column> const> output_offsets);
+  std::span<std::unique_ptr<column> const> string_offsets);
 
 /** @brief Reflects the UDF function signature from type specifications. */
 std::string reflect_udf_signature(bool is_null_aware,

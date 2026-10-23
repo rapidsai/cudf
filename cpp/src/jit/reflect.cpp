@@ -9,6 +9,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <jit/helpers.hpp>
 #include <jit/reflect.hpp>
 #include <jit/util.hpp>
 #include <rtcx/rtcx.hpp>
@@ -105,7 +106,9 @@ std::string reflect_output_column(transform_output_spec const& spec)
 
 transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input_spec const> inputs,
-                             std::span<transform_output_spec const> outputs)
+                             std::span<transform_output_spec const> outputs,
+                             std::span<int32_t const> input_table_sources,
+                             std::span<int32_t const> output_table_sources)
 {
   std::vector<std::string> in_types;
   bool use_physical_types = std::holds_alternative<lto_binary_type>(source_type);
@@ -114,12 +117,13 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
     auto column    = reflect_input_column(in);
     auto element   = reflect_input_element(in, use_physical_types);
     bool as_scalar = in.is_scalar;
-    auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
-                                           rtcx::reflect(i),
-                                           column,
-                                           element,
-                                           rtcx::reflect(as_scalar),
-                                           rtcx::reflect(0));
+    auto accessor  = rtcx::reflect_template(
+      "cudf::jit::column_accessor",
+      rtcx::reflect(i),
+      column,
+      element,
+      rtcx::reflect(as_scalar),
+      input_table_sources.empty() ? rtcx::reflect(0) : rtcx::reflect(input_table_sources[i]));
     in_types.push_back(accessor);
   }
 
@@ -129,12 +133,13 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
     auto column    = reflect_output_column(out);
     auto element   = reflect_output_element(out, use_physical_types);
     bool as_scalar = false;  // never scalar
-    auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
-                                           rtcx::reflect(i),
-                                           column,
-                                           element,
-                                           rtcx::reflect(as_scalar),
-                                           rtcx::reflect(0));
+    auto accessor  = rtcx::reflect_template(
+      "cudf::jit::column_accessor",
+      rtcx::reflect(i),
+      column,
+      element,
+      rtcx::reflect(as_scalar),
+      output_table_sources.empty() ? rtcx::reflect(0) : rtcx::reflect(output_table_sources[i]));
 
     out_types.push_back(accessor);
   }
@@ -155,13 +160,10 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
     }
   }
 
-  return std::make_tuple(ins, outs, ptx_in_types, ptx_out_types);
+  return {ins, outs, ptx_in_types, ptx_out_types};
 }
 
 namespace {
-
-column_view as_column_view(scalar_column_view const& scalar) { return scalar.as_column_view(); }
-column_view as_column_view(column_view const& column) { return column; }
 
 transform_input_spec make_input_spec(column_view const& column, bool is_scalar)
 {
@@ -251,11 +253,13 @@ std::vector<transform_output_spec> make_output_specs(
 
 transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input const> inputs,
-                             std::span<output_column const> outputs)
+                             std::span<output_column const> outputs,
+                             std::span<int32_t const> input_table_sources,
+                             std::span<int32_t const> output_table_sources)
 {
   auto input_specs  = make_input_specs(inputs);
   auto output_specs = make_output_specs(outputs);
-  return reflect(source_type, input_specs, output_specs);
+  return reflect(source_type, input_specs, output_specs, input_table_sources, output_table_sources);
 }
 
 std::string reflect_udf_signature(bool is_null_aware,
