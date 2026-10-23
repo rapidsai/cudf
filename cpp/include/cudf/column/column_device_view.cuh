@@ -1023,7 +1023,6 @@ struct pair_rep_accessor {
 
   template <typename R>
   [[nodiscard]] __device__ inline auto get_rep(cudf::size_type i) const
-    requires(not cuda::std::same_as<R, rep_type>)
   {
     return col.element<R>(i).value();
   }

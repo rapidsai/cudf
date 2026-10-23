@@ -312,7 +312,6 @@ class list_device_view {
 
     template <typename R>
     __device__ inline rep_type get_rep(cudf::size_type i) const
-      requires(not cuda::std::same_as<R, rep_type>)
     {
       return list.element<R>(i).value();
     }
