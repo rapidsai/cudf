@@ -342,11 +342,14 @@ fetch_footers_to_host(
 }
 
 /**
- * @copydoc fetch_page_indexes_to_host(std::span<std::reference_wrapper<cudf::io::datasource>
- * const>, std::span<byte_range_info const>)
+ * @brief Fetches host buffers of Parquet page index bytes from multiple input data sources
  *
  * @deprecated in release 26.12 and will be removed in a future release. Use the overload that
  * takes `std::span` instead.
+ *
+ * @param datasources Input datasources
+ * @param page_index_bytes_per_source Byte ranges of page index, one per datasource
+ * @return Vector of host buffers containing page index bytes, one per datasource
  */
 template <typename = void>
 [[deprecated("Use the overload that takes std::span.")]] [[nodiscard]] std::vector<
@@ -361,12 +364,19 @@ fetch_page_indexes_to_host(
 }
 
 /**
- * @copydoc fetch_byte_ranges_to_device_async(std::span<std::reference_wrapper<cudf::io::datasource>
- * const>, std::span<std::vector<byte_range_info> const>, io_submission_policy, cuda::stream_ref,
- * cudf::memory_resources)
+ * @brief Fetches lists of byte ranges from multiple datasources into device buffers
  *
  * @deprecated in release 26.12 and will be removed in a future release. Use the overload that
  * takes `std::span` instead.
+ *
+ * @param datasources Input datasources
+ * @param byte_ranges_per_source Vector of byte ranges to fetch, one per datasource
+ * @param policy Whether to serialize I/O submissions from callers
+ * @param stream CUDA stream
+ * @param mr Memory resources used to allocate the returned device buffers
+ *
+ * @return A tuple containing a vector of device buffers, a vector of vectors of device spans (one
+ * per byte range per datasource), and a future to wait on the read tasks
  */
 template <typename = void>
 [[deprecated("Use the overload that takes std::span.")]] std::tuple<
@@ -389,11 +399,20 @@ fetch_byte_ranges_to_device_async(
 }
 
 /**
- * @copydoc fetch_bloom_filters_to_device(cudf::io::datasource&, std::span<byte_range_info const>,
- * io_submission_policy, cuda::stream_ref, cudf::memory_resources)
+ * @brief Fetches Parquet bloom filter bitsets from a datasource into device buffers
  *
  * @deprecated in release 26.12 and will be removed in a future release. Use the overload that
  * takes `std::span` instead.
+ *
+ * @param datasource Input datasource
+ * @param bloom_filter_byte_ranges Byte ranges of complete bloom filters to fetch, must span a
+ * complete bloom filter
+ * @param policy Whether to serialize I/O submissions from callers
+ * @param stream CUDA stream
+ * @param mr Memory resources used to allocate the returned device buffers
+ *
+ * @return A pair containing buffers that own the fetched bitsets and one device span per input byte
+ * range
  */
 template <typename = void>
 [[deprecated("Use the overload that takes std::span.")]] std::
@@ -413,12 +432,20 @@ template <typename = void>
 }
 
 /**
- * @copydoc fetch_bloom_filters_to_device(std::span<std::reference_wrapper<cudf::io::datasource>
- * const>, std::span<std::vector<byte_range_info> const>, io_submission_policy, cuda::stream_ref,
- * cudf::memory_resources)
+ * @brief Fetches Parquet bloom filter bitsets from multiple datasources into device buffers
  *
  * @deprecated in release 26.12 and will be removed in a future release. Use the overload that
  * takes `std::span` instead.
+ *
+ * @param datasources Input datasources
+ * @param bloom_filter_byte_ranges_per_source Byte ranges of complete bloom filters to fetch, one
+ * vector per datasource. Each byte range must span a complete bloom filter.
+ * @param policy Whether to serialize I/O submissions from callers
+ * @param stream CUDA stream
+ * @param mr Memory resources used to allocate the returned device buffers
+ *
+ * @return A pair containing buffers that own the fetched bitsets and per-source device spans, with
+ * one inner vector per datasource
  */
 template <typename = void>
 [[deprecated("Use the overload that takes std::span.")]] std::pair<
