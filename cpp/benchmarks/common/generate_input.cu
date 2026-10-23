@@ -144,7 +144,6 @@ double non_fixed_width_size(data_profile const& profile)
 }
 
 template <typename T>
-  requires(not cudf::concepts::fixed_width<T>)
 double non_fixed_width_size(data_profile const& profile)
 {
   CUDF_FAIL("not implemented!");
@@ -544,7 +543,6 @@ std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& pr
                                                           cudf::size_type num_rows);
 
 template <typename T>
-  requires(not cudf::concepts::arithmetic_not_bool<T>)
 std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& profile,
                                                           cuda::std::philox4x32& engine,
                                                           cudf::size_type num_rows);
@@ -855,7 +853,6 @@ std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& pr
 
 // catch-all for all types not handled specifically above
 template <typename T>
-  requires(not cudf::concepts::arithmetic_not_bool<T>)
 std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& profile,
                                                           cuda::std::philox4x32& engine,
                                                           cudf::size_type num_rows)

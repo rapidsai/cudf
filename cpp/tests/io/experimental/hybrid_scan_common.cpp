@@ -53,7 +53,6 @@ cudf::test::strings_column_wrapper constant_strings(cudf::size_type value)
  */
 template <typename T>
 cudf::test::fixed_width_column_wrapper<T> descending_low_cardinality()
-  requires(not cudf::concepts::chrono<T> and not cudf::concepts::fixed_point<T>)
 {
   static_assert(
     cudf::is_chrono<T>() or cudf::is_fixed_point<T>(),

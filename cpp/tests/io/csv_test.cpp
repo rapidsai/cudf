@@ -271,7 +271,6 @@ void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const
 // Helper function to compare two column contents
 template <typename T>
 void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs)
-  requires(not cuda::std::floating_point<T>)
 {
   EXPECT_THAT(cudf::test::to_host<T>(rhs).first, ::testing::ElementsAreArray(lhs));
 }

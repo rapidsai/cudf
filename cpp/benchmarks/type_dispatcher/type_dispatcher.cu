@@ -88,7 +88,6 @@ struct ColumnHandle {
   }
 
   template <typename ColumnType>
-    requires(not cudf::concepts::rep_layout_compatible<ColumnType>)
   void operator()(cudf::mutable_column_device_view source_column, int work_per_thread)
   {
     CUDF_FAIL("Invalid type to benchmark.");
@@ -110,7 +109,6 @@ struct RowHandle {
   }
 
   template <typename T>
-    requires(not cudf::concepts::rep_layout_compatible<T>)
   __device__ void operator()(cudf::mutable_column_device_view source, cudf::size_type index)
   {
     CUDF_UNREACHABLE("Unsupported type.");
