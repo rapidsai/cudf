@@ -1041,6 +1041,17 @@ TEST_F(StringsContainsTests, InlineFlags)
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 0, 0, 1, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 
+  // many consecutive flag-only groups should not exhaust the host stack
+  std::string pattern;
+  for (int32_t i = 0; i < 100000; ++i) {
+    pattern += "(?i)";
+  }
+  pattern += "abc";
+  prog     = cudf::strings::regex_program::create(pattern);
+  results  = cudf::strings::contains_re(view, *prog);
+  expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
   // unsupported inline flags
   EXPECT_THROW(cudf::strings::regex_program::create("(?x)abc"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::regex_program::create("(?-i)abc"), cudf::logic_error);

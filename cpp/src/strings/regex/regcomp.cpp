@@ -463,6 +463,18 @@ class regex_parser {
   {
     _chr = 0;
 
+    // consume any flag-only groups: (?i) applies to the remainder of the enclosing group
+    while (!_lex_done && *_expr_ptr == '(') {
+      auto const expr_ptr_save        = _expr_ptr++;
+      auto const [inline_flags, term] = parse_inline_flags();
+      if (term != ')') {
+        _expr_ptr = expr_ptr_save;  // not a flag-only group
+        break;
+      }
+      _flags = static_cast<regex_flags>(_flags | inline_flags);
+      _prog.add_flags(inline_flags);
+    }
+
     auto [is_quoted, chr] = next_char();
     if (is_quoted) {
       switch (chr) {
@@ -584,14 +596,12 @@ class regex_parser {
       case '(': {
         // flags set inside this group are restored at its closing ')'
         _flags_stack.push(_flags);
+        // flag-only groups (?i) are consumed above so only the scoped (?i:...) is found here
         auto const [inline_flags, term] = parse_inline_flags();
-        if (term != 0) {
+        if (term == ':') {
           _flags = static_cast<regex_flags>(_flags | inline_flags);
           _prog.add_flags(inline_flags);
-          if (term == ':') { return LBRA_NC; }  // scoped flags: (?i:...)
-          // (?i) applies to the remainder of the enclosing group
-          _flags_stack.pop();
-          return lex();
+          return LBRA_NC;
         }
         if (*_expr_ptr == '?' && *(_expr_ptr + 1) == ':')  // non-capturing group
         {
