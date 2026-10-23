@@ -398,6 +398,10 @@ Use `cudf::host_span<T>` only when one of the following applies:
 2. The function must accept a libcudf-specific container that `std::span` cannot be constructed
    from directly.
 
+Pinned containers (`cudf::detail::host_vector`, `hostdevice_vector`) convert implicitly to
+`std::span` and silently drop `is_device_accessible()`, so a host-device copy downstream takes the
+pageable path. Keep `cudf::host_span` on any path where that property is useful.
+
 ## cudf::scalar
 
 A `cudf::scalar` is an object that can represent a singular, nullable value of any of the types
