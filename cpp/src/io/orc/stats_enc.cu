@@ -203,7 +203,8 @@ __device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, void const* r
 
 // Splits a nanosecond timestamp into the milliseconds and the sub-millisecond remainder ORC writes
 // a timestamp bound as
-__device__ cuda::std::pair<__int128_t, int32_t> split_nanosecond_timestamp(__int128_t nano_count)
+__device__ constexpr cuda::std::pair<__int128_t, int32_t> split_nanosecond_timestamp(
+  __int128_t nano_count)
 {
   auto constexpr ns_per_ms = __int128_t{1'000'000};
   auto ms                  = nano_count / ns_per_ms;
@@ -217,7 +218,7 @@ __device__ cuda::std::pair<__int128_t, int32_t> split_nanosecond_timestamp(__int
   return {ms, ns_remainder};
 }
 
-__device__ bool fits_int64(__int128_t value)
+__device__ constexpr bool fits_int64(__int128_t value)
 {
   return value >= cuda::std::numeric_limits<int64_t>::min() and
          value <= cuda::std::numeric_limits<int64_t>::max();
