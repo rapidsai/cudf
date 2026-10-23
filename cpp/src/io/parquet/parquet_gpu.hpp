@@ -852,14 +852,13 @@ __device__ inline bool is_literal_run(int const run_header) { return (run_header
 __device__ inline bool is_repeated_run(int const run_header) { return !is_literal_run(run_header); }
 
 /**
- * @brief Count all headers while retaining decoded descriptors in bounded per-chunk scratch.
+ * @brief Count headers and cache descriptors in bounded scratch.
  *
- * Scratch contains equally sized slices, one per chunk. A chunk that exceeds its capacity
- * continues counting but stops storing descriptors; finish_page_headers reparses it instead.
- * Dictionary pages also consume scratch slots. No capacity estimate is required for correctness.
+ * Each chunk gets an equal slice for data and dictionary pages. Counting continues on overflow;
+ * finish_page_headers reparses those chunks.
  *
- * @param[in,out] chunks Input column chunks; receives exact data/dictionary page counts
- * @param[out] scratch Temporary descriptors, with a size divisible by the chunk count
+ * @param[in,out] chunks Column chunks; receives exact data and dictionary page counts
+ * @param[out] scratch Scratch size must be divisible by the chunk count
  * @param[out] error_code Header parsing errors
  * @param[in] stream CUDA stream to use
  */
@@ -869,13 +868,12 @@ void count_and_decode_page_headers(cudf::device_span<ColumnChunkDesc> chunks,
                                    cuda::stream_ref stream);
 
 /**
- * @brief Materialize dictionary-first descriptors into exact-size output for each chunk.
+ * @brief Copy cached headers or reparse overflowing chunks into final output.
  *
- * Copies retained descriptors for chunks that fit; reparses overflowing chunks completely.
- * Must follow count_and_decode_page_headers with the same scratch storage and chunk ordering.
+ * Uses the same scratch and chunk order as count_and_decode_page_headers. Dictionaries come first.
  *
  * @param[in] chunks Column chunks with exact page counts
- * @param[in] scratch Per-chunk descriptors retained by the fused count/parse pass
+ * @param[in] scratch Cached page descriptors
  * @param[out] chunk_pages Exact-size output storage for each chunk
  * @param[out] error_code Header parsing errors
  * @param[in] stream CUDA stream to use

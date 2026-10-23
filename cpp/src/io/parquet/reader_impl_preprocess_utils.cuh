@@ -72,17 +72,17 @@ void generate_depth_remappings(
   rmm::device_async_resource_ref mr);
 
 /**
- * @brief Allocate bounded temporary descriptors for fused header counting and parsing.
+ * @brief Allocate bounded scratch for fused header parsing.
  *
- * At most 16,384 descriptors per chunk. The total budget defaults to 64 MiB and is configurable
- * through LIBCUDF_PARQUET_PAGE_HEADER_SCRATCH_MIB (a nonnegative integer, read for nonempty
- * no-index passes). Zero disables scratch. Invalid values throw cudf::logic_error. Indexed reads
- * return empty storage; if the budget cannot hold one descriptor per chunk, empty storage selects
- * separate parsing. Keep the returned buffer alive through count_page_headers and
- * decode_page_headers.
+ * LIBCUDF_PARQUET_PAGE_HEADER_SCRATCH_MIB sets an integer MiB budget (default 64; zero disables).
+ * Each chunk gets at most 16,192 slots. Indexed or empty passes return empty scratch.
+ * Budgets below one slot per chunk use separate parsing. Keep scratch alive through header
+ * decoding.
+ *
+ * @throws cudf::logic_error For invalid budgets on nonempty no-index passes
  *
  * @param num_chunks Number of column chunks in the pass
- * @param has_offset_index Whether counts and page locations are already known from indexes
+ * @param has_offset_index Whether page indexes are available
  * @param stream CUDA stream to use
  * @return Per-chunk scratch descriptors
  */
@@ -91,10 +91,10 @@ rmm::device_uvector<PageInfo> make_page_header_scratch(size_t num_chunks,
                                                        cuda::stream_ref stream);
 
 /**
- * @brief Return the number of total pages, retaining descriptors when scratch has sufficient capacity.
+ * @brief Count pages and cache headers that fit in scratch.
  *
  * @param chunks Host-device span of column chunk descriptors
- * @param scratch Equal per-chunk scratch slices; fewer slots than chunks selects count-only parsing
+ * @param scratch Equal per-chunk slices; below one slot per chunk uses count-only parsing
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return The total number of pages
@@ -141,8 +141,7 @@ std::string encoding_to_string(Encoding encoding);
  * @param pass The struct containing pass information
  * @param unsorted_pages Device span of page information to decode
  * @param has_offset_index Boolean indicating if the offset index is available
- * @param scratch Descriptors retained by counting; fewer slots than chunks selects separate
- * header decoding
+ * @param scratch Cached headers; below one slot per chunk uses separate decoding
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void decode_page_headers(pass_intermediate_data& pass,

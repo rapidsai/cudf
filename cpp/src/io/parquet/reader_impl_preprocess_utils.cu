@@ -230,8 +230,7 @@ rmm::device_uvector<PageInfo> make_page_header_scratch(size_t num_chunks,
                                                        bool has_offset_index,
                                                        cuda::stream_ref stream)
 {
-  // Bound speculative storage independently of file size. Count/parse continues on overflow; 
-  // in which case, we reparse those chunks after exact output allocation.
+  // Overflowing chunks are reparsed after output allocation.
   if (has_offset_index || num_chunks == 0) { return rmm::device_uvector<PageInfo>(0, stream); }
 
   constexpr size_t max_pages_per_chunk = 16'192;
@@ -259,7 +258,7 @@ rmm::device_uvector<PageInfo> make_page_header_scratch(size_t num_chunks,
 
   kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
-  // Retaining headers requires space for at least one descriptor per chunk.
+  // Fusion needs at least one scratch slot per chunk.
   if (scratch.size() < chunks.size()) {
     count_page_headers(chunks, error_code.data(), stream);
   } else {
@@ -477,7 +476,7 @@ enum class page_data_source_type : uint8_t {
  * @param pass Struct containing pass information
  * @param unsorted_pages Device span of page information to decode
  * @param page_data Span of page data spans (only used for PAGE_SPANS source)
- * @param scratch Descriptors retained by counting; unused for indexed page sources
+ * @param scratch Cached headers; unused for indexed pages
  * @param stream Stream to use
  */
 template <page_data_source_type data_source_type>
@@ -612,9 +611,8 @@ void decode_page_headers_impl(pass_intermediate_data& pass,
       error_code.data(),
       stream);
   } else {
-    // Match the count-stage capacity check: insufficient scratch retained no descriptors.
+    // Use the same capacity check as the count stage.
     if (scratch.size() < pass.chunks.size()) {
-      // (Slow) decode page headers, one warp (lane) per pages of a column chunk
       decode_page_headers(
         device_span<ColumnChunkDesc const>(pass.chunks.device_ptr(), pass.chunks.size()),
         device_span<chunk_page_info>(d_chunk_page_info.data(), d_chunk_page_info.size()),

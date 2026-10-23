@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "cuda/std/__utility/cmp.h"
 #include "error.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
@@ -11,6 +10,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -20,16 +20,21 @@
 #include <cuda/std/cstring>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <cuda/stream>
 #include <thrust/binary_search.h>
+
+#include <limits>
 
 namespace cudf::io::parquet::detail {
 
 namespace {
 
-auto constexpr decode_page_headers_block_size     = 4 * cudf::detail::warp_size;
-auto constexpr count_page_headers_block_size      = 4 * cudf::detail::warp_size;
-auto constexpr build_string_dict_index_block_size = 4 * cudf::detail::warp_size;
+auto constexpr decode_page_headers_block_size           = 4 * cudf::detail::warp_size;
+auto constexpr count_page_headers_block_size            = 4 * cudf::detail::warp_size;
+auto constexpr count_and_decode_page_headers_block_size = cudf::detail::warp_size;
+auto constexpr finish_page_headers_block_size           = 4 * cudf::detail::warp_size;
+auto constexpr build_string_dict_index_block_size       = 4 * cudf::detail::warp_size;
 
 namespace cg = cooperative_groups;
 
@@ -522,8 +527,7 @@ void __forceinline__ __device__ zero_out_page_header_info(byte_stream_s* bs)
 
 enum class parsed_page_kind { invalid, data, dictionary };
 
-// Shared by separate decoding, fused counting/parsing, and overflow reparsing.
-// chunk_row is a running estimate for flat schemas; preprocessing resolves nested row counts.
+// Shared parser. Preprocessing corrects chunk_row for nested columns.
 __device__ __forceinline__ parsed_page_kind parse_next_descriptor(byte_stream_s* bs,
                                                                   size_t& values_found,
                                                                   uint32_t& data_pages,
@@ -587,13 +591,13 @@ __device__ __forceinline__ void initialize_page_header_stream(byte_stream_s* bs,
   bs->ck   = chunk;
   bs->base = bs->cur = chunk.compressed_data;
   bs->end            = bs->base + chunk.compressed_size;
-  // memset in this helper includes PageInfo padding, required by raw descriptor copies below.
+  // Clear padding too, since descriptors are copied as bytes.
   zero_out_page_header_info(bs);
   bs->page.chunk_idx      = chunk_idx;
   bs->page.src_col_schema = chunk.src_col_schema;
 }
 
-// One local stream per chunk. Fully materializes PageInfo; this is not the count-only parser.
+// Reparse an overflowing chunk into its final output.
 __device__ __forceinline__ void decode_chunk_page_headers(ColumnChunkDesc const& chunk,
                                                           int chunk_idx,
                                                           PageInfo* output,
@@ -693,15 +697,15 @@ void __launch_bounds__(decode_page_headers_block_size)
   });
 }
 
-// Scratch is divided into equal per-chunk slices. Dictionary descriptors grow from the front,
-// data descriptors from the back, so their final relative positions need no prior page count.
-CUDF_KERNEL void __launch_bounds__(32) count_and_decode_page_headers_kernel(ColumnChunkDesc* chunks,
-                                                                            PageInfo* scratch,
-                                                                            uint32_t capacity,
-                                                                            int num_chunks,
-                                                                            uint32_t* error_code)
+// Each chunk stores dictionaries from the front of its scratch slice and data pages from the back.
+CUDF_KERNEL void __launch_bounds__(count_and_decode_page_headers_block_size)
+  count_and_decode_page_headers_kernel(ColumnChunkDesc* chunks,
+                                       PageInfo* scratch,
+                                       uint32_t capacity,
+                                       int num_chunks,
+                                       uint32_t* error_code)
 {
-  // One active lane per block keeps independent chunk walks on independent warps.
+  // One active lane per block keeps chunk walks independent.
   if (threadIdx.x != 0) { return; }
   auto const chunk_idx = static_cast<int>(blockIdx.x);
   if (chunk_idx >= num_chunks) { return; }
@@ -711,7 +715,7 @@ CUDF_KERNEL void __launch_bounds__(32) count_and_decode_page_headers_kernel(Colu
   uint32_t data_pages = 0, dict_pages = 0, error = 0;
   while (values_found < bs.ck.num_values and bs.cur < bs.end) {
     auto const kind = parse_next_descriptor(&bs, values_found, data_pages, dict_pages, error);
-    // On overflow we continue exact counting and validation, allowing an exact-size fallback.
+    // Keep counting after scratch fills.
     if (kind != parsed_page_kind::invalid and
         static_cast<uint64_t>(data_pages) + dict_pages <= capacity) {
       auto const index =
@@ -725,12 +729,13 @@ CUDF_KERNEL void __launch_bounds__(32) count_and_decode_page_headers_kernel(Colu
   if (error) { set_error(error, error_code); }
 }
 
-CUDF_KERNEL void __launch_bounds__(128) finish_page_headers_kernel(ColumnChunkDesc const* chunks,
-                                                                   PageInfo const* scratch,
-                                                                   uint32_t capacity,
-                                                                   chunk_page_info* pages,
-                                                                   int num_chunks,
-                                                                   uint32_t* error_code)
+CUDF_KERNEL void __launch_bounds__(finish_page_headers_block_size)
+  finish_page_headers_kernel(ColumnChunkDesc const* chunks,
+                             PageInfo const* scratch,
+                             uint32_t capacity,
+                             chunk_page_info* pages,
+                             int num_chunks,
+                             uint32_t* error_code)
 {
   auto const chunk_idx = static_cast<int>(blockIdx.x);
   if (chunk_idx >= num_chunks) { return; }
@@ -739,14 +744,13 @@ CUDF_KERNEL void __launch_bounds__(128) finish_page_headers_kernel(ColumnChunkDe
   auto const count      = static_cast<uint64_t>(dict_pages) + chunk.num_data_pages;
   if (count == 0) { return; }
   if (count > capacity) {
-    // Only overflowing chunks pay for a second header walk. The original parser and exact counts
-    // make this safe even for zero-value pages, many dictionaries, and arbitrarily small capacity.
+    // Reparse the whole chunk into exact-size output.
     if (threadIdx.x == 0) {
       decode_chunk_page_headers(chunk, chunk_idx, pages[chunk_idx].pages, error_code);
     }
     return;
   }
-  // The count stage defers unsupported-encoding errors until descriptors are available.
+  // Report unsupported encodings now that descriptors are available.
   for (size_t i = threadIdx.x; i < count; i += blockDim.x) {
     auto const j = i < dict_pages ? i : capacity - 1 - (i - dict_pages);
     if (not is_supported_encoding(
@@ -758,12 +762,12 @@ CUDF_KERNEL void __launch_bounds__(128) finish_page_headers_kernel(ColumnChunkDe
   static_assert(sizeof(PageInfo) % sizeof(uint32_t) == 0);
   auto const* source = scratch + static_cast<size_t>(chunk_idx) * capacity;
   auto* destination  = reinterpret_cast<unsigned char*>(pages[chunk_idx].pages);
-  // Threads cover consecutive words in each descriptor for coalesced stores and loads.
+  // Copy consecutive words for coalesced access.
   for (size_t word = threadIdx.x; word < count * words_per_page; word += blockDim.x) {
     auto const page          = word / words_per_page;
     auto const source_page   = page < dict_pages ? page : capacity - 1 - (page - dict_pages);
     auto const* source_bytes = reinterpret_cast<unsigned char const*>(source + source_page);
-    // memcpy preserves the object representation without aliasing PageInfo as uint32_t.
+    // memcpy avoids type aliasing.
     cuda::std::memcpy(destination + word * sizeof(uint32_t),
                       source_bytes + (word % words_per_page) * sizeof(uint32_t),
                       sizeof(uint32_t));
@@ -1059,11 +1063,16 @@ void count_and_decode_page_headers(cudf::device_span<ColumnChunkDesc> chunks,
                                    cuda::stream_ref stream)
 {
   if (chunks.empty()) { return; }
+  CUDF_EXPECTS(chunks.size() <= std::numeric_limits<int>::max(), "Too many column chunks");
+  auto const num_chunks = static_cast<int>(chunks.size());
   CUDF_EXPECTS(scratch.size() % chunks.size() == 0, "Expected equal scratch capacity per chunk");
   auto const capacity = scratch.size() / chunks.size();
   CUDF_EXPECTS(capacity <= UINT32_MAX, "Page header scratch capacity is too large");
-  count_and_decode_page_headers_kernel<<<chunks.size(), 32, 0, stream.get()>>>(
-    chunks.data(), scratch.data(), static_cast<uint32_t>(capacity), chunks.size(), error_code);
+  count_and_decode_page_headers_kernel<<<num_chunks,
+                                         count_and_decode_page_headers_block_size,
+                                         0,
+                                         stream.get()>>>(
+    chunks.data(), scratch.data(), static_cast<uint32_t>(capacity), num_chunks, error_code);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 
@@ -1075,15 +1084,17 @@ void finish_page_headers(cudf::device_span<ColumnChunkDesc const> chunks,
 {
   CUDF_EXPECTS(chunk_pages.size() == chunks.size(), "Expected output pointers for every chunk");
   if (chunks.empty()) { return; }
+  CUDF_EXPECTS(chunks.size() <= std::numeric_limits<int>::max(), "Too many column chunks");
+  auto const num_chunks = static_cast<int>(chunks.size());
   CUDF_EXPECTS(scratch.size() % chunks.size() == 0, "Expected equal scratch capacity per chunk");
   auto const capacity = scratch.size() / chunks.size();
   CUDF_EXPECTS(capacity <= UINT32_MAX, "Page header scratch capacity is too large");
-  finish_page_headers_kernel<<<chunks.size(), 128, 0, stream.get()>>>(
+  finish_page_headers_kernel<<<num_chunks, finish_page_headers_block_size, 0, stream.get()>>>(
     chunks.data(),
     scratch.data(),
     static_cast<uint32_t>(capacity),
     chunk_pages.data(),
-    chunks.size(),
+    num_chunks,
     error_code);
   CUDF_CUDA_TRY(cudaGetLastError());
 }

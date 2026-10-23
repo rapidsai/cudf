@@ -12,11 +12,13 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/column/column.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
@@ -44,6 +46,7 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
 
@@ -57,8 +60,7 @@ auto page_boundary_slices(cudf::size_type const num_rows)
 
 }  // namespace
 
-// Verify reads when page indexes are not provided, with configurable scratch budgets, including zero (separate count/decode),
-// and reject malformed or overflowing budget values.
+// Test scratch budgets, including zero and invalid values, without page indexes.
 TEST_F(ParquetReaderTest, PageHeaderScratchBudget)
 {
   auto const expected = create_random_fixed_table<int>(2, 100, false);
@@ -76,17 +78,18 @@ TEST_F(ParquetReaderTest, PageHeaderScratchBudget)
     auto const result = cudf::io::read_parquet(options);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
   }
-  for (auto const* budget : {"", "-1", "abc", "64MiB", "1.5", "18446744073709551615"}) {
+  for (auto const* budget :
+       {"", "-1", "abc", "64MiB", "1.5", "18446744073709551615", "18446744073709551616"}) {
     SCOPED_TRACE(budget);
     tmp_env_var const env("LIBCUDF_PARQUET_PAGE_HEADER_SCRATCH_MIB", budget);
     EXPECT_THROW(cudf::io::read_parquet(options), cudf::logic_error);
   }
 }
 
-// Verify indexed reads ignore an invalid scratch setting because they do not use header scratch.
+// Indexed reads ignore the scratch budget.
 TEST_F(ParquetReaderTest, IndexedReadIgnoresPageHeaderScratchBudget)
 {
-  cudf::test::strings_column_wrapper strings{{"one", "two", "three"}};
+  cudf::test::strings_column_wrapper strings{{"one", "", "é字"}};
   cudf::table_view const expected{{strings}};
   auto const path = temp_env->get_temp_filepath("indexed_header_scratch.parquet");
   cudf::io::write_parquet(
@@ -99,21 +102,19 @@ TEST_F(ParquetReaderTest, IndexedReadIgnoresPageHeaderScratchBudget)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-// Verify mixed fitting/overflowing chunks preserve string values and nulls with V1/V2 headers
-// and plain/dictionary encoding, exercising cached descriptors and overflow reparsing together.
+// Test cached and reparsed chunks together, with V1/V2 headers and plain/dictionary strings.
 TEST_F(ParquetReaderTest, FusedPageHeadersOverflow)
 {
-  // One source fits in scratch; the other has more pages than the per-chunk capacity.
-  // Verify the actual page counts so writer page coalescing cannot hide the fallback path.
+  // Enable fusion regardless of the caller's environment.
+  tmp_env_var const env("LIBCUDF_PARQUET_PAGE_HEADER_SCRATCH_MIB", "64");
+  // One source fits; the other overflows. Check page counts below to ensure overflow occurs.
   constexpr cudf::size_type num_rows   = 16'385;
   constexpr cudf::size_type small_rows = 17;
-  std::vector<std::string> values;
-  for (cudf::size_type i = 0; i < num_rows; ++i) {
-    values.push_back("value-" + std::to_string(i % 3));
-  }
+  auto const values                    = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i % 3 == 0 ? std::string{} : "välue-" + std::to_string(i % 3); });
   auto validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 7 != 0; });
-  cudf::test::strings_column_wrapper strings(values.begin(), values.end(), validity);
+  cudf::test::strings_column_wrapper strings(values, values + num_rows, validity);
   cudf::table_view const large{{strings}};
   auto const small    = cudf::slice(large, {0, small_rows}).front();
   auto const expected = cudf::concatenate(std::vector<cudf::table_view>{small, large});
