@@ -26,26 +26,26 @@ namespace detail {
 namespace {
 
 /**
- * @brief Utility to return a bool column indicating the presence of
- * a given target string in a strings column.
+ * @brief Utility to return a bool column indicating whether each string satisfies
+ * `predicate` with the given target string.
  *
  * Null string entries return corresponding null output column entries.
  *
- * @tparam BoolFunction Return bool value given two strings.
+ * @tparam Predicate Returns a bool value given a string and the target.
  *
- * @param strings Column of strings to check for target.
- * @param target UTF-8 encoded string to check in strings column.
- * @param pfn Returns bool value if target is found in the given string.
+ * @param strings Column of strings to check against the target.
+ * @param target UTF-8 encoded string to check against each string.
+ * @param predicate Returns true if the given string matches the target.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New BOOL column.
  */
-template <typename BoolFunction>
-std::unique_ptr<column> contains_fn(strings_column_view const& strings,
-                                    string_scalar const& target,
-                                    BoolFunction pfn,
-                                    cuda::stream_ref stream,
-                                    rmm::device_async_resource_ref mr)
+template <typename Predicate>
+std::unique_ptr<column> starts_ends_with_fn(strings_column_view const& strings,
+                                            string_scalar const& target,
+                                            Predicate predicate,
+                                            cuda::stream_ref stream,
+                                            rmm::device_async_resource_ref mr)
 {
   auto strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::BOOL8);
@@ -78,35 +78,35 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{strings_count},
                     d_results,
-                    [d_strings, pfn, d_target] __device__(size_type idx) {
+                    [d_strings, predicate, d_target] __device__(size_type idx) {
                       return !d_strings.is_null(idx) &&
-                             bool{pfn(d_strings.element<string_view>(idx), d_target)};
+                             bool{predicate(d_strings.element<string_view>(idx), d_target)};
                     });
   results->set_null_count(strings.null_count());
   return results;
 }
 
 /**
- * @brief Utility to return a bool column indicating the presence of
- * a string targets[i] in strings[i].
+ * @brief Utility to return a bool column indicating whether each `strings[i]` satisfies
+ * `predicate` with `targets[i]`.
  *
  * Null string entries return corresponding null output column entries.
  *
- * @tparam BoolFunction Return bool value given two strings.
+ * @tparam Predicate Returns a bool value given a string and its target.
  *
- * @param strings Column of strings to check for `targets[i]`.
- * @param targets Column of strings to be checked in `strings[i]``.
- * @param pfn Returns bool value if target is found in the given string.
+ * @param strings Column of strings to check against `targets[i]`.
+ * @param targets Column of strings to check against `strings[i]`.
+ * @param predicate Returns true if the given string matches its target.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New BOOL column.
  */
-template <typename BoolFunction>
-std::unique_ptr<column> contains_fn(strings_column_view const& strings,
-                                    strings_column_view const& targets,
-                                    BoolFunction pfn,
-                                    cuda::stream_ref stream,
-                                    rmm::device_async_resource_ref mr)
+template <typename Predicate>
+std::unique_ptr<column> starts_ends_with_fn(strings_column_view const& strings,
+                                            strings_column_view const& targets,
+                                            Predicate predicate,
+                                            cuda::stream_ref stream,
+                                            rmm::device_async_resource_ref mr)
 {
   if (strings.is_empty()) return make_empty_column(type_id::BOOL8);
 
@@ -132,12 +132,13 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
     cuda::counting_iterator<size_type>{0},
     cuda::counting_iterator<size_type>{strings.size()},
     d_results,
-    [d_strings, pfn, d_targets] __device__(size_type idx) {
+    [d_strings, predicate, d_targets] __device__(size_type idx) {
       // empty target string returns true
       if (d_targets.is_valid(idx) && d_targets.element<string_view>(idx).length() == 0) {
         return true;
       } else if (!d_strings.is_null(idx) && !d_targets.is_null(idx)) {
-        return bool{pfn(d_strings.element<string_view>(idx), d_targets.element<string_view>(idx))};
+        return bool{
+          predicate(d_strings.element<string_view>(idx), d_targets.element<string_view>(idx))};
       } else {
         return false;
       }
@@ -152,11 +153,11 @@ std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     cuda::stream_ref stream,
                                     rmm::device_async_resource_ref mr)
 {
-  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+  auto predicate = [] __device__(string_view d_string, string_view d_target) {
     return (d_target.size_bytes() <= d_string.size_bytes()) &&
            (d_target.compare(d_string.data(), d_target.size_bytes()) == 0);
   };
-  return contains_fn(strings, target, pfn, stream, mr);
+  return starts_ends_with_fn(strings, target, predicate, stream, mr);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
@@ -164,11 +165,11 @@ std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     cuda::stream_ref stream,
                                     rmm::device_async_resource_ref mr)
 {
-  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+  auto predicate = [] __device__(string_view d_string, string_view d_target) {
     return (d_target.size_bytes() <= d_string.size_bytes()) &&
            (d_target.compare(d_string.data(), d_target.size_bytes()) == 0);
   };
-  return contains_fn(strings, targets, pfn, stream, mr);
+  return starts_ends_with_fn(strings, targets, predicate, stream, mr);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
@@ -176,14 +177,14 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   cuda::stream_ref stream,
                                   rmm::device_async_resource_ref mr)
 {
-  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+  auto predicate = [] __device__(string_view d_string, string_view d_target) {
     auto const str_size = d_string.size_bytes();
     auto const tgt_size = d_target.size_bytes();
     return (tgt_size <= str_size) &&
            (d_target.compare(d_string.data() + str_size - tgt_size, tgt_size) == 0);
   };
 
-  return contains_fn(strings, target, pfn, stream, mr);
+  return starts_ends_with_fn(strings, target, predicate, stream, mr);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
@@ -191,14 +192,14 @@ std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   cuda::stream_ref stream,
                                   rmm::device_async_resource_ref mr)
 {
-  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+  auto predicate = [] __device__(string_view d_string, string_view d_target) {
     auto const str_size = d_string.size_bytes();
     auto const tgt_size = d_target.size_bytes();
     return (tgt_size <= str_size) &&
            (d_target.compare(d_string.data() + str_size - tgt_size, tgt_size) == 0);
   };
 
-  return contains_fn(strings, targets, pfn, stream, mr);
+  return starts_ends_with_fn(strings, targets, predicate, stream, mr);
 }
 
 }  // namespace detail

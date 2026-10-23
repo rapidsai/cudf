@@ -3,23 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * @file find_skewed.cpp
- * @brief contains(column, scalar) over columns whose row lengths follow skewed distributions.
- *
- * `dist` axis values:
- *   fixed_L              every row L bytes
- *   uniform_A_B          lengths uniform in [A, B]
- *   bimodal_P_S_L        P percent of rows are L bytes, the rest S bytes
- *   lognormal_M_S        lengths ~ lognormal with median M and sigma S/100, clamped to [0, 1 MiB]
- *   pareto_XM_A          lengths ~ pareto(xm=XM, alpha=A/100), clamped to [0, 1 MiB]
- *   fewhuge_S_H_K        all rows S bytes except K rows of H bytes
- *
- * Row content is random text over a 64-symbol alphabet. The target is inserted at a random
- * position in `hit_rate` percent of the rows long enough to hold it, and `null_pct` percent of
- * the rows are null.
- */
-
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -47,6 +30,22 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+/**
+ * @brief contains(column, scalar) over columns whose row lengths follow skewed distributions.
+ *
+ * `dist` axis values:
+ *   fixed_L              every row L bytes
+ *   uniform_A_B          lengths uniform in [A, B]
+ *   bimodal_P_S_L        P percent of rows are L bytes, the rest S bytes
+ *   lognormal_M_S        lengths ~ lognormal with median M and sigma S/100, clamped to [0, 1 MiB]
+ *   pareto_XM_A          lengths ~ pareto(xm=XM, alpha=A/100), clamped to [0, 1 MiB]
+ *   fewhuge_S_H_K        all rows S bytes except K rows of H bytes
+ *
+ * Row content is random text over a 64-symbol alphabet. The target is inserted at a random
+ * position in `hit_rate` percent of the rows long enough to hold it, and `null_pct` percent of
+ * the rows are null.
+ */
 
 namespace {
 
