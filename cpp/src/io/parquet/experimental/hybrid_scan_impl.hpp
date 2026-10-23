@@ -45,7 +45,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param footer_bytes Span of parquet file footer byte spans, one per source
    * @param options Parquet reader options
    */
-  explicit hybrid_scan_reader_impl(std::span<cudf::host_span<uint8_t const> const> footer_bytes,
+  explicit hybrid_scan_reader_impl(std::span<std::span<uint8_t const> const> footer_bytes,
                                    parquet_reader_options const& options);
 
   /**
@@ -86,7 +86,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   /**
    * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::setup_page_indexes
    */
-  void setup_page_indexes(std::span<cudf::host_span<uint8_t const> const> page_index_bytes) const;
+  void setup_page_indexes(std::span<std::span<uint8_t const> const> page_index_bytes) const;
 
   /**
    * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::all_row_groups

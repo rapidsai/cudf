@@ -89,7 +89,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param use_arrow_schema Whether to use Arrow schema
    * @param has_cols_from_mismatched_srcs Whether to have columns from mismatched sources
    */
-  aggregate_reader_metadata(std::span<cudf::host_span<uint8_t const> const> footer_bytes,
+  aggregate_reader_metadata(std::span<std::span<uint8_t const> const> footer_bytes,
                             bool use_arrow_schema,
                             bool has_cols_from_mismatched_srcs);
 
@@ -158,7 +158,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *
    * @param page_index_bytes Host span of Parquet page index buffer bytes, one per source
    */
-  void setup_page_indexes(std::span<cudf::host_span<uint8_t const> const> page_index_bytes);
+  void setup_page_indexes(std::span<std::span<uint8_t const> const> page_index_bytes);
 
   /**
    * @brief Get all available row group indices, one inner vector per source

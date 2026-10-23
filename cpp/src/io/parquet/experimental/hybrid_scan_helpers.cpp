@@ -101,7 +101,7 @@ metadata::metadata(std::span<uint8_t const> footer_bytes)
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(
-  std::span<cudf::host_span<uint8_t const> const> footer_bytes,
+  std::span<std::span<uint8_t const> const> footer_bytes,
   bool use_arrow_schema,
   bool has_cols_from_mismatched_srcs)
   : aggregate_reader_metadata(
@@ -187,7 +187,7 @@ std::vector<FileMetaData> aggregate_reader_metadata::parquet_metadatas() const
 }
 
 void aggregate_reader_metadata::setup_page_indexes(
-  std::span<cudf::host_span<uint8_t const> const> page_index_bytes)
+  std::span<std::span<uint8_t const> const> page_index_bytes)
 {
   CUDF_EXPECTS(page_index_bytes.size() == per_file_metadata.size(),
                "Page index byte span count must equal the number of sources");
