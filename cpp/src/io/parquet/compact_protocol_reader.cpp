@@ -1040,7 +1040,8 @@ void CompactProtocolReader::read(ColumnIndex* c)
                             parquet_field_enum<BoundaryOrder>(4, c->boundary_order),
                             optional_list_i64(5, c->null_counts),
                             optional_list_i64(6, c->repetition_level_histogram),
-                            optional_list_i64(7, c->definition_level_histogram));
+                            optional_list_i64(7, c->definition_level_histogram),
+                            optional_list_i64(8, c->nan_counts));
   function_builder(this, op);
 }
 
@@ -1057,7 +1058,8 @@ void CompactProtocolReader::read(Statistics* s)
                             optional_binary(5, s->max_value),
                             optional_binary(6, s->min_value),
                             optional_bool(7, s->is_max_value_exact),
-                            optional_bool(8, s->is_min_value_exact));
+                            optional_bool(8, s->is_min_value_exact),
+                            optional_int64(9, s->nan_count));
   function_builder(this, op);
 }
 

@@ -270,15 +270,15 @@ std::string reflect_udf_signature(bool is_null_aware,
 {
   std::vector<std::string> in_types;
 
-  for (size_t i = 0; i < inputs.size(); i++) {
-    auto element = reflect_input_element(inputs[i], use_physical_types);
+  for (auto const& input : inputs) {
+    auto element = reflect_input_element(input, use_physical_types);
     in_types.push_back(is_null_aware ? std::format("cuda::std::optional<{}>", element) : element);
   }
 
   std::vector<std::string> out_types;
 
-  for (size_t i = 0; i < outputs.size(); i++) {
-    auto element = reflect_output_element(outputs[i], use_physical_types);
+  for (auto const& output : outputs) {
+    auto element = reflect_output_element(output, use_physical_types);
     out_types.push_back(is_null_aware ? std::format("cuda::std::optional<{}> *", element)
                                       : std::format("{} *", element));
   }
