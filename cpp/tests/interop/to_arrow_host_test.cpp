@@ -18,8 +18,10 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/concepts.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/concepts>
 
 #include <array>
 #include <cstdint>
@@ -45,7 +47,7 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
                       ArrowArrayView const* actual,
                       int64_t start_offset_actual,
                       int64_t length)
-    requires(cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>)
+    requires(cudf::concepts::fixed_width<T> and !cuda::std::same_as<T, bool>)
   {
     for (int64_t i = 0; i < length; ++i) {
       bool const is_null = ArrowArrayViewIsNull(expected, start_offset_expected + i);
@@ -59,13 +61,12 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
     }
   }
 
-  template <typename T>
+  template <cuda::std::same_as<cudf::string_view> T>
   void compare_subset(ArrowArrayView const* expected,
                       int64_t start_offset_expected,
                       ArrowArrayView const* actual,
                       int64_t start_offset_actual,
                       int64_t length)
-    requires(std::is_same_v<T, cudf::string_view>)
   {
     for (int64_t i = 0; i < length; ++i) {
       bool const is_null = ArrowArrayViewIsNull(expected, start_offset_expected + i);
