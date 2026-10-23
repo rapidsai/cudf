@@ -103,9 +103,7 @@ mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
 option(CUDF_IWYU "Enable IWYU during compilation" OFF)
 option(CUDF_CLANG_TIDY_AUTOFIX "Enable clang-tidy autofixes" OFF)
-option(CUDF_JIT_USE_LIBCUDACXXLITE "Use the experimental CCCL subset for runtime JIT compilation"
-       ON
-)
+option(CUDF_JIT_USE_LIBNVCXX "Use librtcx libnvcxx for runtime JIT compilation" ON)
 
 option(
   CUDF_KVIKIO_REMOTE_IO
@@ -455,11 +453,6 @@ endif()
 rtcx_add_embed(cudf_cuda_embed)
 
 rtcx_embed_includes(
-  cudf_cuda_embed SOURCE_DIRECTORY ${rtcx_SOURCE_DIR}/libcxx DEST_DIRECTORY librtcx/libcxx
-  INCLUDE_DIRECTORIES librtcx/libcxx
-)
-
-rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf DEST_DIRECTORY
   cudf/cpp/include/cudf INCLUDE_DIRECTORIES cudf/cpp/include
 )
@@ -484,22 +477,34 @@ rtcx_embed_includes(
   cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-if(CUDF_JIT_USE_LIBCUDACXXLITE)
-  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 13.3)
-    message(FATAL_ERROR "CUDF_JIT_USE_LIBCUDACXXLITE requires CUDA/NVRTC 13.3 or newer")
-  endif()
-
-  set(LITE_SOURCE_DIR "${PROJECT_SOURCE_DIR}/libcudacxxlite")
+if(CUDF_JIT_USE_LIBNVCXX)
+  set(NVCXX_SOURCE_DIR "${rtcx_SOURCE_DIR}/libnvcxx")
   file(
-    GLOB_RECURSE LITE_HEADERS CONFIGURE_DEPENDS
-    RELATIVE "${LITE_SOURCE_DIR}"
-    "${LITE_SOURCE_DIR}/cuda/*"
+    GLOB_RECURSE NVCXX_HEADERS CONFIGURE_DEPENDS
+    RELATIVE "${NVCXX_SOURCE_DIR}"
+    "${NVCXX_SOURCE_DIR}/nvcxx/*"
   )
   rtcx_embed_includes(
-    cudf_cuda_embed SOURCE_DIRECTORY "${LITE_SOURCE_DIR}" DEST_DIRECTORY CCCL/libcudacxxlite
-    INCLUDE_DIRECTORIES CCCL/libcudacxxlite FILES ${LITE_HEADERS}
+    cudf_cuda_embed
+    SOURCE_DIRECTORY
+    "${NVCXX_SOURCE_DIR}"
+    DEST_DIRECTORY
+    librtcx/libnvcxx
+    INCLUDE_DIRECTORIES
+    librtcx/libnvcxx
+    librtcx/libnvcxx/nvcxx
+    librtcx/libnvcxx/nvcxx/std
+    FILES
+    ${NVCXX_HEADERS}
   )
 else()
+
+  # Workaround for aliasing fundamental types like `cuda::std::int8_t` as `std::int8_t`
+  rtcx_embed_includes(
+    cudf_cuda_embed SOURCE_DIRECTORY ${rtcx_SOURCE_DIR}/libcxx DEST_DIRECTORY librtcx/libcxx
+    INCLUDE_DIRECTORIES librtcx/libcxx
+  )
+
   get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
 
   foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
@@ -1333,6 +1338,8 @@ target_compile_definitions(
          "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
          "CUDF_LTO_ARCHITECTURE=${CUDF_LTO_ARCHITECTURE}"
 )
+
+target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_JIT_USE_LIBNVCXX}>:CUDF_JIT_USE_LIBNVCXX>)
 
 # Per-thread default stream
 if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)

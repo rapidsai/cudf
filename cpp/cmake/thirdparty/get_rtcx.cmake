@@ -15,8 +15,8 @@ function(find_and_configure_rtcx VERSION)
     rtcx ${VERSION}
     GLOBAL_TARGETS rtcx::rtcx
     CPM_ARGS
-    GIT_REPOSITORY https://github.com/rapidsai/librtcx.git
-    GIT_TAG da8150f0a83e22953e598844dbebff6791681de7
+    GIT_REPOSITORY https://github.com/lamarrr/librtcx.git
+    GIT_TAG 08b2c0305573f0bb1876510ec80dcf61734cc688
     GIT_SHALLOW FALSE
     EXCLUDE_FROM_ALL ${CUDF_EXCLUDE_DEPS_FROM_ALL}
   )
