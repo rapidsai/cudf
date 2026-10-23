@@ -141,14 +141,13 @@ void write_compressed_to_sink(data_sink* out_sink,
       return cudf::util::round_up_safe(io::detail::max_compressed_size(compression, input.size()),
                                        alignment);
     });
-  cuda::device_buffer<uint8_t> comp_buffer(
-    stream, cudf::get_current_device_resource_ref(), out_offsets.back(), cuda::no_init);
+  auto const temp_mr = cudf::get_current_device_resource_ref();
+  cuda::device_buffer<uint8_t> comp_buffer(stream, temp_mr, out_offsets.back(), cuda::no_init);
 
   for (size_t block = 0; block < num_blocks; ++block) {
     h_outputs[block] = device_span<uint8_t>{comp_buffer.data() + out_offsets[block],
                                             out_offsets[block + 1] - out_offsets[block]};
   }
-  auto const temp_mr   = cudf::get_current_device_resource_ref();
   auto const d_inputs  = cudf::detail::make_device_buffer_async(h_inputs, stream, temp_mr);
   auto const d_outputs = cudf::detail::make_device_buffer_async(h_outputs, stream, temp_mr);
 

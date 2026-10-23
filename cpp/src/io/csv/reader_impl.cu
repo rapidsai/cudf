@@ -58,7 +58,6 @@ using std::vector;
 
 using cudf::device_span;
 using cudf::host_span;
-using cudf::detail::make_device_buffer_async;
 
 namespace cudf {
 namespace io {
@@ -103,7 +102,8 @@ class selected_buffer {
     selected = selected.subspan(n, selected.size() - n);
   }
   auto size() const { return selected.size(); }
-  auto data() const { return selected.data(); }
+  T const* data() const { return selected.data(); }
+  T* data() { return selected.data(); }
 };
 
 using selected_rows_offsets = selected_buffer<uint64_t>;
@@ -127,8 +127,6 @@ void resize_scratch_buffer(cuda::device_buffer<T>& storage,
         replacement.data(), elements.data(), elements.size_bytes(), stream));
     }
     storage = std::move(replacement);
-  } else {
-    storage.set_stream(stream);
   }
   elements = {storage.data(), new_size};
 }
@@ -631,7 +629,8 @@ void infer_column_types(parse_options const& parse_opts,
   auto const column_stats = cudf::io::csv::gpu::detect_column_types(
     parse_opts.view(),
     data,
-    make_device_buffer_async(column_flags, stream, cudf::get_current_device_resource_ref()),
+    cudf::detail::make_device_buffer_async(
+      column_flags, stream, cudf::get_current_device_resource_ref()),
     row_offsets,
     num_inferred_columns,
     stream);
@@ -791,11 +790,14 @@ decode_result decode_data(parse_options const& parse_opts,
   cudf::io::csv::gpu::decode_row_column_data<OffsetT>(
     parse_opts.view(),
     data,
-    make_device_buffer_async(column_flags, stream, cudf::get_current_device_resource_ref()),
+    cudf::detail::make_device_buffer_async(
+      column_flags, stream, cudf::get_current_device_resource_ref()),
     row_offsets,
-    make_device_buffer_async(column_types, stream, cudf::get_current_device_resource_ref()),
-    make_device_buffer_async(h_data, stream, cudf::get_current_device_resource_ref()),
-    make_device_buffer_async(h_valid, stream, cudf::get_current_device_resource_ref()),
+    cudf::detail::make_device_buffer_async(
+      column_types, stream, cudf::get_current_device_resource_ref()),
+    cudf::detail::make_device_buffer_async(h_data, stream, cudf::get_current_device_resource_ref()),
+    cudf::detail::make_device_buffer_async(
+      h_valid, stream, cudf::get_current_device_resource_ref()),
     d_valid_counts,
     stream);
 
