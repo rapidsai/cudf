@@ -23,6 +23,7 @@
 
 #include <cuco/static_set.cuh>
 #include <cuda/iterator>
+#include <cuda/std/concepts>
 #include <cuda/stream>
 #include <thrust/logical.h>
 
@@ -93,9 +94,8 @@ struct has_nans {
    *
    * @returns bool true if `input` has `NaN` else false
    */
-  template <typename T>
+  template <cuda::std::floating_point T>
   bool operator()(column_view const& input, cuda::stream_ref stream)
-    requires(std::is_floating_point_v<T>)
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
@@ -119,7 +119,6 @@ struct has_nans {
    */
   template <typename T>
   bool operator()(column_view const&, cuda::stream_ref)
-    requires(not std::is_floating_point_v<T>)
   {
     return false;
   }

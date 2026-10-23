@@ -18,6 +18,7 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/concepts.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -25,6 +26,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/concepts>
 #include <cuda/std/limits>
 #include <cuda/stream>
 #include <thrust/count.h>
@@ -63,7 +65,6 @@ struct DeviceRolling {
 
   // operations we don't support
   template <typename T = InputType, aggregation::Kind O = op>
-    requires(not is_supported<T, O>())
   explicit DeviceRolling(size_type min_periods) : min_periods(min_periods)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
@@ -237,8 +238,7 @@ struct DeviceRollingArgMinMaxDictionary : DeviceRollingArgMinMaxBase<cudf::dicti
   using DeviceRollingArgMinMaxBase<cudf::dictionary32, op>::min_periods;
 
   struct keys_dispatch_fn {
-    template <typename T>
-      requires(cudf::is_dictionary_key<T>())
+    template <cudf::concepts::dictionary_key T>
     size_type __device__ operator()(column_device_view const& dict,
                                     bool has_nulls,
                                     size_type start_index,
@@ -263,7 +263,6 @@ struct DeviceRollingArgMinMaxDictionary : DeviceRollingArgMinMaxBase<cudf::dicti
       return count >= min_periods ? index : -1;
     }
     template <typename T>
-      requires(not cudf::is_dictionary_key<T>())
     size_type __device__
     operator()(column_device_view const&, bool, size_type, size_type, size_type)
     {
@@ -537,9 +536,7 @@ struct DeviceRollingLead {
   }
 
   template <typename T = InputType>
-  DeviceRollingLead(size_type _row_offset)
-    requires(!is_supported<T>())
-    : row_offset(_row_offset)
+  DeviceRollingLead(size_type _row_offset) : row_offset(_row_offset)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
   }
@@ -602,9 +599,7 @@ struct DeviceRollingLag {
   }
 
   template <typename T = InputType>
-  DeviceRollingLag(size_type _row_offset)
-    requires(!is_supported<T>())
-    : row_offset(_row_offset)
+  DeviceRollingLag(size_type _row_offset) : row_offset(_row_offset)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
   }
@@ -705,7 +700,7 @@ struct corresponding_rolling_operator<InputType, aggregation::Kind::LAG> {
 /**
  * @brief Functor for creating a device rolling operator based on input type and aggregation type.
  */
-template <typename InputType, aggregation::Kind k, typename = void>
+template <typename InputType, aggregation::Kind k>
 struct create_rolling_operator {
   auto operator()(size_type min_periods, rolling_aggregation const&)
   {
@@ -751,7 +746,7 @@ struct create_rolling_operator<InputType, aggregation::Kind::LAG> {
 };
 
 template <typename InputType, aggregation::Kind k>
-  requires(std::is_same_v<InputType, cudf::string_view> &&
+  requires(cuda::std::same_as<InputType, cudf::string_view> &&
            (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX))
 struct create_rolling_operator<InputType, k> {
   auto operator()(size_type min_periods, rolling_aggregation const&)
@@ -761,7 +756,7 @@ struct create_rolling_operator<InputType, k> {
 };
 
 template <typename InputType, aggregation::Kind k>
-  requires(std::is_same_v<InputType, cudf::dictionary32> &&
+  requires(cuda::std::same_as<InputType, cudf::dictionary32> &&
            (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX))
 struct create_rolling_operator<InputType, k> {
   auto operator()(size_type min_periods, rolling_aggregation const&)
@@ -771,7 +766,7 @@ struct create_rolling_operator<InputType, k> {
 };
 
 template <typename InputType, aggregation::Kind k>
-  requires(std::is_same_v<InputType, cudf::struct_view> &&
+  requires(cuda::std::same_as<InputType, cudf::struct_view> &&
            (k == aggregation::Kind::ARGMIN || k == aggregation::Kind::ARGMAX))
 struct create_rolling_operator<InputType, k> {
   template <typename Comparator>
