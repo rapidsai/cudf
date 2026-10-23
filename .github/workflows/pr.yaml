@@ -61,7 +61,7 @@ jobs:
     continue-on-error: true
     runs-on: ubuntu-latest
     env:
-      OTEL_SERVICE_NAME: 'pr-cudf'
+      OTEL_SERVICE_NAME: "pr-cudf"
     steps:
       - name: Telemetry setup
         if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
@@ -75,6 +75,7 @@ jobs:
       id-token: write
     env:
       GH_TOKEN: ${{ github.token }}
+      SHARED_ACTIONS_REF: temp-extension
     steps:
       - name: Get PR Info
         id: get-pr-info
@@ -797,7 +798,13 @@ jobs:
       build_type: pull-request
       matrix_name: docs-build
   docs-build:
-    needs: [docs-build-matrix, conda-python-build, conda-python-build-noarch, changed-files]
+    needs:
+      [
+        docs-build-matrix,
+        conda-python-build,
+        conda-python-build-noarch,
+        changed-files,
+      ]
     permissions:
       actions: read
       contents: read
