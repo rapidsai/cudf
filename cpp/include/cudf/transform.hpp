@@ -11,6 +11,8 @@
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/buffer>
+
 #include <functional>
 #include <memory>
 #include <optional>
@@ -120,6 +122,7 @@ struct transform_output_spec {
  * Construction retrieves the kernel for the UDF and the supplied input and output specifications.
  * Subsequent calls to `run` reuse that kernel.
  * Runtime inputs and outputs must be compatible with the specifications used at construction.
+ * UDF output initialization follows the contract documented by `transform`.
  *
  */
 struct transform_program {
@@ -258,6 +261,12 @@ struct transform_program {
  * Computes:
  * `(outputs[i]...) =  UDF(inputs[i]...)`.
  *
+ * For both null-aware and non-null-aware UDFs, output values have the following initialization:
+ * - Fixed-width outputs have uninitialized values.
+ * - Mutable string outputs (`cuda::std::span<char>`, used with preallocated string offsets) contain
+ *   a valid data pointer and size, but the character data is uninitialized.
+ * - String-view outputs (`cudf::string_view`) have uninitialized values.
+ *
  * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
  * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
  * types
@@ -393,25 +402,6 @@ std::unique_ptr<table> transform_lto(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Creates a null_mask from `input` by converting `NaN` to null and
- * preserving existing null values and also returns new null_count.
- *
- * @deprecated in release 26.04. Use column_nans_to_nulls instead.
- *
- * @throws cudf::logic_error if `input.type()` is a non-floating type
- *
- * @param input  An immutable view of the input column of floating-point type
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr     Device memory resource used to allocate the returned bitmask
- * @return A pair containing a `device_buffer` with the new bitmask and its
- * null count obtained by replacing `NaN` in `input` with null.
- */
-[[deprecated]] std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
-  column_view const& input,
-  cuda::stream_ref stream           = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
  * @brief Creates a null_mask from `input` by converting `NaN` elements to null rows
  * and preserving existing null values
  *
@@ -518,7 +508,7 @@ std::unique_ptr<table> compute_table_jit(
  * null count obtained from input considering `true` represent `valid`/`1` and
  * `false` represent `invalid`/`0`.
  */
-std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
+std::pair<std::unique_ptr<cuda::device_buffer<cudf::bitmask_type>>, cudf::size_type> bools_to_mask(
   column_view const& input,
   cuda::stream_ref stream           = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

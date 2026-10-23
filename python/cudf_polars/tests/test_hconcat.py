@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import polars as pl
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import DataFrameScan, Empty, HConcat, IRExecutionContext
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from cudf_polars.utils.versions import POLARS_VERSION_LT_139
 
 
 def test_hconcat(engine: pl.GPUEngine):
@@ -29,11 +28,10 @@ def test_hconcat_different_heights(engine: pl.GPUEngine):
 
     right = pl.LazyFrame({"b": [[1], [2]], "c": ["a", "bcde"]})
 
-    q = pl.concat([left, right], how="horizontal")
+    q = pl.concat([left, right], how="horizontal_extend")
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.skipif(POLARS_VERSION_LT_139, reason="strict keyword added in polars 1.39")
 def test_hconcat_strict_different_heights():
     left = pl.LazyFrame({"a": [1, 2, 3]})
     right = pl.LazyFrame({"b": [4, 5]})
@@ -56,8 +54,8 @@ def test_hconcat_should_broadcast():
     child2 = DataFrameScan({"b": DataType(pl.Float64())}, df2._df, None)
 
     schema = {"a": DataType(pl.Int64()), "b": DataType(pl.Float64())}
-    node = HConcat(schema, True, False, child1, child2)  # noqa: FBT003
-    result = node.evaluate(cache={}, timer=None, context=context)
+    node = HConcat(schema, True, False, False, child1, child2)  # noqa: FBT003
+    result = node.evaluate(cache={}, context=context)
 
     polars_result = result.to_polars()
     assert polars_result.shape == (3, 2)

@@ -9,6 +9,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/json/json.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.hpp>
@@ -162,7 +163,11 @@ auto build_json_string_column(int desired_bytes, int num_rows)
     desired_bytes, num_rows, {*d_books, *d_bicycles}, *d_book_pct, *d_misc_order, *d_store_order};
   auto [offsets, chars] = cudf::strings::detail::make_strings_children(
     jb, num_rows, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-  return cudf::make_strings_column(num_rows, std::move(offsets), chars.release(), 0, {});
+  return cudf::make_strings_column(num_rows,
+                                   std::move(offsets),
+                                   chars.release(),
+                                   0,
+                                   cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
 }
 
 static std::string queries[] = {"$",
@@ -179,10 +184,10 @@ static void bench_query(nvbench::state& state)
 {
   srand(5236);
 
-  auto const num_rows              = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const desired_bytes         = static_cast<cudf::size_type>(state.get_int64("bytes"));
-  auto const query                 = state.get_int64("query");
-  std::string_view const json_path = queries[query];
+  auto const num_rows      = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const desired_bytes = static_cast<cudf::size_type>(state.get_int64("bytes"));
+  auto const query         = state.get_int64("query");
+  cudf::string_scalar json_path(queries[query]);
 
   auto const stream = cudf::get_default_stream();
   auto input        = build_json_string_column(desired_bytes, num_rows);

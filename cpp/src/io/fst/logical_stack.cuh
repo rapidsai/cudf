@@ -12,15 +12,17 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cub/cub.cuh>
+#include <cub/device/device_radix_sort.cuh>
+#include <cub/device/device_scan.cuh>
+#include <cub/util_type.cuh>
+#include <cuda/buffer>
 #include <cuda/iterator>
 #include <cuda/std/functional>
+#include <cuda/std/type_traits>
 #include <thrust/device_ptr.h>
-#include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/scatter.h>
 
@@ -65,7 +67,7 @@ namespace detail {
 template <typename StackLevelT, typename ValueT>
 struct StackOp {
   // Must be signed type as any subsequence of stack operations must be able to be covered.
-  static_assert(std::is_signed_v<StackLevelT>, "StackLevelT has to be a signed type");
+  static_assert(cuda::std::is_signed_v<StackLevelT>, "StackLevelT has to be a signed type");
 
   StackLevelT stack_level;
   ValueT value;
@@ -308,7 +310,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                      std::size_t const num_symbols_out,
                                      cuda::stream_ref stream)
 {
-  rmm::device_buffer temp_storage{};
+  cuda::device_buffer<std::byte> temp_storage{stream, cudf::get_current_device_resource_ref()};
 
   // Type used to hold pairs of (stack_level, value) pairs
   using StackOpT = detail::StackOp<StackLevelT, StackSymbolT>;
@@ -446,7 +448,8 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                             propagate_writes_scan_bytes});
 
   if (temp_storage.size() < total_temp_storage_bytes) {
-    temp_storage.resize(total_temp_storage_bytes, stream);
+    temp_storage = cuda::device_buffer<std::byte>{
+      stream, cudf::get_current_device_resource_ref(), total_temp_storage_bytes, cuda::no_init};
   }
   // Actual device buffer size, as we need to pass in an lvalue-ref to cub algorithms as
   // temp_storage_bytes

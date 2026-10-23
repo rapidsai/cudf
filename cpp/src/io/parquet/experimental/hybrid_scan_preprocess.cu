@@ -12,6 +12,7 @@
 #include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/buffer_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
@@ -21,6 +22,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_transform.cuh>
+#include <cuda/buffer>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/stream>
@@ -52,11 +54,12 @@ void decode_dictionary_page_headers(
 {
   CUDF_FUNC_RANGE();
 
-  auto const page_data = cudf::detail::make_device_uvector_async(
+  auto const page_data = cudf::detail::make_device_buffer_async(
     dict_page_data, stream, cudf::get_current_device_resource_ref());
 
   // Exactly one dictionary page per column chunk
-  rmm::device_uvector<size_type> chunk_page_offsets(chunks.size() + 1, stream);
+  cuda::device_buffer<size_type> chunk_page_offsets(
+    stream, cudf::get_current_device_resource_ref(), chunks.size() + 1, cuda::no_init);
   thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    chunk_page_offsets.begin(),
                    chunk_page_offsets.end(),
@@ -70,6 +73,7 @@ void decode_dictionary_page_headers(
     cudf::device_span<PageInfo>{pages.device_ptr(), pages.size()},
     page_data,
     chunk_page_offsets,
+    {},  // Dictionary-only parsing has no page-index metadata.
     error_code.data(),
     stream);
 
@@ -78,18 +82,30 @@ void decode_dictionary_page_headers(
               parquet::kernel_error::to_string(error));
   }
 
-  // Setup dictionary page for each chunk. One page per column chunk, zeroed out struct if a column
-  // is not fully dictionary encoded.
-  thrust::for_each(
-    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    cuda::counting_iterator<cuda::std::size_t>(0),
-    cuda::counting_iterator<cuda::std::size_t>(chunks.size()),
-    [chunks = chunks.device_begin(), pages = pages.device_begin()] __device__(auto chunk_idx) {
-      auto const& page = pages[chunk_idx];
-      if (page.flags & parquet::detail::PAGEINFO_FLAGS_DICTIONARY) {
-        chunks[chunk_idx].dict_page = &page;
-      }
-    });
+  // Point each chunk at its dictionary page. A chunk whose span is empty keeps a zeroed page and is
+  // not pruned with. A non-empty span must hold a dictionary page.
+  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   cuda::counting_iterator<cuda::std::size_t>(0),
+                   cuda::counting_iterator<cuda::std::size_t>(chunks.size()),
+                   [chunks     = chunks.device_begin(),
+                    pages      = pages.device_begin(),
+                    error_code = error_code.data()] __device__(auto chunk_idx) {
+                     auto const& page = pages[chunk_idx];
+                     auto& chunk      = chunks[chunk_idx];
+                     if (page.flags & parquet::detail::PAGEINFO_FLAGS_DICTIONARY) {
+                       chunk.dict_page = &page;
+                     } else if (chunk.compressed_size > 0) {
+                       parquet::detail::set_error(
+                         static_cast<parquet::kernel_error::value_type>(
+                           parquet::detail::decode_error::INVALID_PAGE_TYPE),
+                         error_code);
+                     }
+                   });
+
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    CUDF_FAIL("Dictionary page data holds a non-dictionary page, code(s) " +
+              parquet::kernel_error::to_string(error));
+  }
 
   pages.device_to_host_async(stream);
   chunks.device_to_host_async(stream);
@@ -202,7 +218,7 @@ void hybrid_scan_reader_impl::setup_compressed_data(
   auto const total_pages = _has_offset_index ? count_page_headers_with_pgidx(chunks, _stream)
                                              : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
-  auto unsorted_pages = cudf::detail::make_zeroed_device_uvector_async<PageInfo>(
+  auto unsorted_pages = cudf::detail::make_zeroed_device_buffer_async<PageInfo>(
     total_pages, _stream, cudf::get_current_device_resource_ref());
 
   // decoding of column/page information
@@ -240,7 +256,7 @@ void hybrid_scan_reader_impl::setup_sparse_compressed_data(
 
   // `decode_page_headers` may not write every byte of each PageInfo, and `sort_pages` copies
   // PageInfo as whole objects.
-  auto unsorted_pages = cudf::detail::make_zeroed_device_uvector_async<PageInfo>(
+  auto unsorted_pages = cudf::detail::make_zeroed_device_buffer_async<PageInfo>(
     total_pages, _stream, cudf::get_current_device_resource_ref());
   parquet::detail::decode_page_headers(pass, unsorted_pages, page_data, _stream);
   CUDF_EXPECTS(pass.page_offsets.size() - 1 == static_cast<size_t>(_input_columns.size()),

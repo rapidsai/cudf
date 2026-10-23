@@ -178,6 +178,7 @@ if(BUILD_TESTS AND NOT CUDF_BUILD_TESTUTIL)
 endif()
 
 set(CUDF_CXX_FLAGS "")
+set(CUDF_CXX_TEST_FLAGS "")
 set(CUDF_CUDA_FLAGS "")
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
@@ -732,24 +733,30 @@ add_library(
   src/filling/fill.cu
   src/filling/repeat.cu
   src/filling/sequence.cu
+  src/groupby/common/group_struct_minmax_scan.cu
   src/groupby/common/m2_var_std.cu
+  src/groupby/common/null_mask.cu
   src/groupby/common/utils.cpp
   src/groupby/groupby.cu
-  src/groupby/hash/compute_global_memory_aggs.cu
-  src/groupby/hash/compute_global_memory_aggs_null.cu
-  src/groupby/hash/compute_groupby.cu
-  src/groupby/hash/compute_mapping_indices.cu
-  src/groupby/hash/compute_mapping_indices_null.cu
-  src/groupby/hash/compute_shared_memory_aggs.cu
+  src/groupby/hash/compute_groupby.cpp
+  src/groupby/hash/compute_single_pass_aggs.cpp
   src/groupby/hash/compute_single_pass_aggs.cu
-  src/groupby/hash/compute_single_pass_aggs_null.cu
   src/groupby/hash/extract_single_pass_aggs.cpp
+  src/groupby/hash/group_keys.cu
   src/groupby/hash/groupby.cu
   src/groupby/hash/hash_compound_agg_finalizer.cu
   src/groupby/hash/output_utils.cu
+  src/groupby/hash/single_pass_argminmax.cu
+  src/groupby/hash/single_pass_fused_minmax_sum.cu
+  src/groupby/hash/single_pass_minmax.cu
+  src/groupby/hash/single_pass_product.cu
+  src/groupby/hash/single_pass_sum_overflow.cu
+  src/groupby/hash/single_pass_sums.cu
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu
+  src/groupby/sort/group_argminmax_nested.cu
+  src/groupby/sort/group_argminmax_primitives.cu
   src/groupby/sort/group_bitwise.cu
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
@@ -783,15 +790,13 @@ add_library(
   src/groupby/streaming_groupby/aggregate.cu
   src/groupby/streaming_groupby/impl.cu
   src/groupby/streaming_groupby/insert.cu
-  src/groupby/streaming_groupby/insert_first.cu
-  src/groupby/streaming_groupby/insert_first_nested.cu
   src/groupby/streaming_groupby/insert_nested.cu
-  src/groupby/streaming_groupby/insert_subsequent.cu
-  src/groupby/streaming_groupby/insert_subsequent_nested.cu
   src/groupby/streaming_groupby/merge.cu
+  src/groupby/streaming_groupby/warp_aggregate.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
+  src/hash/spark_murmurhash3_x86_32.cu
   src/hash/sha1_hash.cu
   src/hash/sha224_hash.cu
   src/hash/sha256_hash.cu
@@ -871,6 +876,7 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/experimental/page_index_filter_utils.cu
+  src/io/parquet/experimental/parquet_footer.cpp
   src/io/parquet/experimental/variant_extract.cu
   src/io/parquet/experimental/variant_path.cpp
   src/io/parquet/expression_transform_helpers.cpp
@@ -942,6 +948,9 @@ add_library(
   src/join/hash_join/full_join_retrieve.cu
   src/join/hash_join/full_join_size.cu
   src/join/hash_join/hash_join.cu
+  src/join/hash_join/hash_join_size.cu
+  src/join/hash_join/hash_join_retrieve.cu
+  src/join/hash_join/hash_csr_kernels.cu
   src/join/hash_join/inner_join_match_context.cpp
   src/join/hash_join/inner_join_retrieve.cu
   src/join/hash_join/inner_join_size.cu
@@ -1079,7 +1088,6 @@ add_library(
   src/sort/sort_column.cu
   src/sort/sort_radix.cu
   src/sort/sorted_order_radix.cu
-  src/sort/stable_sort_column.cu
   src/sort/stable_sort.cu
   src/sort/top_k.cu
   src/stream_compaction/apply_mask.cu
@@ -1101,7 +1109,6 @@ add_library(
   src/strings/attributes.cu
   src/strings/capitalize.cu
   src/strings/case.cu
-  src/strings/char_types/char_cases.cu
   src/strings/char_types/char_types.cu
   src/strings/combine/concatenate.cu
   src/strings/combine/join.cu
@@ -1191,6 +1198,7 @@ add_library(
   src/text/vocabulary_tokenize.cu
   src/text/wordpiece_tokenize.cu
   src/transform/bools_to_mask.cu
+  src/transform/checked_arithmetic.cu
   src/transform/compute_column.cu
   src/transform/compute_column_kernel_complex.cu
   src/transform/compute_column_kernel_null_complex.cu
@@ -1481,18 +1489,6 @@ endif()
 
 rapids_cuda_set_runtime(cudf USE_STATIC ON)
 
-file(
-  WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
-  [=[
-SECTIONS
-{
-  .nvFatBinSegment : { *(.nvFatBinSegment) }
-  .nv_fatbin : { *(.nv_fatbin) }
-}
-]=]
-)
-target_link_options(cudf PRIVATE "$<HOST_LINK:${CUDF_BINARY_DIR}/fatbin.ld>")
-
 add_library(cudf::cudf ALIAS cudf)
 
 # ##################################################################################################
@@ -1544,8 +1540,10 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_compile_options(
-    cudftestutil INTERFACE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
-                           "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
+    cudftestutil
+    INTERFACE
+      "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS};${CUDF_CXX_TEST_FLAGS}>>"
+      "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
   )
 
   target_link_libraries(

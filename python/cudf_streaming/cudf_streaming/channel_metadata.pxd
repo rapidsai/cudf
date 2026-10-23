@@ -55,6 +55,7 @@ cdef extern from "<cudf_streaming/channel_metadata.hpp>" \
         bool_t locally_ordered
         cpp_Ordering with_keys(vector[cpp_OrderKey]) except +ex_handler
         cpp_Ordering with_locally_ordered(bool_t) except +ex_handler
+        cpp_Ordering as_strict(cpp_BufferResource&) except +ex_handler
         bool_t boundaries_aligned_with(
             const cpp_Ordering&, const cpp_BufferResource&
         ) except +ex_handler
