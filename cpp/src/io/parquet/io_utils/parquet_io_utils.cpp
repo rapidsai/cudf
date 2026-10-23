@@ -233,7 +233,7 @@ void read_ranges_to_host(std::span<std::reference_wrapper<cudf::io::datasource> 
                          OffsetIterator offsets,
                          SizeIterator sizes,
                          std::size_t count,
-                         std::span<uint8_t> dst,
+                         cudf::host_span<uint8_t> dst,
                          bool serialize_submissions)
 {
   std::vector<std::future<std::size_t>> host_read_tasks;
