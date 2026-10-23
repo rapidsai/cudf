@@ -19,7 +19,7 @@
 namespace cudf {
 namespace {
 struct dispatch_create_indices {
-  template <cudf::concepts::integral_not_bool IndexType>
+  template <cudf::concepts::index_type IndexType>
   std::unique_ptr<column> operator()(column_view const& indices,
                                      cuda::stream_ref stream,
                                      rmm::device_async_resource_ref mr)
@@ -96,7 +96,7 @@ namespace {
  * @brief This functor maps unsigned type_ids to signed counterparts
  */
 struct make_signed_fn {
-  template <cudf::concepts::integral_not_bool T>
+  template <cudf::concepts::index_type T>
   constexpr cudf::type_id operator()()
   {
     return cudf::type_to_id<cuda::std::make_signed_t<T>>();

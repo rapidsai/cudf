@@ -117,7 +117,7 @@ namespace {
  * @brief For dispatching index-type of indices parameter in the nvtext::is_letter API.
  */
 struct dispatch_is_letter_fn {
-  template <cudf::concepts::integral_not_bool T>
+  template <cudf::concepts::index_type T>
   std::unique_ptr<cudf::column> operator()(cudf::strings_column_view const& strings,
                                            letter_type ltype,
                                            cudf::column_view const& indices,
@@ -133,7 +133,7 @@ struct dispatch_is_letter_fn {
 
   template <typename T, typename... Args>
   std::unique_ptr<cudf::column> operator()(Args&&...) const
-    requires(not cudf::concepts::integral_not_bool<T>)
+    requires(not cudf::concepts::index_type<T>)
   {
     CUDF_FAIL("The is_letter indices parameter must be an integer type.");
   }
