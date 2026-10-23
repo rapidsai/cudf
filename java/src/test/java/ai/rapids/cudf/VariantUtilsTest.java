@@ -859,8 +859,11 @@ public class VariantUtilsTest extends CudfTestBase {
              ColumnVector.fromBoxedUnsignedBytes((byte) 0, (byte) 0, null);
          ColumnView allValidMaskedStatus = new ColumnView(
              DType.UINT8, 2, Optional.of(0L), data.getData(), maskOwner.getValid());
-         ColumnView slicedStatus = allValidMaskedStatus.sliceAsViews(1, 2)[0];
-         ColumnView slicedValues = values.sliceAsViews(1, 2)[0]) {
+         CloseableArray<ColumnView> statusViews =
+             CloseableArray.wrap(allValidMaskedStatus.splitAsViews(1));
+         CloseableArray<ColumnView> valueViews = CloseableArray.wrap(values.splitAsViews(1))) {
+      ColumnView slicedStatus = statusViews.get(1);
+      ColumnView slicedValues = valueViews.get(1);
       assertEquals(0, allValidMaskedStatus.getNullCount());
       assertNotNull(allValidMaskedStatus.getValid());
       assertEquals(0, slicedStatus.getNullCount());
@@ -882,10 +885,11 @@ public class VariantUtilsTest extends CudfTestBase {
              statusId(VariantOperationStatus.SUCCESS),
              statusId(VariantOperationStatus.MISSING_PATH),
              statusId(VariantOperationStatus.SUCCESS));
-         ColumnView slicedValues = values.sliceAsViews(1, 4)[0];
-         ColumnView slicedStatus = status.sliceAsViews(1, 4)[0];
+         CloseableArray<ColumnView> valueViews = CloseableArray.wrap(values.splitAsViews(1));
+         CloseableArray<ColumnView> statusViews = CloseableArray.wrap(status.splitAsViews(1));
          VariantOperationResult sliced =
-             VariantUtils.castVariantValueWithStatus(slicedValues, DType.INT32, slicedStatus);
+             VariantUtils.castVariantValueWithStatus(
+                 valueViews.get(1), DType.INT32, statusViews.get(1));
          ColumnVector expectedValues = ColumnVector.fromBoxedInts(7, null, 9);
          ColumnVector expectedStatus = ColumnVector.fromUnsignedBytes(
              statusId(VariantOperationStatus.SUCCESS),
@@ -897,7 +901,7 @@ public class VariantUtilsTest extends CudfTestBase {
              VariantUtils.castVariantValueWithStatus(emptyValues, DType.INT32, emptyStatus)) {
       assertColumnsAreEqual(expectedValues, sliced.getValue());
       assertColumnsAreEqual(expectedStatus, sliced.getStatus());
-      assertColumnsAreEqual(expectedStatus, slicedStatus);
+      assertColumnsAreEqual(expectedStatus, statusViews.get(1));
       assertEquals(0, empty.getValue().getRowCount());
       assertEquals(0, empty.getStatus().getRowCount());
       assertNull(empty.getStatus().getValid());
