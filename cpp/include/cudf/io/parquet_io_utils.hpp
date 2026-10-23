@@ -8,6 +8,7 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/resource_ref.hpp>
@@ -21,6 +22,7 @@
 #include <future>
 #include <span>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -266,8 +268,8 @@ std::tuple<std::vector<rmm::device_buffer>,
            std::vector<std::vector<cudf::device_span<uint8_t const>>>,
            std::future<void>>
 fetch_byte_ranges_to_device_async(
-  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  std::span<std::vector<byte_range_info> const> byte_ranges_per_source,
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<std::vector<byte_range_info> const> byte_ranges_per_source,
   cuda::stream_ref stream   = cudf::get_default_stream(),
   cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
@@ -293,7 +295,7 @@ fetch_byte_ranges_to_device_async(
 [[deprecated("Use the overload that takes io_submission_policy.")]]
 std::pair<std::vector<cuda::device_buffer<uint8_t>>, std::vector<cudf::device_span<uint8_t const>>>
 fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
-                              std::span<byte_range_info const> bloom_filter_byte_ranges,
+                              cudf::host_span<byte_range_info const> bloom_filter_byte_ranges,
                               cuda::stream_ref stream   = cudf::get_default_stream(),
                               cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
@@ -320,10 +322,190 @@ fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
 std::pair<std::vector<cuda::device_buffer<uint8_t>>,
           std::vector<std::vector<cudf::device_span<uint8_t const>>>>
 fetch_bloom_filters_to_device(
-  std::span<std::reference_wrapper<cudf::io::datasource> const> datasources,
-  std::span<std::vector<byte_range_info> const> bloom_filter_byte_ranges_per_source,
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<std::vector<byte_range_info> const> bloom_filter_byte_ranges_per_source,
   cuda::stream_ref stream   = cudf::get_default_stream(),
   cudf::memory_resources mr = cudf::get_current_device_resource_ref());
+
+/** @} */  // end of group
+
+namespace detail {
+
+/**
+ * @brief Whether `Container` converts to `cudf::host_span<T const>` but not to `std::span<T const>`
+ *
+ * Matches arguments (e.g. `thrust::host_vector`) accepted by the deprecated `host_span` overloads
+ * that the `std::span` overloads cannot accept.
+ */
+template <typename Container, typename T>
+concept host_span_only = std::is_convertible_v<Container const&, cudf::host_span<T const>> and
+                         not std::is_convertible_v<Container const&, std::span<T const>>;
+
+/**
+ * @brief Whether `Container` converts to `cudf::host_span<T const>` or `std::span<T const>`
+ */
+template <typename Container, typename T>
+concept host_span_or_std_span = std::is_convertible_v<Container const&, cudf::host_span<T const>> or
+                                std::is_convertible_v<Container const&, std::span<T const>>;
+
+/**
+ * @brief Converts a container accepted by `cudf::host_span<T const>` to `std::span<T const>`
+ *
+ * @tparam T Element type
+ * @tparam Container Container type
+ * @param container Input container
+ * @return A `std::span` over the elements of `container`
+ */
+template <typename T, typename Container>
+[[nodiscard]] std::span<T const> to_std_span(Container const& container)
+{
+  auto const span = cudf::host_span<T const>{container};
+  return {span.data(), span.size()};
+}
+
+}  // namespace detail
+
+/**
+ * @addtogroup io_utils
+ * @{
+ */
+
+/**
+ * @copydoc fetch_footers_to_host(std::span<std::reference_wrapper<cudf::io::datasource> const>)
+ *
+ * @deprecated in release 26.12 and will be removed in a future release. Use the overload that
+ * takes `std::span` instead.
+ *
+ * @tparam Datasources Container type convertible to `cudf::host_span` but not to `std::span`
+ */
+template <typename Datasources>
+  requires detail::host_span_only<Datasources, std::reference_wrapper<cudf::io::datasource>>
+[[deprecated("Use the overload that takes std::span.")]] [[nodiscard]] std::vector<
+  std::unique_ptr<cudf::io::datasource::buffer>>
+fetch_footers_to_host(Datasources const& datasources)
+{
+  return fetch_footers_to_host(
+    detail::to_std_span<std::reference_wrapper<cudf::io::datasource>>(datasources));
+}
+
+/**
+ * @copydoc fetch_page_indexes_to_host(std::span<std::reference_wrapper<cudf::io::datasource>
+ * const>, std::span<byte_range_info const>)
+ *
+ * @deprecated in release 26.12 and will be removed in a future release. Use the overload that
+ * takes `std::span` instead.
+ *
+ * @tparam Datasources Container type convertible to `cudf::host_span` of datasources
+ * @tparam ByteRanges Container type convertible to `cudf::host_span` of byte ranges
+ */
+template <typename Datasources, typename ByteRanges>
+  requires(
+    detail::host_span_or_std_span<Datasources, std::reference_wrapper<cudf::io::datasource>> and
+    detail::host_span_or_std_span<ByteRanges, byte_range_info> and
+    (detail::host_span_only<Datasources, std::reference_wrapper<cudf::io::datasource>> or
+     detail::host_span_only<ByteRanges, byte_range_info>))
+[[deprecated("Use the overload that takes std::span.")]] [[nodiscard]] std::vector<
+  std::unique_ptr<cudf::io::datasource::buffer>>
+fetch_page_indexes_to_host(Datasources const& datasources,
+                           ByteRanges const& page_index_bytes_per_source)
+{
+  return fetch_page_indexes_to_host(
+    detail::to_std_span<std::reference_wrapper<cudf::io::datasource>>(datasources),
+    detail::to_std_span<byte_range_info>(page_index_bytes_per_source));
+}
+
+/**
+ * @copydoc fetch_byte_ranges_to_device_async(std::span<std::reference_wrapper<cudf::io::datasource>
+ * const>, std::span<std::vector<byte_range_info> const>, io_submission_policy, cuda::stream_ref,
+ * cudf::memory_resources)
+ *
+ * @deprecated in release 26.12 and will be removed in a future release. Use the overload that
+ * takes `std::span` instead.
+ *
+ * @tparam Datasources Container type convertible to `cudf::host_span` of datasources
+ * @tparam ByteRanges Container type convertible to `cudf::host_span` of byte range vectors
+ */
+template <typename Datasources, typename ByteRanges>
+  requires(
+    detail::host_span_or_std_span<Datasources, std::reference_wrapper<cudf::io::datasource>> and
+    detail::host_span_or_std_span<ByteRanges, std::vector<byte_range_info>> and
+    (detail::host_span_only<Datasources, std::reference_wrapper<cudf::io::datasource>> or
+     detail::host_span_only<ByteRanges, std::vector<byte_range_info>>))
+[[deprecated("Use the overload that takes std::span.")]] std::tuple<
+  std::vector<rmm::device_buffer>,
+  std::vector<std::vector<cudf::device_span<uint8_t const>>>,
+  std::future<void>>
+fetch_byte_ranges_to_device_async(
+  Datasources const& datasources,
+  ByteRanges const& byte_ranges_per_source,
+  io_submission_policy policy,
+  cuda::stream_ref stream   = cudf::get_default_stream(),
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref())
+{
+  return fetch_byte_ranges_to_device_async(
+    detail::to_std_span<std::reference_wrapper<cudf::io::datasource>>(datasources),
+    detail::to_std_span<std::vector<byte_range_info>>(byte_ranges_per_source),
+    policy,
+    stream,
+    mr);
+}
+
+/**
+ * @copydoc fetch_bloom_filters_to_device(cudf::io::datasource&, std::span<byte_range_info const>,
+ * io_submission_policy, cuda::stream_ref, cudf::memory_resources)
+ *
+ * @deprecated in release 26.12 and will be removed in a future release. Use the overload that
+ * takes `std::span` instead.
+ *
+ * @tparam ByteRanges Container type convertible to `cudf::host_span` but not to `std::span`
+ */
+template <typename ByteRanges>
+  requires detail::host_span_only<ByteRanges, byte_range_info>
+[[deprecated("Use the overload that takes std::span.")]] std::
+  pair<std::vector<cuda::device_buffer<uint8_t>>, std::vector<cudf::device_span<uint8_t const>>>
+  fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
+                                ByteRanges const& bloom_filter_byte_ranges,
+                                io_submission_policy policy,
+                                cuda::stream_ref stream   = cudf::get_default_stream(),
+                                cudf::memory_resources mr = cudf::get_current_device_resource_ref())
+{
+  return fetch_bloom_filters_to_device(
+    datasource, detail::to_std_span<byte_range_info>(bloom_filter_byte_ranges), policy, stream, mr);
+}
+
+/**
+ * @copydoc fetch_bloom_filters_to_device(std::span<std::reference_wrapper<cudf::io::datasource>
+ * const>, std::span<std::vector<byte_range_info> const>, io_submission_policy, cuda::stream_ref,
+ * cudf::memory_resources)
+ *
+ * @deprecated in release 26.12 and will be removed in a future release. Use the overload that
+ * takes `std::span` instead.
+ *
+ * @tparam Datasources Container type convertible to `cudf::host_span` of datasources
+ * @tparam ByteRanges Container type convertible to `cudf::host_span` of byte range vectors
+ */
+template <typename Datasources, typename ByteRanges>
+  requires(
+    detail::host_span_or_std_span<Datasources, std::reference_wrapper<cudf::io::datasource>> and
+    detail::host_span_or_std_span<ByteRanges, std::vector<byte_range_info>> and
+    (detail::host_span_only<Datasources, std::reference_wrapper<cudf::io::datasource>> or
+     detail::host_span_only<ByteRanges, std::vector<byte_range_info>>))
+[[deprecated("Use the overload that takes std::span.")]] std::pair<
+  std::vector<cuda::device_buffer<uint8_t>>,
+  std::vector<std::vector<cudf::device_span<uint8_t const>>>>
+fetch_bloom_filters_to_device(Datasources const& datasources,
+                              ByteRanges const& bloom_filter_byte_ranges_per_source,
+                              io_submission_policy policy,
+                              cuda::stream_ref stream   = cudf::get_default_stream(),
+                              cudf::memory_resources mr = cudf::get_current_device_resource_ref())
+{
+  return fetch_bloom_filters_to_device(
+    detail::to_std_span<std::reference_wrapper<cudf::io::datasource>>(datasources),
+    detail::to_std_span<std::vector<byte_range_info>>(bloom_filter_byte_ranges_per_source),
+    policy,
+    stream,
+    mr);
+}
 
 /** @} */  // end of group
 }  // namespace io::parquet
