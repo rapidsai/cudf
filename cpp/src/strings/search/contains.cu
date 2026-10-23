@@ -80,6 +80,8 @@ constexpr int LRB_BLOCK_SIZE = 256;
  */
 constexpr int LRB_SHIFT = 4;
 
+constexpr int LRB_CHUNK_SHIFT = 12;  // log2(LRB_CHUNK_BYTES)
+
 /**
  * @brief Rows longer than this are scheduled as several warp tasks, one per chunk of this many
  * bytes, so every task carries a bounded amount of work regardless of row length.
@@ -89,10 +91,7 @@ constexpr int LRB_SHIFT = 4;
  * case depends on how many long rows there are. Chunks of one row never conflict: the scatter pass
  * writes `false` for every binned row and chunk tasks only ever write `true`.
  */
-constexpr int LRB_CHUNK_BYTES = 4096;
-
-constexpr int LRB_CHUNK_SHIFT = 12;  // log2(LRB_CHUNK_BYTES)
-static_assert((1 << LRB_CHUNK_SHIFT) == LRB_CHUNK_BYTES);
+constexpr int LRB_CHUNK_BYTES = 1 << LRB_CHUNK_SHIFT;  // 4 KiB
 
 /**
  * @brief Rows of at most this many bytes are searched thread-per-row directly inside the
