@@ -493,7 +493,8 @@ if(CUDF_JIT_USE_LIBNVCXX)
     INCLUDE_DIRECTORIES
     librtcx/libnvcxx
     librtcx/libnvcxx/nvcxx
-    librtcx/libnvcxx/nvcxx/std
+    librtcx/libnvcxx/nvcxx/cuda
+    librtcx/libnvcxx/nvcxx/cuda/std
     FILES
     ${NVCXX_HEADERS}
   )
