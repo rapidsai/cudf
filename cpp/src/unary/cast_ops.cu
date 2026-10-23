@@ -370,8 +370,6 @@ struct dispatch_unary_cast_to {
 
   template <typename TargetT, typename SourceT = _SourceT>
   std::unique_ptr<column> operator()(data_type, cuda::stream_ref, rmm::device_async_resource_ref)
-
-    requires(not is_supported_cast<SourceT, TargetT>())
   {
     if (!cudf::is_fixed_width<TargetT>())
       CUDF_FAIL("Column type must be numeric or chrono or decimal32/64/128");

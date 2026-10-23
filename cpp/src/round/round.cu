@@ -204,7 +204,6 @@ std::unique_ptr<column> round_with(column_view const& input,
                                    int32_t decimal_places,
                                    cuda::stream_ref stream,
                                    rmm::device_async_resource_ref mr)
-  requires(not cudf::concepts::fixed_point<T>)
 {
   using Functor = RoundFunctor<T>;
 
