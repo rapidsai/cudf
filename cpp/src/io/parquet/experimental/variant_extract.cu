@@ -1031,6 +1031,9 @@ constexpr int max_global_scratch_blocks = 256;
 // and running it on fewer threads is a fair price for a bounded temporary.
 constexpr std::size_t max_global_scratch_bytes = std::size_t{32} * 1024 * 1024;
 
+// Dynamic shared memory up to this size needs no opt-in on any supported architecture
+constexpr std::size_t max_shared_trie_bytes = std::size_t{48} * 1024;
+
 /**
  * @brief Resolves a whole trie of VARIANT paths in each row, recording each path's result.
  *
@@ -1061,6 +1064,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_field_trie_kernel(
   bitmask_type const* d_row_valid,
   size_type num_rows,
   size_type trie_depth,
+  bool stage_trie,
   device_span<size_type> d_sizes,
   device_span<size_type> d_src_offsets,
   device_span<bitmask_type* const> d_null_masks,
@@ -1071,6 +1075,25 @@ CUDF_KERNEL __launch_bounds__(block_size) void locate_variant_field_trie_kernel(
   auto const num_paths = static_cast<size_type>(d_null_masks.size());
   auto const tid       = cudf::detail::grid_1d::global_thread_id<block_size>();
   auto const stride    = cudf::detail::grid_1d::grid_stride<block_size>();
+
+  // The trie arrays are read for every (row, slot) pair but are the same for the whole block, so
+  // they are staged in shared memory when the launch reserved room for them
+  if (stage_trie) {
+    extern __shared__ size_type shared_trie[];
+    auto* next       = shared_trie;
+    auto const stage = [&](device_span<size_type const>& span) {
+      for (auto i = static_cast<std::size_t>(threadIdx.x); i < span.size(); i += block_size) {
+        next[i] = span[i];
+      }
+      span = device_span<size_type const>{next, span.size()};
+      next += span.size();
+    };
+    stage(slot_steps);
+    stage(slot_depth);
+    stage(output_offsets);
+    stage(output_paths);
+    __syncthreads();
+  }
 
   // The local stack is private to the thread and indexed directly. Global scratch is depth-major
   // (`depth * stride + tid`, `stride` being the thread count) so that at each level the threads of
@@ -1828,23 +1851,35 @@ std::unique_ptr<table> get_variant_fields(column_view const& variant_column,
     stream,
     temp_mr);
 
-  auto const launch = [&](auto use_local) {
+  // Room for the trie arrays in shared memory, kept within the default per-block limit so that the
+  // launch needs no opt-in; a trie too large for it is read from global memory instead
+  auto const trie_bytes = sizeof(size_type) * (d_slot_steps.size() + d_slot_depth.size() +
+                                               d_output_offsets.size() + d_output_paths.size());
+  bool const stage_trie = trie_bytes <= max_shared_trie_bytes;
+  auto const launch     = [&](auto use_local) {
+    // Reserving any shared memory otherwise lets the driver shrink L1, which the metadata lookups
+    // depend on; at many paths that costs more than staging the trie saves
+    CUDF_CUDA_TRY(cudaFuncSetAttribute(locate_variant_field_trie_kernel<decltype(use_local)::value>,
+                                       cudaFuncAttributePreferredSharedMemoryCarveout,
+                                       cudaSharedmemCarveoutMaxL1));
     locate_variant_field_trie_kernel<decltype(use_local)::value>
-      <<<num_blocks, block_size, 0, stream.get()>>>(meta_lists_device_view,
-                                                    val_lists_device_view,
-                                                    *steps_device_view,
-                                                    d_slot_steps,
-                                                    d_slot_depth,
-                                                    d_output_offsets,
-                                                    d_output_paths,
-                                                    d_row_valid,
-                                                    num_rows,
-                                                    trie_depth,
-                                                    d_sizes,
-                                                    d_src_offsets,
-                                                    d_null_masks,
-                                                    d_statuses,
-                                                    d_scratch);
+      <<<num_blocks, block_size, stage_trie ? trie_bytes : 0, stream.get()>>>(
+        meta_lists_device_view,
+        val_lists_device_view,
+        *steps_device_view,
+        d_slot_steps,
+        d_slot_depth,
+        d_output_offsets,
+        d_output_paths,
+        d_row_valid,
+        num_rows,
+        trie_depth,
+        stage_trie,
+        d_sizes,
+        d_src_offsets,
+        d_null_masks,
+        d_statuses,
+        d_scratch);
   };
   if (use_local_scratch) {
     launch(cuda::std::true_type{});

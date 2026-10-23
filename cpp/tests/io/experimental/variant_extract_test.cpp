@@ -1432,6 +1432,19 @@ TEST_F(GetVariantFieldsTest, ManyShallowPaths)
   expect_matches_looped_get(make_xyz_three_row_variant(), paths);
 }
 
+TEST_F(GetVariantFieldsTest, TrieTooLargeForSharedMemory)
+{
+  // Enough paths that the trie arrays no longer fit the shared memory the walk stages them in, so
+  // they are read from global memory instead. The fields that resolve sit at both ends, so the
+  // output mapping is checked across the whole of the larger arrays.
+  auto paths = std::vector<std::string>{"x", "y", "z"};
+  for (int i = 0; i < 4000; ++i) {
+    paths.push_back(std::format("$.field_{}", i));
+  }
+  paths.push_back("$.y");
+  expect_matches_looped_get(make_xyz_three_row_variant(), paths);
+}
+
 TEST_F(GetVariantFieldsTest, DeepTrieUsesGlobalScratch)
 {
   // Every path extends the previous one, so the trie is a chain deeper than the per-thread stack
