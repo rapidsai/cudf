@@ -135,21 +135,23 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
   auto const null_count   = indices->null_count();  // before calling release()
   auto contents           = indices->release();
 
-  auto const new_type_id = cudf::type_dispatcher(indices_type, make_signed_fn{keys->size()});
+  auto const new_type =
+    data_type{cudf::type_dispatcher(indices_type, make_signed_fn{keys->size()})};
 
   // create the dictionary indices: convert to signed and remove nulls if necessary
   auto indices_column = [&] {
-    // If the types match, then just commandeer the column's data buffer.
-    if (new_type_id == indices_type.id()) {
-      return std::make_unique<column>(indices_type,
+    // If the widths match, then just commandeer the column's data buffer.
+    // Every valid index is less than keys->size() so its bits are the same in both types.
+    if (new_type == indices_type || cudf::size_of(new_type) == cudf::size_of(indices_type)) {
+      return std::make_unique<column>(new_type,
                                       indices_size,
                                       std::move(*(contents.data.release())),
                                       cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED),
                                       0);
     }
-    // If the new type does not match, then convert the data.
+    // If the widths do not match, then convert the data.
     cudf::column_view cast_view{indices_type, indices_size, contents.data->data(), nullptr, 0};
-    return cudf::detail::cast(cast_view, data_type{new_type_id}, stream, mr);
+    return cudf::detail::cast(cast_view, new_type, stream, mr);
   }();
 
   return make_dictionary_column(std::move(keys),
