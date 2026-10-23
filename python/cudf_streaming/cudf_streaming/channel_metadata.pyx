@@ -140,7 +140,8 @@ cdef class RowOrdering:
     group_keys
         Columns defining equality groups. When empty, all rows in the selected
         scope are ordered together. Otherwise, each group's subsequence is
-        ordered independently.
+        ordered independently. Group keys must not also appear in
+        ``order_keys``.
     """
 
     def __init__(

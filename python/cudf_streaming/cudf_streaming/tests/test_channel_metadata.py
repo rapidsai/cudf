@@ -154,6 +154,9 @@ def test_row_ordering() -> None:
     with pytest.raises(ValueError, match="order_keys must not be empty"):
         RowOrdering((), RowOrderingScope.GLOBAL)
 
+    with pytest.raises(ValueError, match="must not overlap"):
+        RowOrdering((key,), RowOrderingScope.GLOBAL, group_keys=(1,))
+
 
 def test_order_scheme(context: Context) -> None:
     """Test OrderScheme construction, properties, equality, and repr."""

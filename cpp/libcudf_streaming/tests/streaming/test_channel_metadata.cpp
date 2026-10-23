@@ -50,6 +50,8 @@ TEST_F(StreamingChannelMetadata, RowOrdering)
   EXPECT_EQ(ordering, (row_ordering{{key}, row_ordering_scope::RANK_LOCAL, {0}}));
   EXPECT_THROW(static_cast<void>(row_ordering{{}, row_ordering_scope::GLOBAL}),
                std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(row_ordering{{key}, row_ordering_scope::GLOBAL, {1}}),
+               std::invalid_argument);
 }
 
 TEST_F(StreamingChannelMetadata, OrderSchemeCtorRejectsEmptyKeys)

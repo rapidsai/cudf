@@ -96,8 +96,10 @@ struct row_ordering {
    *
    * @param order_keys Non-empty keys that order rows.
    * @param scope Scope of the ordering guarantee.
-   * @param group_keys Columns defining equality groups.
-   * @throws std::invalid_argument if `order_keys` is empty.
+   * @param group_keys Columns defining equality groups. These must not also
+   * appear in `order_keys`.
+   * @throws std::invalid_argument if `order_keys` is empty or overlaps with
+   * `group_keys`.
    */
   row_ordering(std::vector<order_key> order_keys,
                row_ordering_scope scope,

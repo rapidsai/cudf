@@ -49,6 +49,16 @@ row_ordering::row_ordering(std::vector<order_key> order_keys,
 {
   RAPIDSMPF_EXPECTS(
     !this->order_keys.empty(), "row_ordering: order_keys must not be empty", std::invalid_argument);
+  RAPIDSMPF_EXPECTS(std::none_of(this->order_keys.begin(),
+                                 this->order_keys.end(),
+                                 [this](auto const& order_key) {
+                                   return std::find(this->group_keys.begin(),
+                                                    this->group_keys.end(),
+                                                    order_key.column_index) !=
+                                          this->group_keys.end();
+                                 }),
+                    "row_ordering: order_keys and group_keys must not overlap",
+                    std::invalid_argument);
 }
 
 ordering::ordering(std::vector<order_key> keys,
