@@ -12,6 +12,7 @@ import ai.rapids.cudf.HostColumnVector.StructType;
 
 import org.junit.jupiter.api.Test;
 
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -247,6 +248,39 @@ public class VariantUtilsTest extends CudfTestBase {
           (int) ((bits >>> 40) & 0xff),
           (int) ((bits >>> 48) & 0xff),
           (int) ((bits >>> 56) & 0xff));
+    }
+
+    private static List<Byte> decimal4(int unscaled, int fractionalDigits) {
+      return decimal(BigInteger.valueOf(unscaled), fractionalDigits, 4, 0x08);
+    }
+
+    private static List<Byte> decimal8(long unscaled, int fractionalDigits) {
+      return decimal(BigInteger.valueOf(unscaled), fractionalDigits, 8, 0x09);
+    }
+
+    private static List<Byte> decimal16(BigInteger unscaled, int fractionalDigits) {
+      return decimal(unscaled, fractionalDigits, 16, 0x0a);
+    }
+
+    private static List<Byte> decimal(
+        BigInteger unscaled, int fractionalDigits, int width, int primitiveType) {
+      if (fractionalDigits < 0 || fractionalDigits > 255) {
+        throw new IllegalArgumentException(
+            "decimal fractional digits do not fit in one byte: " + fractionalDigits);
+      }
+      BigInteger limit = BigInteger.ONE.shiftLeft(width * Byte.SIZE - 1);
+      if (unscaled.compareTo(limit.negate()) < 0 || unscaled.compareTo(limit) >= 0) {
+        throw new IllegalArgumentException(
+            "decimal value does not fit in " + width + " bytes: " + unscaled);
+      }
+
+      List<Byte> result = new ArrayList<>(width + 2);
+      result.add(oneByte(simple(primitiveType), "decimal header"));
+      result.add(oneByte(fractionalDigits, "decimal fractional digits"));
+      for (int byteIndex = 0; byteIndex < width; byteIndex++) {
+        result.add(unscaled.shiftRight(byteIndex * Byte.SIZE).byteValue());
+      }
+      return result;
     }
 
     private static List<Byte> bool(boolean value) {
@@ -662,6 +696,126 @@ public class VariantUtilsTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, null, null, null)) {
       assertColumnsAreEqual(unslicedExpected, unslicedResult);
       assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void castDecimalWidthsToEveryOutputWidthFromSlice() {
+    DType decimal32 = DType.create(DType.DTypeEnum.DECIMAL32, -2);
+    DType decimal64 = DType.create(DType.DTypeEnum.DECIMAL64, -2);
+    DType decimal128 = DType.create(DType.DTypeEnum.DECIMAL128, -2);
+    try (ColumnVector values = ColumnVector.fromLists(
+             BINARY_TYPE,
+             VariantEncoder.int8(0),
+             VariantEncoder.decimal4(1234, 2),
+             VariantEncoder.decimal8(-5678, 2),
+             VariantEncoder.decimal16(BigInteger.valueOf(9012), 2));
+         ColumnVector sliced = values.subVector(1, 4);
+         ColumnVector result32 = VariantUtils.castVariantValue(sliced, decimal32);
+         ColumnVector result64 = VariantUtils.castVariantValue(sliced, decimal64);
+         ColumnVector result128 = VariantUtils.castVariantValue(sliced, decimal128);
+         ColumnVector expected32 = ColumnVector.decimalFromInts(-2, 1234, -5678, 9012);
+         ColumnVector expected64 = ColumnVector.decimalFromLongs(-2, 1234, -5678, 9012);
+         ColumnVector expected128 = ColumnVector.decimalFromBigInt(
+             -2, BigInteger.valueOf(1234), BigInteger.valueOf(-5678), BigInteger.valueOf(9012))) {
+      assertColumnsAreEqual(expected32, result32);
+      assertColumnsAreEqual(expected64, result64);
+      assertColumnsAreEqual(expected128, result128);
+    }
+  }
+
+  @Test
+  void castDecimal128UsesFullPayloadWidth() {
+    BigInteger high = BigInteger.ONE.shiftLeft(100).add(BigInteger.valueOf(1234));
+    DType decimal128 = DType.create(DType.DTypeEnum.DECIMAL128, 0);
+    try (ColumnVector values = ColumnVector.fromLists(
+             BINARY_TYPE,
+             VariantEncoder.decimal16(high, 0),
+             VariantEncoder.decimal16(high.negate(), 0));
+         ColumnVector result = VariantUtils.castVariantValue(values, decimal128);
+         ColumnVector expected = ColumnVector.decimalFromBigInt(0, high, high.negate())) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void castDecimalRescalesAndTruncatesTowardZero() {
+    DType target = DType.create(DType.DTypeEnum.DECIMAL32, -1);
+    try (ColumnVector values = ColumnVector.fromLists(
+             BINARY_TYPE,
+             VariantEncoder.decimal4(125, 2),
+             VariantEncoder.decimal4(-125, 2),
+             VariantEncoder.decimal4(7, 0),
+             VariantEncoder.decimal8(30, 3),
+             VariantEncoder.decimal16(BigInteger.ONE, 38));
+         ColumnVector result = VariantUtils.castVariantValue(values, target);
+         ColumnVector expected = ColumnVector.decimalFromInts(-1, 12, -12, 70, 0, 0)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void castDecimalInvalidRowsProduceNulls() {
+    DType target = DType.create(DType.DTypeEnum.DECIMAL32, -3);
+    try (ColumnVector values = ColumnVector.fromLists(
+             BINARY_TYPE,
+             VariantEncoder.decimal4(1234, 2),
+             VariantEncoder.decimal8((long) Integer.MAX_VALUE + 1, 3),
+             VariantEncoder.decimal4(Integer.MAX_VALUE / 1000 + 1, 0),
+             VariantEncoder.nullValue(),
+             VariantEncoder.int32(1234),
+             VariantEncoder.decimal4(1234, 39),
+             bytes(VariantEncoder.simple(0x09), 0x03, 0x00),
+             null);
+         ColumnVector result = VariantUtils.castVariantValue(values, target);
+         ColumnVector expected = ColumnVector.decimalFromBoxedInts(
+             -3, 12340, null, null, null, null, null, null, null)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void extractDecimalFieldRescalesAndPreservesNulls() {
+    VariantEncoder priceEncoder = new VariantEncoder("price");
+    VariantEncoder otherEncoder = new VariantEncoder("other");
+    DType target = DType.create(DType.DTypeEnum.DECIMAL64, -2);
+    try (ColumnVector variant = ColumnVector.fromStructs(
+             VARIANT_TYPE,
+             variant(priceEncoder.metadata(), priceEncoder.object(fields(
+                 field("price", VariantEncoder.decimal8(123456, 3))))),
+             variant(priceEncoder.metadata(), priceEncoder.object(fields(
+                 field("price", VariantEncoder.decimal4(-5, 1))))),
+             variant(otherEncoder.metadata(), otherEncoder.object(fields(
+                 field("other", VariantEncoder.decimal4(1, 0))))),
+             variant(priceEncoder.metadata(), priceEncoder.object(fields(
+                 field("price", VariantEncoder.nullValue())))),
+             null);
+         ColumnVector result = VariantUtils.extractVariantField(variant, "price", target);
+         ColumnVector expected = ColumnVector.decimalFromBoxedLongs(
+             -2, 12345L, -50L, null, null, null)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void emptyInputSupportsEveryDecimalOutputWidthAndScale() {
+    DType[] targets = {
+        DType.create(DType.DTypeEnum.DECIMAL32, -1),
+        DType.create(DType.DTypeEnum.DECIMAL64, -2),
+        DType.create(DType.DTypeEnum.DECIMAL128, -3)
+    };
+    try (ColumnVector values = ColumnVector.fromLists(BINARY_TYPE);
+         ColumnVector variant = ColumnVector.fromStructs(VARIANT_TYPE)) {
+      for (DType target : targets) {
+        try (ColumnVector directResult = VariantUtils.castVariantValue(values, target);
+             ColumnVector extractedResult =
+                 VariantUtils.extractVariantField(variant, "x", target)) {
+          assertEquals(target, directResult.getType());
+          assertEquals(target, extractedResult.getType());
+          assertEquals(0, directResult.getRowCount());
+          assertEquals(0, extractedResult.getRowCount());
+        }
+      }
     }
   }
 
