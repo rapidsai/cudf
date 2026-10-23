@@ -454,6 +454,11 @@ if packaging.version.parse(sqlite3.sqlite_version) <= packaging.version.parse("3
             "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[STRING_AGG]": 'sqlite3.OperationalError: near "ORDER": syntax error',
             "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[GROUP_CONCAT]": 'sqlite3.OperationalError: near "ORDER": syntax error',
             "tests/unit/sql/test_window_functions.py::test_window_frame_validation": 'sqlite3.OperationalError: near "GROUPS": syntax error',
+            "tests/unit/sql/test_window_functions.py::test_window_total": 'sqlite3.OperationalError: near "NULLS": syntax error',
+            "tests/unit/sql/test_window_functions.py::test_window_order_by_nulls_multiple_keys_29390[False-False]": 'sqlite3.OperationalError: near "NULLS": syntax error',
+            "tests/unit/sql/test_window_functions.py::test_window_order_by_nulls_multiple_keys_29390[False-True]": 'sqlite3.OperationalError: near "NULLS": syntax error',
+            "tests/unit/sql/test_window_functions.py::test_window_order_by_nulls_multiple_keys_29390[True-False]": 'sqlite3.OperationalError: near "NULLS": syntax error',
+            "tests/unit/sql/test_window_functions.py::test_window_order_by_nulls_multiple_keys_29390[True-True]": 'sqlite3.OperationalError: near "NULLS": syntax error',
         }
     )
 
