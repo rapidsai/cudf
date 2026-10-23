@@ -35,6 +35,7 @@
 #include <limits>
 #include <numeric>
 #include <optional>
+#include <ranges>
 #include <stdexcept>
 #include <utility>
 
@@ -931,13 +932,10 @@ void reader_impl::initialize_output_dict_column_mask(parquet_reader_options cons
   auto dictionary32_column_names =
     make_column_path_set(_options.case_sensitive_names, dictionary32_columns.size());
   dictionary32_column_names.insert(dictionary32_columns.begin(), dictionary32_columns.end());
-  _output_dict_column_mask.resize(_output_buffers.size());
-  std::transform(_output_buffers.begin(),
-                 _output_buffers.end(),
-                 _output_dict_column_mask.begin(),
-                 [&](auto const& buff) {
-                   return output_all_columns or dictionary32_column_names.contains(buff.name);
-                 });
+  auto const mask = _output_buffers | std::views::transform([&](auto const& buff) {
+                      return output_all_columns or dictionary32_column_names.contains(buff.name);
+                    });
+  _output_dict_column_mask.assign(mask.begin(), mask.end());
 }
 
 std::unique_ptr<table> reader_impl::encode_output_dict_columns(
