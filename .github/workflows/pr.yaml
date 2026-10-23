@@ -80,11 +80,12 @@ jobs:
         id: get-pr-info
         uses: nv-gha-runners/get-pr-info@090577647b8ddc4e06e809e264f7881650ecdccf # main
       - name: Check if nightly CI is passing
-        uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
+        uses: rapidsai/shared-actions/check_nightly_success/dispatch@temp-extension
         with:
           repo: ${{ github.repository }}
           target-branch: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
-          max-days-without-success: 21
+          max-days-without-success: 14
+          temp-extension-expires: 2026-10-24
   changed-files:
     permissions:
       actions: read
