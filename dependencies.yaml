@@ -1288,6 +1288,7 @@ dependencies:
           - deltalake>=1.6.0
           - pyiceberg>=0.12.0
           - sqlalchemy>=2.0.18
+          - pyarrow>=19.0.0
       - output_types: conda
         packages:
           # Used by timeout_with_stack.py utility
