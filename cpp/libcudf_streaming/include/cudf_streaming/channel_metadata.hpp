@@ -313,8 +313,8 @@ struct partitioning {
 /**
  * @brief Channel-level metadata describing the data stream.
  *
- * Contains information about chunk counts, partitioning, and duplication for
- * the data flowing through a channel.
+ * Contains information about chunk counts, partitioning, and duplication
+ * status for the data flowing through a channel.
  */
 struct channel_metadata {
   std::uint64_t local_count{};       ///< Local chunk-count estimate for this rank.
