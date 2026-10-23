@@ -81,6 +81,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.dsl.utils.io import CachedParquetInfo
+    from cudf_polars.engine.metadata_cache import MetadataCache
     from cudf_polars.quent._context import (
         ActorBoundQuentIRExecutionState,
         UnboundQuentIRExecutionState,
@@ -143,6 +144,10 @@ class IRExecutionContext:
         Optional pre-actor Quent tracing context bound to a physical operator.
     tracer
         The actor tracer. Used to propagate statistics.
+    metadata_cache
+        This engine's persistent parquet metadata cache, or ``None`` when
+        both ``ParquetOptions.persistent_metadata_cache`` and
+        ``ParquetOptions.persistent_column_size_cache`` are disabled.
     """
 
     py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)
@@ -151,6 +156,7 @@ class IRExecutionContext:
     actor_bound_quent_ir_execution_state: ActorBoundQuentIRExecutionState | None = None
     unbound_quent_ir_execution_state: UnboundQuentIRExecutionState | None = None
     tracer: ActorTracer | None = None
+    metadata_cache: MetadataCache | None = field(default=None)
 
     async def to_thread[**P, T](
         self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
@@ -1109,6 +1115,19 @@ class Scan(IR):
         columns = dict(zip(names, table.columns(), strict=True))
         return plc.Table([columns[name] for name in with_columns]), with_columns
 
+    @staticmethod
+    def _record_observed_column_bytes(
+        context: IRExecutionContext, paths: list[str], df: DataFrame
+    ) -> None:
+        """Record each column's real decoded bytes-per-row against this task's paths."""
+        cache = context.metadata_cache
+        if cache is None or df.num_rows == 0:
+            return
+        for name, column in df.column_map.items():
+            bytes_per_row = column.obj.device_buffer_size() / df.num_rows
+            for path in paths:
+                cache.record_observed_column_bytes(path, name, bytes_per_row)
+
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Scan")
@@ -1369,6 +1388,7 @@ class Scan(IR):
                     dtypes=[schema[name] for name in names],
                     stream=stream,
                 )
+                cls._record_observed_column_bytes(context, paths, df)
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(  # pragma: no cover
                         include_file_paths,
@@ -1410,6 +1430,7 @@ class Scan(IR):
                     [schema[name] for name in col_names],
                     stream=stream,
                 )
+                cls._record_observed_column_bytes(context, paths, df)
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
                         include_file_paths,

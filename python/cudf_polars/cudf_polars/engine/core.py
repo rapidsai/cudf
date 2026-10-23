@@ -35,6 +35,7 @@ from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.utils.io import (
     attach_cached_parquet_metadata,
     prefetch_parquet_file_metadata_for_ir,
+    warm_metadata_cache_for_ir,
 )
 from cudf_polars.quent._plan import build_quent_operator_map, emit_plan
 from cudf_polars.streaming.actor_graph.collectives import (
@@ -64,6 +65,7 @@ if TYPE_CHECKING:
     import cudf_polars.quent._runtime
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.translate import Translator
+    from cudf_polars.engine.metadata_cache import MetadataCache
     from cudf_polars.quent._context import QuentConfig, QuentQueryWorkerState
     from cudf_polars.streaming.base import PartitionInfo
     from cudf_polars.streaming.parallel import ConfigOptions
@@ -492,6 +494,17 @@ class StreamingEngine(pl.GPUEngine):
         """
         return Statistics.merge(self.gather_statistics(clear=clear))
 
+    def clear_metadata_cache(self) -> None:
+        """
+        Drop every entry from the persistent parquet metadata cache, on every rank.
+
+        No-op on any rank where both ``ParquetOptions.persistent_metadata_cache``
+        and ``ParquetOptions.persistent_column_size_cache`` are disabled.
+        """
+        from cudf_polars.engine.metadata_cache import clear_all
+
+        self._run(clear_all)
+
     def _reset(
         self,
         *,
@@ -820,6 +833,7 @@ def allgather_stats(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
     executor: Executor,
+    metadata_cache: MetadataCache | None = None,
 ) -> StatsCollector:
     """
     Collect scan statistics on rank 0 and distribute to all ranks.
@@ -840,16 +854,20 @@ def allgather_stats(
     executor: concurrent.futures.Executor
         Executor to use for IO operations. This function does not start
         or shutdown the executor.
+    metadata_cache
+        This engine's persistent parquet metadata cache, used for scan
+        statistics when ``ParquetOptions.persistent_metadata_cache`` or
+        ``ParquetOptions.persistent_column_size_cache`` is enabled.
 
     Returns
     -------
     A :class:`StatsCollector` valid for the local rank's IR node objects.
     """
     if comm.nranks == 1:
-        return collect_statistics(ir, config_options, executor)
+        return collect_statistics(ir, config_options, executor, metadata_cache)
 
     if comm.rank == 0:
-        stats = collect_statistics(ir, config_options, executor)
+        stats = collect_statistics(ir, config_options, executor, metadata_cache)
         data = json.dumps(stats.serialize(ir)).encode()
     else:
         data = b""
@@ -872,6 +890,7 @@ def evaluate_on_rank(
     collect_metadata: bool = False,
     quent_query_worker_state: QuentQueryWorkerState | None = None,
     query_id: uuid.UUID,
+    metadata_cache: MetadataCache | None = None,
 ) -> tuple[DataFrame, list[ChannelMetadata]]:
     """
     Evaluate a polars IR plan on a single rank.
@@ -903,6 +922,10 @@ def evaluate_on_rank(
         disabled.
     query_id
         A unique identifier for the query.
+    metadata_cache
+        This engine's persistent parquet metadata cache, or ``None`` when
+        both ``ParquetOptions.persistent_metadata_cache`` and
+        ``ParquetOptions.persistent_column_size_cache`` are disabled.
 
     Returns
     -------
@@ -923,6 +946,7 @@ def evaluate_on_rank(
             config_options,
             quent_query_worker_state=quent_query_worker_state,
             query_id=query_id,
+            metadata_cache=metadata_cache,
         )
 
 
@@ -935,8 +959,11 @@ def _evaluate_on_rank(
     *,
     quent_query_worker_state: QuentQueryWorkerState | None,
     query_id: uuid.UUID,
+    metadata_cache: MetadataCache | None,
 ) -> tuple[DataFrame, list[ChannelMetadata]]:
-    stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
+    stats = allgather_stats(
+        comm, ctx.br(), ir, config_options, py_executor, metadata_cache
+    )
     # ``get_stable_plan_id`` is a deterministic function of the IR
     # structure, so every rank derives the same logical plan ID for a
     # given query (only rank 0 emits the declaration, but physical plans
@@ -986,11 +1013,26 @@ def _evaluate_on_rank(
         )
         quent_operator_map = build_quent_operator_map(ir, physical_op_by_id)
     ir_context = IRExecutionContext(
-        py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
+        py_executor,
+        get_cuda_stream=ctx.br().stream_pool.get_stream,
+        query_id=query_id,
+        metadata_cache=metadata_cache,
     )
 
-    prefetch_file_metadata = config_options.parquet_options.prefetch_file_metadata
-    if prefetch_file_metadata is not False:
+    if (
+        metadata_cache is not None
+        and config_options.parquet_options.persistent_metadata_cache
+    ):
+        # Superseded by the persistent cache: submit every path without
+        # blocking on it, and let scan tasks resolve their own paths lazily
+        # instead of waiting here for every file in the query up front.
+        warm_metadata_cache_for_ir(
+            ir,
+            metadata_cache,
+            stats=stats,
+            parse_hybrid_metadata=config_options.parquet_options.use_hybrid_scan,
+        )
+    elif config_options.parquet_options.prefetch_file_metadata is not False:
         cached_parquet_info_map = prefetch_parquet_file_metadata_for_ir(
             ir,
             ir_context.py_executor,
@@ -1000,7 +1042,7 @@ def _evaluate_on_rank(
         attach_cached_parquet_metadata(ir, cached_parquet_info_map)
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
-        return execute_ir_on_rank(
+        result = execute_ir_on_rank(
             ctx,
             comm,
             ir,
@@ -1012,6 +1054,7 @@ def _evaluate_on_rank(
             quent_operator_map=quent_operator_map,
             quent_query_worker_state=quent_query_worker_state,
         )
+    return result
 
 
 def is_duplicated_output(metadata: list[ChannelMetadata] | None) -> bool:

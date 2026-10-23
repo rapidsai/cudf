@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataType
     from cudf_polars.dsl.ir import CachedParquetInfo, IRExecutionContext
     from cudf_polars.dsl.utils.per_path import PerPathValues
+    from cudf_polars.engine.metadata_cache import MetadataCache
     from cudf_polars.streaming.base import (
         DataSourceInfo,
         SerializedDataSourceInfo,
@@ -556,14 +557,39 @@ class ParquetScanTask(ScanTask):
             return None
         return [cached_parquet_info_map[path] for path in self.paths]
 
-    def _fetch_parquet_info_for_hybrid_scan(self) -> list[CachedParquetInfo]:
-        """Fetch parquet metadata for hybrid scan."""
-        from cudf_polars.dsl.utils.io import _prefetch_parquet_footers_for_paths
+    def _fetch_parquet_info(
+        self, context: IRExecutionContext, *, parse_hybrid_metadata: bool
+    ) -> list[CachedParquetInfo]:
+        """
+        Fetch parquet metadata for this task's paths.
 
-        return _prefetch_parquet_footers_for_paths(
-            self.paths,
-            parse_hybrid_metadata=True,
+        Uses the persistent metadata cache when available, falling back to a
+        direct fetch otherwise.
+        """
+        from cudf_polars.dsl.utils.io import (
+            _prefetch_parquet_footers_for_paths,
+            _prefetch_single_parquet_footer,
         )
+
+        cache = context.metadata_cache
+        if cache is None:
+            return _prefetch_parquet_footers_for_paths(
+                self.paths, parse_hybrid_metadata=parse_hybrid_metadata
+            )
+        # Submit (or find already in flight/cached) every path before waiting
+        # on any of them, so paths of a fused task fetch concurrently.
+        futures = [
+            cache.get_or_submit(
+                path,
+                functools.partial(
+                    _prefetch_single_parquet_footer,
+                    path,
+                    parse_hybrid_metadata=parse_hybrid_metadata,
+                ),
+            )
+            for path in self.paths
+        ]
+        return [future.result() for future in futures]
 
     def _split_task_bounds_from_row_group_counts(
         self, row_group_num_rows: list[int]
@@ -693,10 +719,16 @@ class ParquetScanTask(ScanTask):
                 predicate=base_scan.predicate,
             )
         )
-        if task_parquet_info is None and should_try_hybrid_scan:
-            # read_parquet_metadata is faster (for now),
-            # but hybrid scan needs FileMetaData.
-            task_parquet_info = task._fetch_parquet_info_for_hybrid_scan()
+        if task_parquet_info is None and (
+            should_try_hybrid_scan or context.metadata_cache is not None
+        ):
+            # read_parquet_metadata is faster for an uncached, one-off fetch,
+            # but hybrid scan needs FileMetaData regardless, and with the
+            # persistent cache enabled the legacy path benefits too (skips
+            # libcudf's own internal footer read, see Scan.do_evaluate).
+            task_parquet_info = task._fetch_parquet_info(
+                context, parse_hybrid_metadata=should_try_hybrid_scan
+            )
         bounds = task._get_task_bounds(task_parquet_info)
         # Hybrid scan reads through cached parquet metadata, so it is only used
         # when the metadata is available to this task.
@@ -1080,6 +1112,33 @@ def _columnchunk_metadata_from_footers(
     return columnchunk_metadata
 
 
+def _column_size_stats_from_footers(
+    footers: list[plc.io.parquet_metadata.FileMetaData],
+) -> tuple[tuple[str, ...], dict[str, int], tuple[int, ...]]:
+    """Return column names, mean per-file column sizes, and row-group counts."""
+    num_row_groups_per_file = [len(fmd.row_group_num_rows) for fmd in footers]
+    rowgroup_offsets_per_file = list(
+        itertools.accumulate(num_row_groups_per_file, initial=0)
+    )
+    column_sizes_per_file = {
+        name: [
+            sum(uncompressed_sizes[start:end])
+            for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
+        ]
+        for name, uncompressed_sizes in _columnchunk_metadata_from_footers(
+            footers
+        ).items()
+    }
+    mean_size_per_file = {
+        name: int(statistics.mean(sizes)) for name, sizes in column_sizes_per_file.items()
+    }
+    return (
+        tuple(column_sizes_per_file),
+        mean_size_per_file,
+        tuple(num_row_groups_per_file),
+    )
+
+
 class ParquetMetadata:
     """
     Parquet metadata container.
@@ -1133,8 +1192,6 @@ class ParquetMetadata:
         *,
         parse_hybrid_metadata: bool = False,
     ):
-        from cudf_polars.dsl.utils.io import _prefetch_parquet_footers_for_paths
-
         self.paths = paths
         self.max_footer_samples = max_footer_samples
         self.row_count = None
@@ -1144,6 +1201,9 @@ class ParquetMetadata:
         self.cached_parquet_info = None
         self.total_file_count = len(self.paths)
         self.sampled_file_count = 0
+
+        from cudf_polars.dsl.utils.io import _prefetch_parquet_footers_for_paths
+
         if max_footer_samples <= 0:
             self.sample_paths = ()
             return
@@ -1171,42 +1231,34 @@ class ParquetMetadata:
             num_rows_per_sampled_file = int(sampled_row_count / sampled_file_count)
             row_count = num_rows_per_sampled_file * self.total_file_count
 
-        num_row_groups_per_sampled_file = [
-            len(fmd.row_group_num_rows) for fmd in sample_footers
-        ]
-        rowgroup_offsets_per_file = list(
-            itertools.accumulate(num_row_groups_per_sampled_file, initial=0)
-        )
-
-        column_sizes_per_file = {
-            name: [
-                sum(uncompressed_sizes[start:end])
-                for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
-            ]
-            for name, uncompressed_sizes in _columnchunk_metadata_from_footers(
-                sample_footers
-            ).items()
-        }
-
-        self.column_names = tuple(column_sizes_per_file)
-        self.mean_size_per_file = {
-            name: int(statistics.mean(sizes))
-            for name, sizes in column_sizes_per_file.items()
-        }
-        self.num_row_groups_per_file = tuple(num_row_groups_per_sampled_file)
+        (
+            self.column_names,
+            self.mean_size_per_file,
+            self.num_row_groups_per_file,
+        ) = _column_size_stats_from_footers(sample_footers)
         self.row_count = row_count
         self.sampled_file_count = sampled_file_count
 
 
+@functools.cache
 @nvtx_annotate_cudf_polars(message="_sample_rg_sizes")
 def _sample_rg_sizes(
-    metadata: ParquetMetadata,
-    target_cols: list[str],
+    sample_paths: tuple[str, ...],
+    num_row_groups_per_file: tuple[int, ...],
+    target_cols: tuple[str, ...],
     max_row_group_samples: int,
 ) -> dict[str, int]:
-    """Return mean uncompressed bytes per row-group for each column in target_cols."""
-    sample_paths = metadata.sample_paths
-    num_row_groups_per_file = metadata.num_row_groups_per_file
+    """
+    Return mean uncompressed bytes per row-group for each column in target_cols.
+
+    Memoized independently of the caller's own caching (or lack of it):
+    row-group byte sizes depend only on the sampled files' contents, not on
+    what else has since entered the persistent column-size cache, so this
+    real GPU read stays safe to reuse regardless of that cache's state.
+    Deliberately not cleared by :func:`_clear_source_info_cache`: unlike the
+    caller's own footer-derived state (cheap to recompute), this is a real
+    GPU read.
+    """
     if not sample_paths or len(num_row_groups_per_file) != len(sample_paths):
         return {}  # pragma: no cover
 
@@ -1227,7 +1279,7 @@ def _sample_rg_sizes(
     options = plc.io.parquet.ParquetReaderOptions.builder(
         plc.io.SourceInfo(list(samples))
     ).build()
-    options.set_column_names(target_cols)
+    options.set_column_names(list(target_cols))
     options.set_row_groups(list(samples.values()))
     stream = get_cuda_stream()
     tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
@@ -1291,29 +1343,51 @@ class ParquetSourceInfo:
         max_row_group_samples: int,
         *,
         parse_hybrid_metadata: bool = False,
+        metadata_cache: MetadataCache | None = None,
     ) -> ParquetSourceInfo:
-        """Build a ParquetSourceInfo from a list of paths."""
+        """
+        Build a ParquetSourceInfo from a list of paths.
+
+        ``metadata_cache`` is only consulted for its observed column-size
+        store (``ParquetOptions.persistent_column_size_cache``): row-count
+        and footer-derived size estimation always stride-samples footers
+        fresh, regardless of the cache's contents.
+        """
         metadata = ParquetMetadata(
-            paths, max_footer_samples, parse_hybrid_metadata=parse_hybrid_metadata
+            paths,
+            max_footer_samples,
+            parse_hybrid_metadata=parse_hybrid_metadata,
         )
         row_count = metadata.row_count
 
         file_count = len(paths)
         per_file_means: dict[str, int] = {}
-        sample_parquet_info = (
+        cached_parquet_info = (
             list(metadata.cached_parquet_info)
             if metadata.cached_parquet_info is not None
             else None
         )
 
         if not (file_count and row_count and needed_cols):
-            return cls(row_count, {}, cached_parquet_info=sample_parquet_info)
+            return cls(row_count, {}, cached_parquet_info=cached_parquet_info)
 
         rows_per_file = max(1, row_count // file_count)
         schema_map = dict(schema)
         sample_cols: list[str] = []
 
         for col in needed_cols:
+            observed_bytes_per_row = (
+                metadata_cache.mean_observed_column_bytes(paths, col)
+                if metadata_cache is not None
+                else None
+            )
+            if observed_bytes_per_row is not None:
+                # Real decoded data from an actual read, not a footer proxy:
+                # use it directly, no floor check or sampling needed.
+                per_file_means[col] = max(
+                    1, round(observed_bytes_per_row * rows_per_file)
+                )
+                continue
             footer_mean = metadata.mean_size_per_file.get(col)
             if footer_mean is None:
                 continue
@@ -1329,9 +1403,20 @@ class ParquetSourceInfo:
                 sample_cols.append(col)
             else:
                 per_file_means[col] = max(footer_mean, decoded_floor)
+                if metadata_cache is not None:
+                    bytes_per_row = per_file_means[col] / rows_per_file
+                    for path in paths:
+                        metadata_cache.record_estimate(
+                            path, col, bytes_per_row, "footer_mean"
+                        )
 
         if sample_cols:
-            rg_sizes = _sample_rg_sizes(metadata, sample_cols, max_row_group_samples)
+            rg_sizes = _sample_rg_sizes(
+                metadata.sample_paths,
+                metadata.num_row_groups_per_file,
+                tuple(sample_cols),
+                max_row_group_samples,
+            )
             mean_rg_count = (
                 statistics.mean(metadata.num_row_groups_per_file)
                 if metadata.num_row_groups_per_file
@@ -1346,8 +1431,21 @@ class ParquetSourceInfo:
                     if rg_size
                     else max(footer_mean, decoded_floor)
                 )
+                if metadata_cache is not None:
+                    bytes_per_row = per_file_means[col] / rows_per_file
+                    for path in paths:
+                        metadata_cache.record_estimate(path, col, bytes_per_row, "sampled")
+                        # Seed the observation store so later queries for
+                        # this table skip sampling entirely: it's a
+                        # once-per-column-per-table bootstrap, not a
+                        # per-query cost. Not itself a validation of the
+                        # estimate just recorded above, since that needs an
+                        # independent real read, not its own bootstrap.
+                        metadata_cache.record_observed_column_bytes(
+                            path, col, bytes_per_row, validates=False
+                        )
 
-        return cls(row_count, per_file_means, cached_parquet_info=sample_parquet_info)
+        return cls(row_count, per_file_means, cached_parquet_info=cached_parquet_info)
 
     def column_storage_size(self, column: str) -> int | None:
         """Return the average storage size for a single column in one file."""
@@ -1420,8 +1518,16 @@ def _build_parquet_source(
     max_row_group_samples: int,
     *,
     parse_hybrid_metadata: bool = False,
+    metadata_cache: MetadataCache | None = None,
 ) -> ParquetSourceInfo:
-    """Return cached, fully-computed Parquet datasource information."""
+    """
+    Return cached, fully-computed Parquet datasource information.
+
+    Memoized per query (cleared by :func:`_clear_source_info_cache` before
+    each new query evaluation), so a non-``None`` ``metadata_cache`` still
+    reflects that cache's latest contents on the first call of each query,
+    even though repeat calls within one query reuse the first result.
+    """
     return ParquetSourceInfo.from_paths(
         paths,
         needed_cols,
@@ -1429,6 +1535,7 @@ def _build_parquet_source(
         max_footer_samples,
         max_row_group_samples,
         parse_hybrid_metadata=parse_hybrid_metadata,
+        metadata_cache=metadata_cache,
     )
 
 
@@ -1449,19 +1556,20 @@ def _build_source_info(
     *,
     needed_cols: frozenset[str] | None = None,
     schema: tuple[tuple[str, DataType], ...] | None = None,
+    metadata_cache: MetadataCache | None = None,
 ) -> DataSourceInfo:
     """Return DataSourceInfo for a Scan or DataFrameScan node."""
     if isinstance(ir, DataFrameScan):
         return DataFrameSourceInfo.from_polars(pl.DataFrame._from_pydf(ir.df))
     elif isinstance(ir, Scan) and ir.typ == "parquet":
         paths = tuple(ir.paths)
-        max_footer = _resolve_max_footer_samples(
-            paths, config_options.parquet_options.max_footer_samples
-        )
         max_rg = config_options.parquet_options.max_row_group_samples
         needed_cols = frozenset(ir.schema) if needed_cols is None else needed_cols
         schema = tuple(ir.schema.items()) if schema is None else schema
         use_hybrid_scan = config_options.parquet_options.use_hybrid_scan
+        max_footer = _resolve_max_footer_samples(
+            paths, config_options.parquet_options.max_footer_samples
+        )
         return _build_parquet_source(
             paths,
             needed_cols,
@@ -1469,6 +1577,11 @@ def _build_source_info(
             max_footer,
             max_rg,
             parse_hybrid_metadata=use_hybrid_scan,
+            metadata_cache=(
+                metadata_cache
+                if config_options.parquet_options.persistent_column_size_cache
+                else None
+            ),
         )
     else:  # pragma: no cover
         raise ValueError(f"Unsupported Scan type: {ir.typ}")

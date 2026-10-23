@@ -15,6 +15,7 @@ from cudf_polars.streaming.io import _build_source_info
 
 if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.engine.metadata_cache import MetadataCache
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
@@ -26,6 +27,7 @@ def collect_statistics(
     root: IR,
     config_options: ConfigOptions[StreamingExecutor],
     executor: concurrent.futures.Executor,
+    metadata_cache: MetadataCache | None = None,
 ) -> StatsCollector:
     """
     Collect DataSourceInfo for each leaf Scan/DataFrameScan node.
@@ -39,6 +41,10 @@ def collect_statistics(
     executor: concurrent.futures.Executor
         Executor to use for IO operations. This function does not start
         or shutdown the executor.
+    metadata_cache: MetadataCache | None
+        This engine's persistent parquet metadata cache, used when
+        ``ParquetOptions.persistent_metadata_cache`` or
+        ``ParquetOptions.persistent_column_size_cache`` is enabled.
     """
     # Group parquet Scan nodes by paths, accumulating the union of needed columns
     # across all Scan nodes that read the same files.
@@ -66,6 +72,7 @@ def collect_statistics(
             config_options,
             needed_cols=frozenset(needed_cols),
             schema=tuple(schema.items()),
+            metadata_cache=metadata_cache,
         ): scan_nodes
         for needed_cols, schema, scan_nodes in parquet_groups.values()
     }

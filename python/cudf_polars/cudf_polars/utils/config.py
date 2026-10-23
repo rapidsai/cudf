@@ -638,6 +638,22 @@ class ParquetOptions:
         Whether to use the two-pass ``HybridScanReader`` for split parquet
         tasks when a predicate can be pushed down to a parquet filter.
         Default is False.
+    persistent_metadata_cache
+        Whether to cache parquet file metadata across queries on this
+        engine, rather than only for the duration of a single query.
+        Default is False.
+    metadata_fetch_pool_size
+        Number of threads in the persistent metadata cache's dedicated
+        fetch pool. Only used when ``persistent_metadata_cache`` is
+        enabled. Defaults to a size chosen from whether the first query to
+        use the cache touches any remote paths.
+    persistent_column_size_cache
+        Whether to cache each column's real observed decoded bytes-per-row
+        across queries on this engine, and prefer it over a footer-derived
+        estimate for scan planning once available. Independent of
+        ``persistent_metadata_cache``: it does not require footer caching
+        to be enabled, and enabling footer caching does not enable this.
+        Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -705,6 +721,37 @@ class ParquetOptions:
             default=False,
         )
     )
+    persistent_metadata_cache: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PERSISTENT_METADATA_CACHE",
+            _bool_converter,
+            default=False,
+        )
+    )
+    metadata_fetch_pool_size: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__METADATA_FETCH_POOL_SIZE", int, default=None
+        )
+    )
+    persistent_column_size_cache: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PERSISTENT_COLUMN_SIZE_CACHE",
+            _bool_converter,
+            default=False,
+        )
+    )
+    # Internal benchmarking flag: when the persistent column-size cache is enabled,
+    # record every column-size estimate and compare it against the real decoded
+    # bytes observed once a read resolves the same (path, column).
+    _track_column_size_estimates: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__TRACK_COLUMN_SIZE_ESTIMATES",
+            _bool_converter,
+            default=False,
+        ),
+        init=False,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -731,6 +778,12 @@ class ParquetOptions:
             )
         if not isinstance(self.use_jit_filter, bool):
             raise TypeError("use_jit_filter must be a bool")
+        if not isinstance(self.persistent_metadata_cache, bool):
+            raise TypeError("persistent_metadata_cache must be a bool")
+        if not isinstance(self.metadata_fetch_pool_size, (int, type(None))):
+            raise TypeError("metadata_fetch_pool_size must be an int or None")
+        if not isinstance(self.persistent_column_size_cache, bool):
+            raise TypeError("persistent_column_size_cache must be a bool")
 
 
 def default_target_partition_size(min_device_size: int | None) -> int:
@@ -1008,6 +1061,9 @@ class SPMDContext:
         Thread-pool executor used to drive the actor network on each rank.
     quent_controller_runtime, quent_worker_runtime
         Process-local Quent role state. ``None`` when Quent is disabled.
+    store_uid
+        Identifier of this engine's process-local stores (persisted
+        partitions, cached parquet metadata).
     """
 
     comm: Communicator
@@ -1017,6 +1073,7 @@ class SPMDContext:
     worker_id: uuid.UUID
     quent_controller_runtime: QuentControllerRuntime | None
     quent_worker_runtime: QuentWorkerRuntime | None
+    store_uid: str
 
 
 @dataclasses.dataclass(frozen=True)
