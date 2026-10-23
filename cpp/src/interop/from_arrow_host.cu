@@ -12,7 +12,6 @@
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
@@ -258,13 +257,9 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::dictiona
   auto keys_column =
     get_column_copy(&keys_schema_view, input->dictionary, keys_type, true, stream, mr);
 
-  auto const indices_types =
-    get_dictionary_indices_types(schema->storage_type, input->dictionary->length);
-  auto indices_column =
-    get_column_copy(schema, input, indices_types.storage, skip_mask, stream, mr);
-  if (indices_types.storage != indices_types.output) {
-    indices_column = cudf::detail::cast(indices_column->view(), indices_types.output, stream, mr);
-  }
+  auto const indices_type =
+    get_dictionary_indices_types(schema->storage_type, input->dictionary->length).storage;
+  auto indices_column = get_column_copy(schema, input, indices_type, skip_mask, stream, mr);
 
   return make_dictionary_column(std::move(keys_column), std::move(indices_column), stream, mr);
 }
