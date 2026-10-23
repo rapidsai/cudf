@@ -1304,6 +1304,23 @@ struct FromArrowDeviceDictionaryNarrowIndicesTest : public cudf::test::BaseFixtu
 using DeviceNarrowUnsignedIndexTypes = cudf::test::Types<uint8_t, uint16_t>;
 TYPED_TEST_SUITE(FromArrowDeviceDictionaryNarrowIndicesTest, DeviceNarrowUnsignedIndexTypes);
 
+TYPED_TEST(FromArrowDeviceDictionaryNarrowIndicesTest, ReinterpretAtSignedLimit)
+{
+  using IndexType          = TypeParam;
+  using SignedType         = cuda::std::make_signed_t<IndexType>;
+  auto constexpr max_index = std::numeric_limits<SignedType>::max();
+  auto key_values          = cuda::counting_iterator<int64_t>(0);
+  auto keys                = cudf::test::fixed_width_column_wrapper<int64_t>(key_values,
+                                                              key_values + int64_t{max_index} + 1);
+  auto indices             = cudf::test::fixed_width_column_wrapper<IndexType>(
+    {static_cast<IndexType>(max_index), IndexType{0}, IndexType{1}}, {1, 0, 1});
+  auto expected_indices = cudf::test::fixed_width_column_wrapper<SignedType>(
+    {max_index, SignedType{0}, SignedType{1}}, {1, 0, 1});
+  auto expected = cudf::make_dictionary_column(keys, expected_indices);
+
+  expect_unsigned_dictionary_from_device<IndexType>(keys, indices, expected->view(), 0);
+}
+
 TYPED_TEST(FromArrowDeviceDictionaryNarrowIndicesTest, WidenAboveSignedLimit)
 {
   using IndexType = TypeParam;
