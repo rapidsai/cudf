@@ -170,7 +170,7 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
 
   std::vector<std::string> in_types;
   bool use_physical_types = std::holds_alternative<lto_binary_type>(source_type);
-  for (int32_t i = 0; i < static_cast<int32_t>(inputs.size()); i++) {
+  for (int32_t i = 0; i < std::ssize(inputs); i++) {
     auto& in       = inputs[i];
     auto column    = reflect_input_column(in);
     auto element   = reflect_input_element(in, use_physical_types);
@@ -186,7 +186,7 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
   }
 
   std::vector<std::string> out_types;
-  for (int32_t i = 0; i < static_cast<int32_t>(outputs.size()); i++) {
+  for (int32_t i = 0; i < std::ssize(outputs); i++) {
     auto& out      = outputs[i];
     auto column    = reflect_output_column(out);
     auto element   = reflect_output_element(out, use_physical_types);
