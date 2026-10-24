@@ -9,7 +9,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/strings/string_view.cuh>
+#include <cudf/strings/string_view.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/resource_ref.hpp>

@@ -258,6 +258,7 @@ size_t CompactProtocolWriter::write(Statistics const& s)
   if (s.min_value.has_value()) { c.field_binary(6, s.min_value.value()); }
   if (s.is_max_value_exact.has_value()) { c.field_bool(7, s.is_max_value_exact.value()); }
   if (s.is_min_value_exact.has_value()) { c.field_bool(8, s.is_min_value_exact.value()); }
+  if (s.nan_count.has_value()) { c.field_int(9, s.nan_count.value()); }
   return c.value();
 }
 
