@@ -348,7 +348,8 @@ std::unique_ptr<table> transform(
  */
 enum class lto_binary_type : uint8_t {
   LTO_IR,  //< LTO-IR binary
-  FATBIN   //< FATBIN binary
+  FATBIN,  //< FATBIN binary
+  PTX      //< PTX binary
 };
 
 /**

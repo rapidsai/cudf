@@ -6,6 +6,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -20,9 +21,14 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/exec_policy.hpp>
+
 #include <cuda/buffer>
 #include <cuda/iterator>
+#include <cuda/std/span>
 #include <cuda/stream>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/logical.h>
 
 #include <cudf_fragments.hpp>
 #include <jit/cache.hpp>
@@ -35,6 +41,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <span>
 #include <variant>
 
@@ -47,9 +54,10 @@ using jit::output_column;
 using jit::string_views_column;
 
 using input_column_view = transform_input;
-using handle            = std::variant<
-             std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>,
-             std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>>;
+
+using handle = std::variant<
+  std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>,
+  std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>>;
 
 namespace jit_transform {
 
@@ -243,6 +251,7 @@ rtcx::binary_type as_rtcx_binary_type(lto_binary_type type)
   switch (type) {
     case lto_binary_type::LTO_IR: return rtcx::binary_type::LTO_IR;
     case lto_binary_type::FATBIN: return rtcx::binary_type::FATBIN;
+    case lto_binary_type::PTX: return rtcx::binary_type::PTX;
     default:
       CUDF_FAIL(
         std::format("Unrecognized LTO binary type {} for LTO transform", static_cast<int>(type)),
@@ -332,9 +341,13 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
   if (!is_nullable) { return 0; }
 
+  auto init_mask = [&](bool valid) {
+    CUDF_CUDA_TRY(cudaMemsetAsync(
+      null_mask, valid ? 0xff : 0, bitmask_allocation_size_bytes(row_size), stream.get()));
+  };
   if (inputs.empty()) {
     // no input, set all to valid
-    set_null_mask(null_mask, 0, row_size, true, stream);
+    init_mask(true);
     return 0;
   }
 
@@ -350,7 +363,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
     if (scalar_is_null) {
       // scalar is null, all rows will be null
-      set_null_mask(null_mask, 0, row_size, false, stream);
+      init_mask(false);
       return row_size;
     }
   }
@@ -360,7 +373,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
   if (!has_cols) {
     // no non-scalar columns, so all rows are valid
-    set_null_mask(null_mask, 0, row_size, true, stream);
+    init_mask(true);
     return 0;
   }
 
@@ -381,7 +394,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
   if (nullable_masks.empty()) {
     // we only have non-nullable columns, so all rows are valid
-    set_null_mask(null_mask, 0, row_size, true, stream);
+    init_mask(true);
     return 0;
   }
 
