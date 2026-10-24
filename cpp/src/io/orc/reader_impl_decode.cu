@@ -869,6 +869,10 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
 
         // num_child_rows for a struct column will be same, for other nested types it will be
         // calculated.
+        chunk.convert_dates_to_proleptic =
+          _options.convert_dates_to_proleptic and
+          _metadata.per_file_metadata[stripe.source_idx].ff.calendar ==
+            CalendarKind::JULIAN_GREGORIAN;
         chunk.num_child_rows = (chunk.type_kind != STRUCT) ? 0 : chunk.num_rows;
         chunk.dtype_id       = column_types[col_idx].id();
         chunk.decimal_scale  = _metadata.per_file_metadata[stripe.source_idx]
