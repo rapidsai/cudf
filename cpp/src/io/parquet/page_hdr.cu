@@ -34,10 +34,10 @@ auto constexpr build_string_dict_index_block_size = 2 * cudf::detail::warp_size;
 
 // Shared-memory window size in bytes for parsing BYTE_ARRAY string dictionaries.
 // Default value chosen for best balance between memory usage, occupancy and performance.
-constexpr int string_dict_index_window_size = 4096;
+constexpr int32_t string_dict_index_window_size = 4096;
 
 // Maximum dictionary entries parsed per batch by each warp.
-constexpr int dictionary_batch_size = 64;
+constexpr int32_t dictionary_batch_size = 64;
 
 namespace cg = cooperative_groups;
 
@@ -873,14 +873,14 @@ struct decode_from_page_data_fn {
  * uses that metadata to write string descriptors.
  */
 struct parser_state {
-  int cursor;        ///< Page-relative byte offset of the next length prefix.
-  int parsed;        ///< Number of entries whose descriptors have been written.
-  int batch;         ///< Number of entries parsed in the current batch.
-  int window_start;  ///< Page-relative byte offset of window[0]; may be negative.
-  int window_bytes;  ///< Active window size in bytes, including leading padding.
+  int32_t cursor;        ///< Page-relative byte offset of the next length prefix.
+  int32_t parsed;        ///< Number of entries whose descriptors have been written.
+  int32_t batch;         ///< Number of entries parsed in the current batch.
+  int32_t window_start;  ///< Page-relative byte offset of window[0]; may be negative.
+  int32_t window_bytes;  ///< Active window size in bytes, including leading padding.
   bool invalid;      ///< Whether parsing detected a truncated prefix or string.
-  cuda::std::array<int, dictionary_batch_size> offsets;  ///< Page-relative character-data offsets.
-  cuda::std::array<int, dictionary_batch_size> lengths;  ///< String lengths in bytes.
+  cuda::std::array<int32_t, dictionary_batch_size> offsets;  ///< Page-relative character-data offsets.
+  cuda::std::array<int32_t, dictionary_batch_size> lengths;  ///< String lengths in bytes.
 };
 
 // Subset of ColumnChunkDesc fields used by this kernel
@@ -912,9 +912,9 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
                                        int32_t num_chunks,
                                        kernel_error::pointer error_code)
 {
-  constexpr int warp_size           = cudf::detail::warp_size;
-  constexpr int load_size           = sizeof(int4);
-  constexpr int num_warps_per_block = build_string_dict_index_block_size / warp_size;
+  constexpr int32_t warp_size           = cudf::detail::warp_size;
+  constexpr int32_t load_size           = sizeof(int4);
+  constexpr int32_t num_warps_per_block = build_string_dict_index_block_size / warp_size;
 
   static_assert(string_dict_index_window_size % load_size == 0);
 
@@ -927,7 +927,7 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
   auto const warp    = cg::tiled_partition<warp_size>(cg::this_thread_block());
   auto const lane    = warp.thread_rank();
   auto const warp_id = warp.meta_group_rank();
-  int const chunk    = blockIdx.x * num_warps_per_block + warp_id;
+  int32_t const chunk    = blockIdx.x * num_warps_per_block + warp_id;
   if (chunk >= num_chunks) { return; }
 
   if (chunks[chunk].num_dict_pages <= 0 or chunks[chunk].str_dict_index == nullptr) { return; }
@@ -952,8 +952,8 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
   warp.sync();
 
   auto const* dict      = ck.dict_page->page_data;
-  int const dict_size   = ck.dict_page->uncompressed_page_size;
-  int const num_entries = ck.dict_page->num_input_values;
+  int32_t const dict_size   = ck.dict_page->uncompressed_page_size;
+  int32_t const num_entries = ck.dict_page->num_input_values;
   if (num_entries < 0 or dict_size < 0) {
     cg::invoke_one(warp, [&] {
       set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_DICT_WIDTH),
@@ -963,7 +963,7 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
   }
 
   if (ck.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
-    int const width = ck.type_length;
+    int32_t const width = ck.type_length;
     if (width < 0) {
       cg::invoke_one(warp, [&] {
         set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_DICT_WIDTH),
@@ -987,19 +987,19 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
   }
 
   while (state.parsed < num_entries) {
-    int const cursor         = state.cursor;
+    int32_t const cursor         = state.cursor;
     bool const refill_window = cursor > state.window_start + state.window_bytes - 4;
     warp.sync();
 
     if (refill_window) {
       // Align both the page address and the shared destination for int4 copies. The first
       // virtual window can start before the page; pad those bytes instead of reading them.
-      int const start =
-        cursor - static_cast<int>(reinterpret_cast<uintptr_t>(dict + cursor) % load_size);
-      int const this_iteration_bytes =
-        static_cast<int>(min(static_cast<int64_t>(string_dict_index_window_size),
+      int32_t const start =
+        cursor - static_cast<int32_t>(reinterpret_cast<uintptr_t>(dict + cursor) % load_size);
+      int32_t const this_iteration_bytes =
+        static_cast<int32_t>(min(static_cast<int64_t>(string_dict_index_window_size),
                              static_cast<int64_t>(dict_size) - start));
-      for (int i = lane * load_size; i < this_iteration_bytes; i += warp_size * load_size) {
+      for (int32_t i = lane * load_size; i < this_iteration_bytes; i += warp_size * load_size) {
         // Source is the offset of the current iteration from the start of the dictionary.
         int64_t const source = static_cast<int64_t>(start) + i;
         if (source >= 0 and source + load_size <= dict_size and
@@ -1007,7 +1007,7 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
           reinterpret_cast<int4*>(window.data())[i / load_size] =
             *reinterpret_cast<int4 const*>(dict + source);
         } else {  // Byte-wise copy for the page tail; zero-pad bytes before the page start
-          for (int j = 0; j < load_size and i + j < this_iteration_bytes; ++j) {
+          for (int32_t j = 0; j < load_size and i + j < this_iteration_bytes; ++j) {
             window[i + j] = source + j >= 0 ? dict[source + j] : 0;
           }
         }
@@ -1021,16 +1021,16 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
       warp.sync();
     }
 
-    int const first = state.parsed;
+    int32_t const first = state.parsed;
 
     // One lane computes the offsets and lengths for the batch
     cg::invoke_one(warp, [&] {
       // Window bounds stay fixed while parsing the batch. Keep them in registers.
-      int const window_start = state.window_start;
-      int const window_end   = window_start + state.window_bytes - 4;
-      int cur                = state.cursor;
-      int count              = 0;
-      int const max_count    = min(dictionary_batch_size, num_entries - first);
+      int32_t const window_start = state.window_start;
+      int32_t const window_end   = window_start + state.window_bytes - 4;
+      int32_t cur                = state.cursor;
+      int32_t count              = 0;
+      int32_t const max_count    = min(dictionary_batch_size, num_entries - first);
       while (count < max_count) {
         // Check if the dictionary is too small to fit the next 4 bytes
         if (dict_size - cur < 4) {
@@ -1040,7 +1040,7 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
 
         // Check if the cursor is past the end of the window
         if (cur > window_end) { break; }
-        int const offset  = cur - window_start;
+        int32_t const offset  = cur - window_start;
         auto const length = static_cast<uint32_t>(window[offset]) |
                             (static_cast<uint32_t>(window[offset + 1]) << 8) |
                             (static_cast<uint32_t>(window[offset + 2]) << 16) |
@@ -1051,8 +1051,8 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
           break;
         }
         state.offsets[count] = cur + 4;
-        state.lengths[count] = static_cast<int>(length);
-        cur += 4 + static_cast<int>(length);
+        state.lengths[count] = static_cast<int32_t>(length);
+        cur += 4 + static_cast<int32_t>(length);
         ++count;
       }
       state.cursor = cur;
@@ -1064,9 +1064,9 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
     });
     warp.sync();
     if (state.invalid) { return; }
-    int const count = state.batch;
+    int32_t const count = state.batch;
 #pragma unroll
-    for (int batch_offset = 0; batch_offset < dictionary_batch_size; batch_offset += warp_size) {
+    for (int32_t batch_offset = 0; batch_offset < dictionary_batch_size; batch_offset += warp_size) {
       auto const i = lane + batch_offset;
       if (i < count) {
         ck.str_dict_index[first + i] = {reinterpret_cast<char const*>(dict + state.offsets[i]),
