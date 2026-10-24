@@ -400,3 +400,120 @@ the effect of freeing the entire `mi_str_allocation`.
 - **Stack**: Original `ManagedUDFString` becomes invalid/out-of-scope
 - **Reference Count**: N/A (object destroyed)
 - **cuDF** A `cudf::column` of string type containing the result of the UDF
+
+
+## The MLIR backend (in development): what changes
+
+```{note}
+Everything above describes the **current, shipping** string UDF backend: C++
+shim functions plus an owning ``cudf::udf_string`` class. A reimplementation is
+in progress that lowers string operations **entirely in MLIR** and removes the
+C++ shim layer. This section does **not** supersede the material above --- it
+uses it as a lens. The NRT model itself is unchanged; only the representation of
+a device string and the mechanism that creates and frees it change. When the
+MLIR backend becomes the default, this section and the sections above will be
+reconciled into one.
+```
+
+### What stays exactly the same
+
+Re-read ["Numba memory management and the Numba Runtime (NRT)"](#numba-memory-management-and-the-numba-runtime-nrt), the ``MemInfo`` struct, ``NRT_decref``, the three [NRT Requirements](#nrt-requirements), and the five-phase
+``str1 + str2`` [lifecycle](#string-lifecycle-details). **All of it carries over
+verbatim.** NRT is still the memory manager; a reference-counted type still
+declares `has_nrt_meminfo` and exposes `get_nrt_meminfo`; operators that produce
+a string still initialize a `MemInfo` and place it where numba expects; the
+destructor still runs when `refct` hits zero. Two things that might look new are
+**not** --- they already exist in the legacy backend and are unchanged:
+
+- **NRT is enabled only on demand.** ``CaptureNRTUsage`` detects whether a UDF
+  uses a heap-managed type during a trial compile, and ``nrt_enabled()`` toggles
+  ``numba_config.CUDA_ENABLE_NRT`` for the real compile (and the freeing
+  kernel), so purely numeric UDFs pay none of this cost.
+- **Nullable strings are typed ``Masked(...)``.** The refcount rules need no
+  special-casing: an invalid element has a null ``MemInfo``, so "null" and
+  "nothing allocated" coincide and every incref/decref on it is a no-op.
+
+If you understand the model above, you understand the MLIR backend --- what
+follows is only the delta.
+
+### What changes (1): the string representation
+
+The owning C++ container goes away. Instead of ``ManagedUDFString`` wrapping a
+``cudf::udf_string``, the MLIR backend uses a flat value called ``mlir_string``:
+
+```text
+legacy:  ManagedUDFString { void* meminfo, cudf::udf_string }   # owns a C++ class
+MLIR:    mlir_string       { ptr meminfo, ptr data, i64 nbytes } # raw UTF-8 bytes, 24 bytes
+```
+
+There is no ``cudf::udf_string`` and no ``string_view`` class --- ``data`` is just
+a pointer to UTF-8 bytes and ``nbytes`` its length. NRT requirement (2) is
+satisfied even more directly than before: the ``MemInfo`` *is* field 0 of the
+value, so `get_nrt_meminfo` is a single `extractvalue`:
+
+```python
+class MLIRStringModel(PrimitiveModel):
+    _fields = ("meminfo", "data", "nbytes")
+    def has_nrt_meminfo(self): return True
+    def get_nrt_meminfo(self, value):
+        return llvm.extractvalue(llvm.PointerType.get(), value, [0])
+```
+
+One concept the flat layout makes explicit --- **borrowed vs. owned**:
+
+- **Borrowed** (``meminfo == null``): ``data`` points into an existing libcudf
+  column buffer. Every *input* string is borrowed; `NRT_decref` on a null
+  `MemInfo` is a no-op, so there is nothing to free.
+- **Owned** (``meminfo != null``): ``data`` was allocated by NRT; this is every
+  string *produced* by an operation.
+
+### What changes (2): string creation (Phase 2)
+
+This is the only phase of the lifecycle that changes. The legacy Phase 2 calls a
+C++ shim (``concat_shim``) that constructs a ``cudf::udf_string`` via
+placement-new and wraps it with ``make_meminfo_for_new_udf_string``. The MLIR
+backend does it all in MLIR through a single allocation helper:
+
+```python
+def allocate_mlir_string(gpu_module, nbytes_i64):
+    # NRT_MemInfo_new_varsize installs _nrt_varsize_dtor (frees the buffer at
+    # refct 0, or a no-op under the arena); at least 1 byte to avoid malloc(0).
+    alloc_size = arith.maxui(nbytes_i64, _const_i64(1))
+    mi   = _call_nrt(gpu_module, "NRT_MemInfo_new_varsize", [i64], [ptr], [alloc_size])
+    data = _call_nrt(gpu_module, "NRT_MemInfo_data_fast",   [ptr], [ptr], [mi])
+    return mi, data
+```
+
+`concat` then becomes allocate-once, copy, assemble --- no shim, no C++ class:
+
+```python
+def lower_concat(gpu_module, lhs_view, rhs_view):
+    total   = arith.addi(lhs_nbytes, rhs_nbytes)
+    mi, data = allocate_mlir_string(gpu_module, total)   # owning MemInfo in field 0
+    llvm.intr_memcpy(data, lhs_data, lhs_nbytes, False)
+    llvm.intr_memcpy(_gep_byte_offset(data, lhs_nbytes), rhs_data, rhs_nbytes, False)
+    return build_mlir_string(mi, data, total)
+```
+
+The ``MemInfo`` returned by ``NRT_MemInfo_new_varsize`` is exactly the one that
+goes in field 0, satisfying NRT requirement (3). Everything the legacy Phase 2
+said about reference count 1 on creation, and Phases 3-4 about incref on
+assignment/return, is unchanged.
+
+### What changes (3): teardown and column conversion (Phase 5)
+
+The shapes match the legacy Phase 5; only the names and the per-element struct
+change:
+
+| Legacy | MLIR backend |
+|---|---|
+| output array of ``ManagedUDFString`` | output ``rmm.DeviceBuffer`` of ``n`` × 24-byte ``mlir_string`` |
+| ``free_managed_udf_string_array`` (final `NRT_decref`) | ``free_mlir_string_array`` (final `NRT_decref` per entry) |
+| ``column_from_managed_udf_string_array`` | ``_mlir_string_array_to_column`` |
+
+For an **owned** result the final `NRT_decref` drops `refct` to zero and runs
+`_nrt_varsize_dtor` (a no-op under the arena); for a **borrowed** result
+(`meminfo == null`, e.g. a UDF that returns its input unchanged) it is a no-op.
+`_mlir_string_array_to_column` copies each ``{data, nbytes}`` into a new libcudf
+strings column, so the column does not depend on any UDF-owned allocation after
+the freeing kernel runs.
