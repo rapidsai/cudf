@@ -102,14 +102,72 @@ std::string reflect_output_column(transform_output_spec const& spec)
   return "cudf::mutable_column_device_view_core";
 }
 
+transform_input_spec make_input_spec(column_view const& column, bool is_scalar)
+{
+  transform_input_spec result{.type = column.type().id(), .is_scalar = is_scalar};
+  if (is_dictionary(column.type())) {
+    for (size_type i = 0; i < column.num_children(); ++i) {
+      result.children.push_back(make_input_spec(column.child(i), false));
+    }
+  } else if (column.type().id() == type_id::STRING &&
+             column.num_children() > strings_column_view::offsets_column_index) {
+    result.children.push_back(
+      make_input_spec(column.child(strings_column_view::offsets_column_index), false));
+  }
+  return result;
+}
+
+transform_input_spec make_input_spec(transform_input const& input)
+{
+  return std::visit(
+    [](auto& value) {
+      return make_input_spec(as_column_view(value),
+                             std::is_same_v<std::decay_t<decltype(value)>, scalar_column_view>);
+    },
+    input);
+}
+
+transform_output_spec make_output_spec(fixed_width_column const& output)
+{
+  return {.type = output._col->type().id()};
+}
+
+transform_output_spec make_output_spec(string_views_column const&)
+{
+  return {.type = type_id::STRING};
+}
+
+transform_output_spec make_output_spec(mutable_strings_column const& output)
+{
+  auto offsets = output._col->view().child(strings_column_view::offsets_column_index);
+  return {.type               = type_id::STRING,
+          .has_string_offsets = true,
+          .children           = {{.type = offsets.type().id()}}};
+}
+
 }  // namespace
 
 transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input_spec const> inputs,
                              std::span<transform_output_spec const> outputs,
                              std::span<int32_t const> input_table_sources,
-                             std::span<int32_t const> output_table_sources)
+                             std::span<int32_t const> input_table_indices,
+                             std::span<int32_t const> output_table_sources,
+                             std::span<int32_t const> output_table_indices)
 {
+  CUDF_EXPECTS(input_table_sources.empty() || input_table_sources.size() == inputs.size(),
+               "Input table sources size must match the number of inputs or be empty",
+               std::runtime_error);
+  CUDF_EXPECTS(input_table_sources.size() == input_table_indices.size(),
+               "Input table sources and indices size must match",
+               std::runtime_error);
+  CUDF_EXPECTS(output_table_sources.empty() || output_table_sources.size() == outputs.size(),
+               "Output table sources size must match the number of outputs or be empty",
+               std::runtime_error);
+  CUDF_EXPECTS(output_table_sources.size() == output_table_indices.size(),
+               "Output table sources and indices size must match",
+               std::runtime_error);
+
   std::vector<std::string> in_types;
   bool use_physical_types = std::holds_alternative<lto_binary_type>(source_type);
   for (size_t i = 0; i < inputs.size(); i++) {
@@ -119,7 +177,7 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
     bool as_scalar = in.is_scalar;
     auto accessor  = rtcx::reflect_template(
       "cudf::jit::column_accessor",
-      rtcx::reflect(i),
+      input_table_sources.empty() ? rtcx::reflect(i) : rtcx::reflect(input_table_indices[i]),
       column,
       element,
       rtcx::reflect(as_scalar),
@@ -135,7 +193,7 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
     bool as_scalar = false;  // never scalar
     auto accessor  = rtcx::reflect_template(
       "cudf::jit::column_accessor",
-      rtcx::reflect(i),
+      output_table_sources.empty() ? rtcx::reflect(i) : rtcx::reflect(output_table_indices[i]),
       column,
       element,
       rtcx::reflect(as_scalar),
@@ -163,35 +221,6 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
   return {ins, outs, ptx_in_types, ptx_out_types};
 }
 
-namespace {
-
-transform_input_spec make_input_spec(column_view const& column, bool is_scalar)
-{
-  transform_input_spec result{.type = column.type().id(), .is_scalar = is_scalar};
-  if (is_dictionary(column.type())) {
-    for (size_type i = 0; i < column.num_children(); ++i) {
-      result.children.push_back(make_input_spec(column.child(i), false));
-    }
-  } else if (column.type().id() == type_id::STRING &&
-             column.num_children() > strings_column_view::offsets_column_index) {
-    result.children.push_back(
-      make_input_spec(column.child(strings_column_view::offsets_column_index), false));
-  }
-  return result;
-}
-
-transform_input_spec make_input_spec(transform_input const& input)
-{
-  return std::visit(
-    [](auto& value) {
-      return make_input_spec(as_column_view(value),
-                             std::is_same_v<std::decay_t<decltype(value)>, scalar_column_view>);
-    },
-    input);
-}
-
-}  // namespace
-
 std::vector<transform_input_spec> make_input_specs(std::span<transform_input const> inputs)
 {
   std::vector<transform_input_spec> result;
@@ -200,28 +229,6 @@ std::vector<transform_input_spec> make_input_specs(std::span<transform_input con
   }
   return result;
 }
-
-namespace {
-
-transform_output_spec make_output_spec(fixed_width_column const& output)
-{
-  return {.type = output._col->type().id()};
-}
-
-transform_output_spec make_output_spec(string_views_column const&)
-{
-  return {.type = type_id::STRING};
-}
-
-transform_output_spec make_output_spec(mutable_strings_column const& output)
-{
-  auto offsets = output._col->view().child(strings_column_view::offsets_column_index);
-  return {.type               = type_id::STRING,
-          .has_string_offsets = true,
-          .children           = {{.type = offsets.type().id()}}};
-}
-
-}  // namespace
 
 std::vector<transform_output_spec> make_output_specs(std::span<output_column const> outputs)
 {
@@ -255,11 +262,19 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
                              std::span<transform_input const> inputs,
                              std::span<output_column const> outputs,
                              std::span<int32_t const> input_table_sources,
-                             std::span<int32_t const> output_table_sources)
+                             std::span<int32_t const> input_table_indices,
+                             std::span<int32_t const> output_table_sources,
+                             std::span<int32_t const> output_table_indices)
 {
   auto input_specs  = make_input_specs(inputs);
   auto output_specs = make_output_specs(outputs);
-  return reflect(source_type, input_specs, output_specs, input_table_sources, output_table_sources);
+  return reflect(source_type,
+                 input_specs,
+                 output_specs,
+                 input_table_sources,
+                 input_table_indices,
+                 output_table_sources,
+                 output_table_indices);
 }
 
 std::string reflect_udf_signature(bool is_null_aware,
