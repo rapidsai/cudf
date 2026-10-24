@@ -976,7 +976,7 @@ dispatch_lto_kernel_fragment(bool is_null_aware,
   // the contract here is that CMake and this dispatch function agree on symbol mangling of the
   // reflected kernel name.
   auto [in_types, out_types, ptx_in_types, ptx_out_types] =
-    jit::reflect(lto_binary_type::LTO_IR, inputs, outputs);
+    jit::reflect(lto_binary_type::FATBIN, inputs, outputs);
   auto target = strip_whitespace(rtcx::reflect_template("cudf::jit::transform_kernel",
                                                         rtcx::reflect(is_null_aware),
                                                         rtcx::reflect(has_user_data),
