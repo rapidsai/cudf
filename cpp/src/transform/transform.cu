@@ -1064,8 +1064,7 @@ struct transform_program::impl {
   {
     auto actual_input_specs  = jit::make_input_specs(actual_inputs);
     auto actual_output_specs = jit::make_output_specs(actual_outputs, string_offsets);
-    auto actual_reflection =
-      jit::reflect(source_type, actual_input_specs, actual_output_specs);
+    auto actual_reflection   = jit::reflect(source_type, actual_input_specs, actual_output_specs);
     CUDF_EXPECTS(reflection_ == actual_reflection,
                  "Transform program specifications do not match the provided inputs and outputs",
                  std::invalid_argument);

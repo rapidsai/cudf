@@ -5,12 +5,9 @@
 
 #pragma once
 
-#include <cudf/column/column_device_view_base.cuh>
 #include <cudf/types.hpp>
 
-#include <cuda/std/cstddef>
 #include <cuda/std/optional>
-#include <cuda/std/span>
 #include <cuda/std/type_traits>
 
 namespace cudf {
@@ -19,10 +16,9 @@ namespace jit {
 template <int32_t Index, typename Element, bool AsScalar, int32_t TableIndex>
 struct column_accessor {
   static constexpr int32_t index       = Index;
-  static constexpr int32_t table_index = TableIndex;
   using element_type                   = Element;
-
-  static constexpr bool as_scalar = AsScalar;
+  static constexpr bool as_scalar      = AsScalar;
+  static constexpr int32_t table_index = TableIndex;
 
   static constexpr bool is_inplace_output = cuda::std::is_same_v<element_type, mutable_string_view>;
 
@@ -39,22 +35,22 @@ struct column_accessor {
 
   static __device__ decltype(auto) element(auto const* __restrict__ columns, size_type row)
   {
-    return column(columns).template element<element_type>(map_index(row));
+    return columns[index].template element<element_type>(map_index(row));
   }
 
   static __device__ bool is_null(auto const* __restrict__ columns, size_type row)
   {
-    return column(columns).is_null(map_index(row));
+    return columns[index].is_null(map_index(row));
   }
 
   static __device__ bool is_valid(auto const* __restrict__ columns, size_type row)
   {
-    return column(columns).is_valid(map_index(row));
+    return columns[index].is_valid(map_index(row));
   }
 
   static __device__ decltype(auto) nullable_element(auto const* __restrict__ columns, size_type row)
   {
-    return column(columns).template nullable_element<element_type>(map_index(row));
+    return columns[index].template nullable_element<element_type>(map_index(row));
   }
 
   static __device__ void set_null_mask_word(auto const* __restrict__ columns,
@@ -62,7 +58,7 @@ struct column_accessor {
                                             bitmask_type word)
     requires(!as_scalar)
   {
-    auto* mask = column(columns).null_mask();
+    auto* mask = columns[index].null_mask();
 
     if (mask == nullptr) { return; }
 
@@ -72,7 +68,7 @@ struct column_accessor {
   static __device__ void assign(auto const* __restrict__ columns, size_type row, auto value)
     requires(!as_scalar)
   {
-    column(columns).template assign<element_type>(row, value);
+    columns[index].template assign<element_type>(row, value);
   }
 
   static __device__ decltype(auto) output_arg(auto const* __restrict__ columns, size_type row)

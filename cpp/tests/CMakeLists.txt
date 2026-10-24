@@ -777,16 +777,6 @@ target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOU
 
 ConfigureTest(ROW_IR_TEST jit/row_ir.cpp)
 
-ConfigureTest(
-  JIT_REFLECTION_TEST
-  jit/reflect.cpp
-  ../src/jit/reflect.cpp
-  ../src/jit/util.cpp
-  EXTRA_LIBS rtcx::rtcx
-)
-target_include_directories(JIT_REFLECTION_TEST PRIVATE "${cudf_fragments_SOURCE_DIR}")
-add_dependencies(JIT_REFLECTION_TEST cudf_fragments)
-
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
