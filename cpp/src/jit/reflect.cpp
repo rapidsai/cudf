@@ -150,10 +150,10 @@ transform_output_spec make_output_spec(mutable_strings_column const& output)
 transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input_spec const> inputs,
                              std::span<transform_output_spec const> outputs,
-                             std::span<int32_t const> input_table_sources,
-                             std::span<int32_t const> input_table_indices,
-                             std::span<int32_t const> output_table_sources,
-                             std::span<int32_t const> output_table_indices)
+                             std::span<size_t const> input_table_sources,
+                             std::span<size_t const> input_table_indices,
+                             std::span<size_t const> output_table_sources,
+                             std::span<size_t const> output_table_indices)
 {
   CUDF_EXPECTS(input_table_sources.empty() || input_table_sources.size() == inputs.size(),
                "Input table sources size must match the number of inputs or be empty",
@@ -261,10 +261,10 @@ std::vector<transform_output_spec> make_output_specs(
 transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input const> inputs,
                              std::span<output_column const> outputs,
-                             std::span<int32_t const> input_table_sources,
-                             std::span<int32_t const> input_table_indices,
-                             std::span<int32_t const> output_table_sources,
-                             std::span<int32_t const> output_table_indices)
+                             std::span<size_t const> input_table_sources,
+                             std::span<size_t const> input_table_indices,
+                             std::span<size_t const> output_table_sources,
+                             std::span<size_t const> output_table_indices)
 {
   auto input_specs  = make_input_specs(inputs);
   auto output_specs = make_output_specs(outputs);

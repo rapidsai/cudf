@@ -47,10 +47,10 @@ struct transform_reflection {
 transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input_spec const> inputs,
                              std::span<transform_output_spec const> outputs,
-                             std::span<int32_t const> input_table_sources  = {},
-                             std::span<int32_t const> input_table_indices  = {},
-                             std::span<int32_t const> output_table_sources = {},
-                             std::span<int32_t const> output_table_indices = {});
+                             std::span<size_t const> input_table_sources  = {},
+                             std::span<size_t const> input_table_indices  = {},
+                             std::span<size_t const> output_table_sources = {},
+                             std::span<size_t const> output_table_indices = {});
 
 /** @brief Reflects accessors and PTX value types from column storage.
  *
@@ -71,10 +71,10 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
 transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input const> inputs,
                              std::span<output_column const> outputs,
-                             std::span<int32_t const> input_table_sources  = {},
-                             std::span<int32_t const> input_table_indices  = {},
-                             std::span<int32_t const> output_table_sources = {},
-                             std::span<int32_t const> output_table_indices = {});
+                             std::span<size_t const> input_table_sources  = {},
+                             std::span<size_t const> input_table_indices  = {},
+                             std::span<size_t const> output_table_sources = {},
+                             std::span<size_t const> output_table_indices = {});
 
 /** @brief Derives input type specifications from columns or scalars.
  *
