@@ -150,10 +150,10 @@ transform_output_spec make_output_spec(mutable_strings_column const& output)
 transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input_spec const> inputs,
                              std::span<transform_output_spec const> outputs,
-                             std::span<size_t const> input_table_sources,
-                             std::span<size_t const> input_table_indices,
-                             std::span<size_t const> output_table_sources,
-                             std::span<size_t const> output_table_indices)
+                             std::span<int32_t const> input_table_sources,
+                             std::span<int32_t const> input_table_indices,
+                             std::span<int32_t const> output_table_sources,
+                             std::span<int32_t const> output_table_indices)
 {
   CUDF_EXPECTS(input_table_sources.empty() || input_table_sources.size() == inputs.size(),
                "Input table sources size must match the number of inputs or be empty",
@@ -170,7 +170,7 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
 
   std::vector<std::string> in_types;
   bool use_physical_types = std::holds_alternative<lto_binary_type>(source_type);
-  for (size_t i = 0; i < inputs.size(); i++) {
+  for (int32_t i = 0; i < static_cast<int32_t>(inputs.size()); i++) {
     auto& in       = inputs[i];
     auto column    = reflect_input_column(in);
     auto element   = reflect_input_element(in, use_physical_types);
@@ -186,7 +186,7 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
   }
 
   std::vector<std::string> out_types;
-  for (size_t i = 0; i < outputs.size(); i++) {
+  for (int32_t i = 0; i < static_cast<int32_t>(outputs.size()); i++) {
     auto& out      = outputs[i];
     auto column    = reflect_output_column(out);
     auto element   = reflect_output_element(out, use_physical_types);
@@ -261,10 +261,10 @@ std::vector<transform_output_spec> make_output_specs(
 transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input const> inputs,
                              std::span<output_column const> outputs,
-                             std::span<size_t const> input_table_sources,
-                             std::span<size_t const> input_table_indices,
-                             std::span<size_t const> output_table_sources,
-                             std::span<size_t const> output_table_indices)
+                             std::span<int32_t const> input_table_sources,
+                             std::span<int32_t const> input_table_indices,
+                             std::span<int32_t const> output_table_sources,
+                             std::span<int32_t const> output_table_indices)
 {
   auto input_specs  = make_input_specs(inputs);
   auto output_specs = make_output_specs(outputs);
