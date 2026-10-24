@@ -696,6 +696,74 @@ std::unique_ptr<column> make_strings_column(device_span<string_view const> strin
     size, std::move(offsets), chars.release(), null_count, std::move(null_mask));
 }
 
+struct make_output_column_fn {
+  template <typename T>
+    requires(is_fixed_width<T>())
+  output_column operator()(transform_output const& output,
+                           size_type row_size,
+                           cuda::device_buffer<cudf::bitmask_type>&& null_mask,
+                           std::optional<std::unique_ptr<column>>&& offsets,
+                           cuda::stream_ref stream,
+                           rmm::device_async_resource_ref mr)
+  {
+    return fixed_width_column::make(output.type, row_size, std::move(null_mask), 0, stream, mr);
+  }
+
+  template <typename T>
+    requires(std::is_same_v<T, string_view>)
+  output_column operator()(transform_output const& output,
+                           size_type row_size,
+                           cuda::device_buffer<cudf::bitmask_type>&& null_mask,
+                           std::optional<std::unique_ptr<column>>&& offsets,
+                           cuda::stream_ref stream,
+                           rmm::device_async_resource_ref mr)
+  {
+    if (!offsets.has_value()) {
+      return string_views_column::make(row_size, std::move(null_mask), 0, stream, mr);
+    } else {
+      auto chars_size =
+        strings::detail::get_offset_value(offsets.value()->view(), row_size, stream);
+      auto chars = rmm::device_buffer{static_cast<size_t>(chars_size), stream, mr};
+      return mutable_strings_column::make(
+        row_size, std::move(chars), std::move(offsets.value()), std::move(null_mask), 0);
+    }
+  }
+
+  template <typename T>
+    requires(std::is_same_v<T, list_view>)
+  output_column operator()(transform_output const& output,
+                           size_type row_size,
+                           cuda::device_buffer<cudf::bitmask_type>&& null_mask,
+                           std::optional<std::unique_ptr<column>>&& offsets,
+                           cuda::stream_ref stream,
+                           rmm::device_async_resource_ref mr)
+  {
+    auto count = strings::detail::get_offset_value(offsets.value()->view(), row_size, stream);
+    auto element_type = output.children.at(lists_child_column_index).type;
+    // TODO: are nulls in the child columns handled correctly?
+    // TODO: if children column are nullable, we need to allocate null masks for each of the
+    // children elements
+    // Must obey propagation rules
+    // TODO: null-propagation based on attributes
+    auto child = make_fixed_width_column(element_type, count, mask_state::UNALLOCATED, stream, mr);
+    return mutable_lists_column{make_lists_column(
+      row_size, std::move(offsets.value()), std::move(child), 0, std::move(null_mask))};
+  }
+
+  template <typename T>
+    requires(!(is_fixed_width<T>() || std::is_same_v<T, string_view> ||
+               std::is_same_v<T, list_view>))
+  output_column operator()(transform_output const& output,
+                           size_type row_size,
+                           cuda::device_buffer<cudf::bitmask_type>&& null_mask,
+                           std::optional<std::unique_ptr<column>>&& offsets,
+                           cuda::stream_ref stream,
+                           rmm::device_async_resource_ref mr)
+  {
+    CUDF_FAIL("Unsupported output type for transform");
+  }
+};
+
 auto make_outputs(null_aware is_null_aware,
                   size_type row_size,
                   std::span<transform_input const> inputs,
@@ -714,34 +782,22 @@ auto make_outputs(null_aware is_null_aware,
     auto nullable   = is_output_nullable[i];
     auto null_state = nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
     auto null_mask  = create_null_mask(row_size, null_state, stream, mr);
+    auto offsets    = std::optional<std::unique_ptr<column>>{};
 
-    if (is_fixed_width(output.type)) {
-      auto col =
-        fixed_width_column::make(output.type, row_size, std::move(null_mask), 0, stream, mr);
-      cols.emplace_back(std::move(col));
-    } else if (output.type.id() == type_id::LIST) {
-      auto count = strings::detail::get_offset_value(output_offsets[i]->view(), row_size, stream);
-      auto element_type = output.children[lists_child_column_index].type;
-      auto child =
-        make_fixed_width_column(element_type, count, mask_state::UNALLOCATED, stream, mr);
-      auto col = make_lists_column(
-        row_size, std::move(output_offsets[i]), std::move(child), 0, std::move(null_mask));
-      cols.emplace_back(mutable_lists_column{std::move(col)});
-    } else if (output.type.id() == type_id::STRING) {
-      if (output_offsets.empty() || output_offsets[i] == nullptr) {
-        auto col = string_views_column::make(row_size, std::move(null_mask), 0, stream, mr);
-        cols.emplace_back(std::move(col));
-      } else {
-        auto chars_size =
-          strings::detail::get_offset_value(output_offsets[i]->view(), row_size, stream);
-        auto chars = rmm::device_buffer{static_cast<size_t>(chars_size), stream, mr};
-        auto col   = mutable_strings_column::make(
-          row_size, std::move(chars), std::move(output_offsets[i]), std::move(null_mask), 0);
-        cols.emplace_back(std::move(col));
-      }
-    } else {
-      CUDF_UNREACHABLE("Unsupported output type for transform");
+    if (!output_offsets.empty() && output_offsets[i] != nullptr) {
+      offsets = std::move(output_offsets[i]);
     }
+
+    auto output_column = type_dispatcher(output.type,
+                                         make_output_column_fn{},
+                                         output,
+                                         row_size,
+                                         std::move(null_mask),
+                                         std::move(offsets),
+                                         stream,
+                                         mr);
+
+    cols.emplace_back(std::move(output_column));
   }
 
   auto stencil = make_stencil(is_null_aware, row_size, inputs, cols, stream);
@@ -805,9 +861,6 @@ auto finalize_output(mutable_lists_column&& c,
                      cuda::stream_ref stream,
                      rmm::device_async_resource_ref mr)
 {
-  if (auto const view = c._col->view(); detail::has_nonempty_nulls(view, stream)) {
-    return detail::purge_nonempty_nulls(view, stream, mr);
-  }
   return std::move(c._col);
 }
 
