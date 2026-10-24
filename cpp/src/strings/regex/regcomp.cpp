@@ -464,6 +464,7 @@ class regex_parser {
     _chr = 0;
 
     // consume any flag-only groups: (?i) applies to the remainder of the enclosing group
+    bool found_flags = false;
     while (!_lex_done && *_expr_ptr == '(') {
       auto const expr_ptr_save        = _expr_ptr++;
       auto const [inline_flags, term] = parse_inline_flags();
@@ -473,6 +474,7 @@ class regex_parser {
       }
       _flags = static_cast<regex_flags>(_flags | inline_flags);
       _prog.add_flags(inline_flags);
+      found_flags = true;
     }
 
     auto [is_quoted, chr] = next_char();
@@ -666,7 +668,8 @@ class regex_parser {
     // If the previous item is a capture group, we need to check items inside the
     // capture group can be used with quantifiers too.
     // (Note that capture groups can be nested).
-    auto previous_type = _items.back().type;
+    // a flag-only group (?i) cannot be quantified
+    auto previous_type = found_flags ? static_cast<int32_t>(END) : _items.back().type;
     if (previous_type == RBRA) {  // previous item is a capture group
       // look for matching LBRA
       auto nested_count = 1;

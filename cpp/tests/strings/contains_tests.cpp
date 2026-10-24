@@ -1057,6 +1057,9 @@ TEST_F(StringsContainsTests, InlineFlags)
   EXPECT_THROW(cudf::strings::regex_program::create("(?-i)abc"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::regex_program::create("(?)abc"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::regex_program::create("(?i)*abc"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::regex_program::create("a(?i)*"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::regex_program::create("a(?i)(?s)+b"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::regex_program::create("a(?m){2}"), cudf::logic_error);
 }
 
 TEST_F(StringsContainsTests, MediumRegex)
