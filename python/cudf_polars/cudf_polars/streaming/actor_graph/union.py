@@ -251,20 +251,20 @@ async def _exchange_child(
     ch_in: Channel[TableChunk],
     collective_id: int,
     *,
+    owned: Sequence[ChunkStore],
     drop: bool,
-) -> list[ChunkStore]:
+) -> None:
     """
     Route one child's chunks to their owning ranks.
 
-    Returns one spillable store per source rank holding the chunks of this
-    child that this rank must emit, each in source order.
+    Fills ``owned`` (one spillable store per source rank) with the chunks of
+    this child that this rank must emit, each in source order.
     """
     rank = comm.rank
     # Every rank exchanges with every other rank (possibly sending nothing),
     # which keeps the set of peers independent of the routing plan.
     peers = [r for r in range(comm.nranks) if r != rank]
     exchange = SparseAlltoall(context, comm, collective_id, srcs=peers, dsts=peers)
-    owned = [ChunkStore(context) for _ in range(comm.nranks)]
 
     try:
         index = 0
@@ -295,7 +295,6 @@ async def _exchange_child(
             owned[src].insert(
                 Message(i, TableChunk.from_packed_data(packed, context.br()))
             )
-    return owned
 
 
 async def _ordered_union(
@@ -345,17 +344,24 @@ async def _ordered_union(
         ch_out, context, ChannelMetadata(local_count=plan.local_count(comm.rank))
     )
 
+    # Every store created below is tracked in ``buffers`` so that partially
+    # filled, queued or partially emitted stores are cleared if either task
+    # fails.
+    buffers: list[ChunkStore] = []
     exchanged: asyncio.Queue[list[ChunkStore]] = asyncio.Queue()
 
     async def read_and_exchange() -> None:
         for child, (ch_in, meta) in enumerate(zip(chs_in, metadata, strict=True)):
-            owned = await _exchange_child(
+            owned = [ChunkStore(context) for _ in range(comm.nranks)]
+            buffers.extend(owned)
+            await _exchange_child(
                 context,
                 comm,
                 plan,
                 child,
                 ch_in,
                 collective_ids[child],
+                owned=owned,
                 drop=meta.duplicated and comm.rank != 0,
             )
             exchanged.put_nowait(owned)
@@ -373,7 +379,11 @@ async def _ordered_union(
                         sequence_number,
                     )
 
-    await gather_in_task_group(read_and_exchange(), emit())
+    try:
+        await gather_in_task_group(read_and_exchange(), emit())
+    finally:
+        for store in buffers:
+            store.clear()
 
 
 @define_actor()
