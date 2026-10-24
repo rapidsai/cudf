@@ -2046,6 +2046,22 @@ __device__ void transform(int32_t* size, cudf::list_element input) { *size = inp
   supplied.push_back(std::move(scanned));
   auto result = transform_lists(inputs, output, std::move(supplied));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), input->view());
+
+  auto offsets = list_offsets({0, 2, 2, 3, 6});
+  cudf::transform_program program{copy_udf,
+                                  cudf::udf_source_type::CUDA,
+                                  cudf::null_aware::NO,
+                                  std::nullopt,
+                                  inputs,
+                                  output,
+                                  offsets};
+  result = program.run(inputs, output, std::move(offsets), std::nullopt);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), input->view());
+
+  auto next_input = make_lists({{10}, {11, 12}, {}, {-5}});
+  inputs[0]       = next_input->view();
+  result          = program.run(inputs, output, list_offsets({0, 1, 3, 3, 4}), std::nullopt);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), next_input->view());
 }
 
 TEST_F(ListOperationTest, SlicedAndScalarInputs)

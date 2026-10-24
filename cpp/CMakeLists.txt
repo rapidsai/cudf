@@ -513,7 +513,7 @@ function(precompile_fixed_width_kernel_fragments)
     )
     set(VARIANT_NAME transform_kernel_${FILE_INDEX})
     set(INSTANCE
-        "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, ${TYPE}, false, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, ${TYPE}, false, 0>>>"
+        "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0, ${TYPE}, false, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0, ${TYPE}, false, 0>>>"
     )
     add_fragment(
       cudf_fragments
@@ -548,7 +548,7 @@ function(precompile_fixed_width_kernel_fragments)
       )
       set(VARIANT_NAME transform_kernel_${FILE_INDEX})
       set(INSTANCE
-          "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, ${TYPE}, false, 0>, cudf::jit::column_accessor<1ULL, ${TYPE}, ${RHS_IS_SCALAR}, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, ${TYPE}, false, 0>>>"
+          "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0, ${TYPE}, false, 0>, cudf::jit::column_accessor<1, ${TYPE}, ${RHS_IS_SCALAR}, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0, ${TYPE}, false, 0>>>"
       )
       add_fragment(
         cudf_fragments
@@ -596,14 +596,14 @@ function(precompile_string_kernel_fragments)
       set(OUTPUT_POINTERS "")
       foreach(OUTPUT_INDEX IN LISTS OUTPUT_INDICES)
         list(APPEND OUTPUT_ACCESSORS
-             "cudf::jit::column_accessor<${OUTPUT_INDEX}ULL, ${OUTPUT_TYPE}, false, 0>"
+             "cudf::jit::column_accessor<${OUTPUT_INDEX}, ${OUTPUT_TYPE}, false, 0>"
         )
         list(APPEND OUTPUT_POINTERS "${OUTPUT_TYPE} *")
       endforeach()
       list(JOIN OUTPUT_ACCESSORS " ," OUTPUT_ACCESSORS_STR)
       list(JOIN OUTPUT_POINTERS " ," OUTPUT_POINTERS_STR)
       set(INSTANCE
-          "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::string_view, false, 0>>, cudf::jit::type_list<${OUTPUT_ACCESSORS_STR}>>"
+          "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0, cudf::string_view, false, 0>>, cudf::jit::type_list<${OUTPUT_ACCESSORS_STR}>>"
       )
       add_fragment(
         cudf_fragments

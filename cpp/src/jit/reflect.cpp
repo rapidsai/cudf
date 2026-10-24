@@ -10,6 +10,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <jit/helpers.hpp>
 #include <jit/reflect.hpp>
 #include <jit/util.hpp>
 #include <rtcx/rtcx.hpp>
@@ -199,64 +200,6 @@ std::string reflect_output_value_type(transform_output_spec const& spec, bool us
   return type_dispatcher(data_type{spec.type}, reflect_output_value_fn{}, spec, use_physical_type);
 }
 
-}  // namespace
-
-transform_reflection reflect(bool is_ptx,
-                             std::span<transform_input_spec const> inputs,
-                             std::span<transform_output_spec const> outputs,
-                             bool use_physical_types)
-{
-  std::vector<std::string> in_types;
-  for (size_t i = 0; i < inputs.size(); i++) {
-    auto& in       = inputs[i];
-    auto element   = reflect_input_element(in, use_physical_types);
-    bool as_scalar = in.is_scalar;
-    auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
-                                           rtcx::reflect(i),
-                                           element,
-                                           rtcx::reflect(as_scalar),
-                                           rtcx::reflect(0));
-    in_types.push_back(accessor);
-  }
-
-  std::vector<std::string> out_types;
-  for (size_t i = 0; i < outputs.size(); i++) {
-    auto& out      = outputs[i];
-    auto element   = reflect_output_element(out, use_physical_types);
-    bool as_scalar = false;  // never scalar
-    auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
-                                           rtcx::reflect(i),
-                                           element,
-                                           rtcx::reflect(as_scalar),
-                                           rtcx::reflect(0));
-
-    out_types.push_back(accessor);
-  }
-
-  auto ins  = rtcx::reflect_template("cudf::jit::type_list", in_types);
-  auto outs = rtcx::reflect_template("cudf::jit::type_list", out_types);
-
-  std::vector<std::string> ptx_in_types;
-  std::vector<std::string> ptx_out_types;
-  if (is_ptx) {
-    for (auto& in : inputs) {
-      ptx_in_types.push_back(reflect_input_value_type(in, use_physical_types));
-    }
-
-    for (auto& out : outputs) {
-      ptx_out_types.push_back(reflect_output_value_type(out, use_physical_types));
-    }
-  }
-
-  return std::make_tuple(ins, outs, ptx_in_types, ptx_out_types);
-}
-
-namespace {
-
-column_view as_column_view(scalar_column_view const& scalar) { return scalar.as_column_view(); }
-
-column_view as_column_view(column_view const& column) { return column; }
-
 transform_input_spec make_input_spec(column_view const& column, bool is_scalar)
 {
   transform_input_spec result{.type = column.type().id(), .is_scalar = is_scalar};
@@ -281,19 +224,6 @@ transform_input_spec make_input_spec(transform_input const& input)
     },
     input);
 }
-
-}  // namespace
-
-std::vector<transform_input_spec> make_input_specs(std::span<transform_input const> inputs)
-{
-  std::vector<transform_input_spec> result;
-  for (auto& input : inputs) {
-    result.push_back(make_input_spec(input));
-  }
-  return result;
-}
-
-namespace {
 
 transform_output_spec make_output_spec(fixed_width_column const& output)
 {
@@ -321,6 +251,85 @@ transform_output_spec make_output_spec(mutable_strings_column const& output)
 }
 
 }  // namespace
+
+transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
+                             std::span<transform_input_spec const> inputs,
+                             std::span<transform_output_spec const> outputs,
+                             std::span<int32_t const> input_table_sources,
+                             std::span<int32_t const> input_table_indices,
+                             std::span<int32_t const> output_table_sources,
+                             std::span<int32_t const> output_table_indices)
+{
+  CUDF_EXPECTS(input_table_sources.empty() || input_table_sources.size() == inputs.size(),
+               "Input table sources size must match the number of inputs or be empty",
+               std::runtime_error);
+  CUDF_EXPECTS(input_table_sources.size() == input_table_indices.size(),
+               "Input table sources and indices size must match",
+               std::runtime_error);
+  CUDF_EXPECTS(output_table_sources.empty() || output_table_sources.size() == outputs.size(),
+               "Output table sources size must match the number of outputs or be empty",
+               std::runtime_error);
+  CUDF_EXPECTS(output_table_sources.size() == output_table_indices.size(),
+               "Output table sources and indices size must match",
+               std::runtime_error);
+
+  std::vector<std::string> in_types;
+  bool use_physical_types = std::holds_alternative<lto_binary_type>(source_type);
+  for (int32_t i = 0; i < std::ssize(inputs); i++) {
+    auto& in       = inputs[i];
+    auto element   = reflect_input_element(in, use_physical_types);
+    bool as_scalar = in.is_scalar;
+    auto accessor  = rtcx::reflect_template(
+      "cudf::jit::column_accessor",
+      input_table_sources.empty() ? rtcx::reflect(i) : rtcx::reflect(input_table_indices[i]),
+      element,
+      rtcx::reflect(as_scalar),
+      input_table_sources.empty() ? rtcx::reflect(0) : rtcx::reflect(input_table_sources[i]));
+    in_types.push_back(accessor);
+  }
+
+  std::vector<std::string> out_types;
+  for (int32_t i = 0; i < std::ssize(outputs); i++) {
+    auto& out      = outputs[i];
+    auto element   = reflect_output_element(out, use_physical_types);
+    bool as_scalar = false;  // never scalar
+    auto accessor  = rtcx::reflect_template(
+      "cudf::jit::column_accessor",
+      output_table_sources.empty() ? rtcx::reflect(i) : rtcx::reflect(output_table_indices[i]),
+      element,
+      rtcx::reflect(as_scalar),
+      output_table_sources.empty() ? rtcx::reflect(0) : rtcx::reflect(output_table_sources[i]));
+
+    out_types.push_back(accessor);
+  }
+
+  auto ins  = rtcx::reflect_template("cudf::jit::type_list", in_types);
+  auto outs = rtcx::reflect_template("cudf::jit::type_list", out_types);
+
+  std::vector<std::string> ptx_in_types;
+  std::vector<std::string> ptx_out_types;
+  if (std::holds_alternative<udf_source_type>(source_type) &&
+      std::get<udf_source_type>(source_type) == udf_source_type::PTX) {
+    for (auto& in : inputs) {
+      ptx_in_types.push_back(reflect_input_value_type(in, use_physical_types));
+    }
+
+    for (auto& out : outputs) {
+      ptx_out_types.push_back(reflect_output_value_type(out, use_physical_types));
+    }
+  }
+
+  return {ins, outs, ptx_in_types, ptx_out_types};
+}
+
+std::vector<transform_input_spec> make_input_specs(std::span<transform_input const> inputs)
+{
+  std::vector<transform_input_spec> result;
+  for (auto& input : inputs) {
+    result.push_back(make_input_spec(input));
+  }
+  return result;
+}
 
 std::vector<transform_output_spec> make_output_specs(std::span<output_column const> outputs)
 {
@@ -357,14 +366,23 @@ std::vector<transform_output_spec> make_output_specs(
   return result;
 }
 
-transform_reflection reflect(bool is_ptx,
+transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> source_type,
                              std::span<transform_input const> inputs,
                              std::span<output_column const> outputs,
-                             bool use_physical_types)
+                             std::span<int32_t const> input_table_sources,
+                             std::span<int32_t const> input_table_indices,
+                             std::span<int32_t const> output_table_sources,
+                             std::span<int32_t const> output_table_indices)
 {
   auto input_specs  = make_input_specs(inputs);
   auto output_specs = make_output_specs(outputs);
-  return reflect(is_ptx, input_specs, output_specs, use_physical_types);
+  return reflect(source_type,
+                 input_specs,
+                 output_specs,
+                 input_table_sources,
+                 input_table_indices,
+                 output_table_sources,
+                 output_table_indices);
 }
 
 std::string reflect_udf_signature(bool is_null_aware,

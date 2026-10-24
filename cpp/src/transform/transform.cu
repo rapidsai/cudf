@@ -32,8 +32,8 @@
 
 #include <cudf_fragments.hpp>
 #include <jit/cache.hpp>
-#include <jit/column_views.hpp>
 #include <jit/helpers.hpp>
+#include <jit/output_columns.hpp>
 #include <jit/parser.hpp>
 #include <jit/reflect.hpp>
 #include <jit/row_ir.hpp>
@@ -47,10 +47,6 @@
 
 namespace cudf {
 namespace {
-
-column_view as_column_view(scalar_column_view const& scalar) { return scalar.as_column_view(); }
-
-column_view as_column_view(column_view const& column) { return column; }
 
 using jit::fixed_width_column;
 using jit::mutable_lists_column;
@@ -181,7 +177,7 @@ kernel get_kernel(bool is_null_aware,
                   udf_source_type source_type)
 {
   auto [in_types, out_types, ptx_in_types, ptx_out_types] =
-    jit::reflect(source_type == udf_source_type::PTX, inputs, outputs);
+    jit::reflect(source_type, inputs, outputs);
   return instantiate(is_null_aware,
                      has_user_data,
                      in_types,
@@ -200,7 +196,7 @@ kernel get_kernel(bool is_null_aware,
                   udf_source_type source_type)
 {
   auto [in_types, out_types, ptx_in_types, ptx_out_types] =
-    jit::reflect(source_type == udf_source_type::PTX, inputs, outputs);
+    jit::reflect(source_type, inputs, outputs);
   return instantiate(is_null_aware,
                      has_user_data,
                      in_types,
@@ -280,7 +276,7 @@ void run_lto(std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type,
              rmm::device_async_resource_ref mr)
 {
   auto [in_types, out_types, ptx_in_types, ptx_out_types] =
-    jit::reflect(false, inputs, outputs, /*use_physical_types=*/true);
+    jit::reflect(source_type, inputs, outputs);
 
   std::span<uint8_t const> kernel_fragment;
   lto_binary_type kernel_fragment_binary_type = lto_binary_type::FATBIN;
@@ -478,7 +474,7 @@ void perform_checks(std::variant<udf_source_type, lto_binary_type> source_type,
       return is_integral(c.type()) || is_floating_point(c.type());
     };
     static constexpr auto is_supported_input_type = [](auto const& c) {
-      auto col = std::visit([](auto& c) { return as_column_view(c); }, c);
+      auto col = std::visit([](auto& c) { return jit::as_column_view(c); }, c);
       return is_input_value_supported(col) ||
              (is_dictionary(col.type()) &&
               is_input_value_supported(col.child(dictionary_keys_column_index)));
@@ -538,7 +534,7 @@ void perform_checks(std::variant<udf_source_type, lto_binary_type> source_type,
     return false;
   };
   static constexpr auto is_supported_input_type = [&](auto const& c) {
-    auto col = std::visit([](auto const& c) { return as_column_view(c); }, c);
+    auto col = std::visit([](auto const& c) { return jit::as_column_view(c); }, c);
     return is_input_value_supported(is_input_value_supported, col);
   };
   CUDF_EXPECTS(
@@ -1037,7 +1033,7 @@ dispatch_lto_kernel_fragment(bool is_null_aware,
   // the contract here is that CMake and this dispatch function agree on symbol mangling of the
   // reflected kernel name.
   auto [in_types, out_types, ptx_in_types, ptx_out_types] =
-    jit::reflect(false, inputs, outputs, /*use_physical_types=*/true);
+    jit::reflect(lto_binary_type::LTO_IR, inputs, outputs);
   auto target = strip_whitespace(rtcx::reflect_template("cudf::jit::transform_kernel",
                                                         rtcx::reflect(is_null_aware),
                                                         rtcx::reflect(has_user_data),
@@ -1125,8 +1121,7 @@ struct transform_program::impl {
   {
     auto actual_input_specs  = jit::make_input_specs(actual_inputs);
     auto actual_output_specs = jit::make_output_specs(actual_outputs, output_offsets);
-    auto actual_reflection =
-      jit::reflect(source_type == udf_source_type::PTX, actual_input_specs, actual_output_specs);
+    auto actual_reflection   = jit::reflect(source_type, actual_input_specs, actual_output_specs);
     CUDF_EXPECTS(reflection_ == actual_reflection,
                  "Transform program specifications do not match the provided inputs and outputs",
                  std::invalid_argument);
@@ -1138,7 +1133,7 @@ struct transform_program::impl {
        std::optional<void*> user_data,
        std::vector<transform_input_spec> inputs,
        std::vector<transform_output_spec> outputs)
-    : reflection_{jit::reflect(source_type == udf_source_type::PTX, inputs, outputs)},
+    : reflection_{jit::reflect(source_type, inputs, outputs)},
       source_type_{source_type},
       is_null_aware_{is_null_aware},
       user_data_{user_data},
@@ -1151,8 +1146,7 @@ struct transform_program::impl {
   {
   }
 
-  std::tuple<std::string, std::string, std::vector<std::string>, std::vector<std::string>>
-    reflection_;
+  jit::transform_reflection reflection_;
   udf_source_type source_type_;
   null_aware is_null_aware_;
   std::optional<void*> user_data_;
