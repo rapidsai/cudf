@@ -240,14 +240,13 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
 
   std::vector<std::string> in_types;
   bool use_physical_types = std::holds_alternative<lto_binary_type>(source_type);
-  for (size_t i = 0; i < inputs.size(); i++) {
+  for (int32_t i = 0; i < std::ssize(inputs); i++) {
     auto& in       = inputs[i];
     auto element   = reflect_input_element(in, use_physical_types);
     bool as_scalar = in.is_scalar;
     auto accessor  = rtcx::reflect_template(
       "cudf::jit::column_accessor",
-      input_table_sources.empty() ? rtcx::reflect(static_cast<int32_t>(i))
-                                   : rtcx::reflect(input_table_indices[i]),
+      input_table_sources.empty() ? rtcx::reflect(i) : rtcx::reflect(input_table_indices[i]),
       element,
       rtcx::reflect(as_scalar),
       input_table_sources.empty() ? rtcx::reflect(0) : rtcx::reflect(input_table_sources[i]));
@@ -255,14 +254,13 @@ transform_reflection reflect(std::variant<udf_source_type, lto_binary_type> sour
   }
 
   std::vector<std::string> out_types;
-  for (size_t i = 0; i < outputs.size(); i++) {
+  for (int32_t i = 0; i < std::ssize(outputs); i++) {
     auto& out      = outputs[i];
     auto element   = reflect_output_element(out, use_physical_types);
     bool as_scalar = false;  // never scalar
     auto accessor  = rtcx::reflect_template(
       "cudf::jit::column_accessor",
-      output_table_sources.empty() ? rtcx::reflect(static_cast<int32_t>(i))
-                                    : rtcx::reflect(output_table_indices[i]),
+      output_table_sources.empty() ? rtcx::reflect(i) : rtcx::reflect(output_table_indices[i]),
       element,
       rtcx::reflect(as_scalar),
       output_table_sources.empty() ? rtcx::reflect(0) : rtcx::reflect(output_table_sources[i]));

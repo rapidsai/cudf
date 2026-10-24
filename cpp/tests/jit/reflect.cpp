@@ -8,12 +8,15 @@
 
 #include <cudf/column/column_factories.hpp>
 
+#include <cudf_fragments.hpp>
 #include <gtest/gtest.h>
 #include <jit/reflect.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <format>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -31,6 +34,47 @@ using cudf::transform_input_spec;
 using cudf::transform_output_spec;
 using cudf::type_id;
 using cudf::udf_source_type;
+
+TEST(JitReflectionTest, PrecompiledFragmentsMatchRuntimeReflection)
+{
+  auto const expect_precompiled = [](auto const& inputs, auto const& outputs) {
+    auto const reflection = cudf::jit::reflect(lto_binary_type::LTO_IR, inputs, outputs);
+    auto const name       = compact(std::format("cudf::jit::transform_kernel<false, false, {}, {}>",
+                                          reflection.input_accessors,
+                                          reflection.output_accessors));
+    EXPECT_TRUE(std::any_of(std::begin(cudf_fragments::transform_kernel_INSTANCE),
+                            std::end(cudf_fragments::transform_kernel_INSTANCE),
+                            [&](auto const* instance) { return compact(instance) == name; }))
+      << "Missing precompiled fragment: " << name;
+  };
+
+  for (auto const type : {type_id::UINT8,
+                          type_id::UINT16,
+                          type_id::UINT32,
+                          type_id::UINT64,
+                          type_id::DECIMAL32,
+                          type_id::DECIMAL64,
+                          type_id::DECIMAL128}) {
+    std::array const outputs{transform_output_spec{.type = type}};
+    std::array const unary_inputs{transform_input_spec{.type = type}};
+    expect_precompiled(unary_inputs, outputs);
+    for (auto const scalar : {false, true}) {
+      std::array const binary_inputs{transform_input_spec{.type = type},
+                                     transform_input_spec{.type = type, .is_scalar = scalar}};
+      expect_precompiled(binary_inputs, outputs);
+    }
+  }
+
+  std::array const inputs{transform_input_spec{.type = type_id::STRING}};
+  for (auto const type :
+       {type_id::UINT8, type_id::UINT16, type_id::UINT32, type_id::UINT64, type_id::STRING}) {
+    for (int count = 1; count <= 8; ++count) {
+      std::vector<transform_output_spec> const outputs(
+        count, {.type = type, .has_string_offsets = type == type_id::STRING});
+      expect_precompiled(inputs, outputs);
+    }
+  }
+}
 
 TEST(JitReflectionTest, DefaultAndExplicitTableMappings)
 {

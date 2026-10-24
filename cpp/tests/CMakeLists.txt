@@ -784,6 +784,8 @@ ConfigureTest(
   ../src/jit/util.cpp
   EXTRA_LIBS rtcx::rtcx
 )
+target_include_directories(JIT_REFLECTION_TEST PRIVATE "${cudf_fragments_SOURCE_DIR}")
+add_dependencies(JIT_REFLECTION_TEST cudf_fragments)
 
 # ##################################################################################################
 # * stream testing ---------------------------------------------------------------------------------
