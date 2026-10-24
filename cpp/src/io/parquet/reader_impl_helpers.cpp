@@ -645,6 +645,7 @@ void metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes,
     auto const remainder              = total_column_chunks % num_tasks;
 
     std::vector<std::future<void>> tasks;
+    cudf::detail::future_drain_guard tasks_guard{tasks};
     tasks.reserve(num_tasks);
 
     std::size_t start_idx = 0;
