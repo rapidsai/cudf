@@ -33,13 +33,14 @@ constexpr bool is_reduction_supported(aggregation::Kind kind)
     case aggregation::PRODUCT: return cudf::detail::is_valid_aggregation<T, aggregation::PRODUCT>();
     case aggregation::SUM_OF_SQUARES:
       return cudf::detail::is_valid_aggregation<T, aggregation::SUM_OF_SQUARES>();
+    case aggregation::M2: return cudf::is_numeric<T>() && !cudf::is_fixed_point<T>();
     case aggregation::SUM_OVERFLOW:
       return cudf::detail::is_valid_aggregation<T, aggregation::SUM_OVERFLOW>();
     // Target-type validity alone does not constrain extrema's storage or comparisons.
     case aggregation::MIN:
     case aggregation::MAX: return cudf::is_fixed_width<T>() && is_relationally_comparable<T, T>();
     case aggregation::ARGMIN:
-    case aggregation::ARGMAX: return is_relationally_comparable<T, T>();
+    case aggregation::ARGMAX: return is_relationally_comparable<T, T>() || cudf::is_nested<T>();
     default: return false;
   }
 }

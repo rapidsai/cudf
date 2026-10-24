@@ -21,13 +21,18 @@ namespace detail {
 /**
  * @brief Internal API to replace nulls with preceding/following non-null values in @p value
  *
- * @param grouped_value A column whose null values will be replaced.
- * @param group_labels Group labels for @p grouped_value, corresponding to group keys.
+ * The result is in grouped order: row `i` of the result is row `grouped_order[i]` of @p value
+ * with its null replaced by the nearest non-null value of the same group.
+ *
+ * @param value An ungrouped column whose null values will be replaced.
+ * @param grouped_order Row of @p value at each grouped position, in input order within groups.
+ * @param group_labels Group labels for @p grouped_order, corresponding to group keys.
  * @param replace_policy Specify the position of replacement values relative to null values.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate device memory of the returned column.
  */
-std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_value,
+std::unique_ptr<column> group_replace_nulls(cudf::column_view const& value,
+                                            device_span<size_type const> grouped_order,
                                             device_span<size_type const> group_labels,
                                             cudf::replace_policy replace_policy,
                                             cuda::stream_ref stream,

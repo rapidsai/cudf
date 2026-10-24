@@ -4,8 +4,10 @@
  */
 
 #include "groupby/common/utils.hpp"
-#include "groupby/sort/functors.hpp"
-#include "groupby/sort/group_reductions.hpp"
+#include "groupby/hash/compute_groupby.hpp"
+#include "groupby/hash/compute_single_pass_aggs.hpp"
+#include "groupby/hash/functors.hpp"
+#include "groupby/hash/group_reductions.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/aggregation/host_udf.hpp>
@@ -13,11 +15,9 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
-#include <cudf/detail/binaryop.hpp>
-#include <cudf/detail/gather.hpp>
-#include <cudf/detail/groupby/sort_helper.hpp>
+#include <cudf/detail/groupby.hpp>
+#include <cudf/detail/groupby/groupby_helper.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
-#include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/lists/detail/stream_compaction.hpp>
@@ -28,6 +28,7 @@
 
 #include <cuda/stream>
 
+#include <algorithm>
 #include <memory>
 #include <unordered_map>
 #include <utility>
@@ -36,6 +37,46 @@ namespace cudf {
 namespace groupby {
 namespace detail {
 namespace {
+
+/// Whether an aggregation consumes group labels directly or while sorting its values.
+bool uses_group_labels(aggregation::Kind kind)
+{
+  switch (kind) {
+    case aggregation::HISTOGRAM:
+    case aggregation::QUANTILE:
+    case aggregation::MEDIAN:
+    case aggregation::NUNIQUE:
+    case aggregation::NTH_ELEMENT:
+    case aggregation::COVARIANCE:
+    case aggregation::CORRELATION:
+    case aggregation::TDIGEST:
+    case aggregation::MERGE_TDIGEST:
+    case aggregation::BITWISE_AGG:
+    case aggregation::HOST_UDF: return true;
+    default: return false;
+  }
+}
+
+bool needs_stable_groups(aggregation::Kind kind)
+{
+  if (is_hash_aggregation(kind)) { return false; }
+  switch (kind) {
+    case aggregation::HISTOGRAM:
+    case aggregation::MERGE_HISTOGRAM:
+    case aggregation::COLLECT_SET:
+    case aggregation::MERGE_SETS:
+    case aggregation::MERGE_TDIGEST:
+    case aggregation::BITWISE_AGG:
+    case aggregation::TOP_K:
+    case aggregation::QUANTILE:
+    case aggregation::MEDIAN:
+    case aggregation::NUNIQUE:
+    case aggregation::TDIGEST:
+    case aggregation::COVARIANCE:
+    case aggregation::CORRELATION: return false;
+    default: return true;
+  }
+}
 
 /**
  * @brief Creates column views with only valid elements in both input column views
@@ -82,43 +123,44 @@ auto column_view_with_common_nulls(column_view const& column_0,
  * of these values.
  */
 struct aggregate_result_functor final : store_result_functor {
-  using store_result_functor::store_result_functor;
+  aggregate_result_functor(column_view const& values,
+                           groupby_helper& helper,
+                           cudf::detail::result_cache& cache,
+                           bool expose_intermediates,
+                           cuda::stream_ref stream,
+                           cudf::memory_resources mr)
+    : store_result_functor(values, helper, cache, stream, mr),
+      expose_intermediates(expose_intermediates)
+  {
+  }
+
+  bool const expose_intermediates;
+
   template <aggregation::Kind k>
   void operator()(aggregation const& agg)
   {
-    CUDF_FAIL("Unsupported aggregation.");
+    if (cache.has_result(values, agg)) { return; }
+    if constexpr (is_hash_aggregation(k)) {
+      auto const values_type = cudf::is_dictionary(values.type())
+                                 ? dictionary_column_view(values).keys().type()
+                                 : values.type();
+      auto const supported   = [values_type] {
+        if constexpr (k == aggregation::M2 || k == aggregation::VARIANCE || k == aggregation::STD) {
+          return hash::is_single_pass_agg_supported(values_type, aggregation::M2);
+        }
+        return cudf::detail::is_valid_aggregation(values_type, k);
+      }();
+      CUDF_EXPECTS(supported, "Unsupported groupby reduction type-agg combination");
+      aggregation_request request;
+      request.values = values;
+      request.aggregations.emplace_back(dynamic_cast<groupby_aggregation*>(agg.clone().release()));
+      hash::compute_groupby(
+        std::span{&request, 1}, helper, &cache, expose_intermediates, stream, mr);
+    } else {
+      CUDF_FAIL("Unsupported aggregation.");
+    }
   }
 };
-
-template <>
-void aggregate_result_functor::operator()<aggregation::COUNT_VALID>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  cache.add_result(
-    values,
-    agg,
-    get_unordered_grouped_values().nullable()
-      ? detail::group_count_valid(get_unordered_grouped_values(),
-                                  helper.group_labels(stream),
-                                  helper.num_groups(stream),
-                                  stream,
-                                  mr.get_output_mr())
-      : detail::group_count_all(
-          helper.group_offsets(stream), helper.num_groups(stream), stream, mr.get_output_mr()));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  cache.add_result(
-    values,
-    agg,
-    detail::group_count_all(
-      helper.group_offsets(stream), helper.num_groups(stream), stream, mr.get_output_mr()));
-}
 
 template <>
 void aggregate_result_functor::operator()<aggregation::HISTOGRAM>(aggregation const& agg)
@@ -138,245 +180,6 @@ void aggregate_result_functor::operator()<aggregation::HISTOGRAM>(aggregation co
                                            num_groups,
                                            stream,
                                            mr.get_output_mr()));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  cache.add_result(values,
-                   agg,
-                   detail::group_sum(get_unordered_grouped_values(),
-                                     helper.num_groups(stream),
-                                     helper.group_labels(stream),
-                                     stream,
-                                     mr.get_output_mr()));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::SUM_OVERFLOW>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  cache.add_result(values,
-                   agg,
-                   detail::group_sum_overflow(get_unordered_grouped_values(),
-                                              helper.num_groups(stream),
-                                              helper.group_labels(stream),
-                                              stream,
-                                              mr.get_output_mr()));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::PRODUCT>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  cache.add_result(values,
-                   agg,
-                   detail::group_product(get_unordered_grouped_values(),
-                                         helper.num_groups(stream),
-                                         helper.group_labels(stream),
-                                         stream,
-                                         mr.get_output_mr()));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::ARGMAX>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  cache.add_result(values,
-                   agg,
-                   detail::group_argmax(get_grouped_values(),
-                                        helper.num_groups(stream),
-                                        helper.group_labels(stream),
-                                        helper.key_sort_order(stream),
-                                        stream,
-                                        mr.get_output_mr()));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::ARGMIN>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  cache.add_result(values,
-                   agg,
-                   detail::group_argmin(get_grouped_values(),
-                                        helper.num_groups(stream),
-                                        helper.group_labels(stream),
-                                        helper.key_sort_order(stream),
-                                        stream,
-                                        mr.get_output_mr()));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  auto result = [&]() {
-    auto values_type = cudf::is_dictionary(values.type())
-                         ? dictionary_column_view(values).keys().type()
-                         : values.type();
-    if (cudf::is_fixed_width(values_type)) {
-      return detail::group_min(get_unordered_grouped_values(),
-                               helper.num_groups(stream),
-                               helper.group_labels(stream),
-                               stream,
-                               mr.get_output_mr());
-    } else {
-      auto argmin_agg = make_argmin_aggregation();
-      operator()<aggregation::ARGMIN>(*argmin_agg);
-      column_view const argmin_result = cache.get_result(values, *argmin_agg);
-
-      // Compute the ARGMIN result without the null mask in the gather map.
-      column_view const null_removed_map(
-        data_type(type_to_id<size_type>()),
-        argmin_result.size(),
-        static_cast<void const*>(argmin_result.template data<size_type>()),
-        nullptr,
-        0);
-      auto transformed_result =
-        cudf::detail::gather(table_view({values}),
-                             null_removed_map,
-                             argmin_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
-                                                      : cudf::out_of_bounds_policy::DONT_CHECK,
-                             cudf::negative_index_policy::NOT_ALLOWED,
-                             stream,
-                             mr.get_output_mr());
-      return std::move(transformed_result->release()[0]);
-    }
-  }();
-
-  cache.add_result(values, agg, std::move(result));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  auto result = [&]() {
-    auto values_type = cudf::is_dictionary(values.type())
-                         ? dictionary_column_view(values).keys().type()
-                         : values.type();
-    if (cudf::is_fixed_width(values_type)) {
-      return detail::group_max(get_unordered_grouped_values(),
-                               helper.num_groups(stream),
-                               helper.group_labels(stream),
-                               stream,
-                               mr.get_output_mr());
-    } else {
-      auto argmax_agg = make_argmax_aggregation();
-      operator()<aggregation::ARGMAX>(*argmax_agg);
-      column_view const argmax_result = cache.get_result(values, *argmax_agg);
-
-      // Compute the ARGMAX result without the null mask in the gather map.
-      column_view const null_removed_map(
-        data_type(type_to_id<size_type>()),
-        argmax_result.size(),
-        static_cast<void const*>(argmax_result.template data<size_type>()),
-        nullptr,
-        0);
-      auto transformed_result =
-        cudf::detail::gather(table_view({values}),
-                             null_removed_map,
-                             argmax_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
-                                                      : cudf::out_of_bounds_policy::DONT_CHECK,
-                             cudf::negative_index_policy::NOT_ALLOWED,
-                             stream,
-                             mr.get_output_mr());
-      return std::move(transformed_result->release()[0]);
-    }
-  }();
-
-  cache.add_result(values, agg, std::move(result));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::MEAN>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  auto sum_agg   = make_sum_aggregation();
-  auto count_agg = make_count_aggregation();
-  operator()<aggregation::SUM>(*sum_agg);
-  operator()<aggregation::COUNT_VALID>(*count_agg);
-  column_view const sum_result   = cache.get_result(values, *sum_agg);
-  column_view const count_result = cache.get_result(values, *count_agg);
-
-  // TODO (dm): Special case for timestamp. Add target_type_impl for it.
-  //            Blocked until we support operator+ on timestamps
-  auto col_type = cudf::is_dictionary(values.type())
-                    ? cudf::dictionary_column_view(values).keys().type()
-                    : values.type();
-  auto result =
-    cudf::detail::binary_operation(sum_result,
-                                   count_result,
-                                   binary_operator::DIV,
-                                   cudf::detail::target_type(col_type, aggregation::MEAN),
-                                   stream,
-                                   mr.get_output_mr());
-  cache.add_result(values, agg, std::move(result));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::M2>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  auto const mean_agg = make_mean_aggregation();
-  operator()<aggregation::MEAN>(*mean_agg);
-  auto const mean_result = cache.get_result(values, *mean_agg);
-
-  cache.add_result(values,
-                   agg,
-                   detail::group_m2(get_unordered_grouped_values(),
-                                    mean_result,
-                                    helper.group_labels(stream),
-                                    stream,
-                                    mr.get_output_mr()));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::VARIANCE>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  auto& var_agg  = dynamic_cast<cudf::detail::var_aggregation const&>(agg);
-  auto mean_agg  = make_mean_aggregation();
-  auto count_agg = make_count_aggregation();
-  operator()<aggregation::MEAN>(*mean_agg);
-  operator()<aggregation::COUNT_VALID>(*count_agg);
-  column_view const mean_result = cache.get_result(values, *mean_agg);
-  column_view const group_sizes = cache.get_result(values, *count_agg);
-
-  auto result = detail::group_var(get_unordered_grouped_values(),
-                                  mean_result,
-                                  group_sizes,
-                                  helper.group_labels(stream),
-                                  var_agg._ddof,
-                                  stream,
-                                  mr.get_output_mr());
-  cache.add_result(values, agg, std::move(result));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::STD>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  auto& std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
-  auto var_agg  = make_variance_aggregation(std_agg._ddof);
-  operator()<aggregation::VARIANCE>(*var_agg);
-  column_view const var_result = cache.get_result(values, *var_agg);
-
-  auto result =
-    cudf::detail::unary_operation(var_result, unary_operator::SQRT, stream, mr.get_output_mr());
-  cache.add_result(values, agg, std::move(result));
 }
 
 template <>
@@ -670,9 +473,9 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto mean_agg = make_mean_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream, mr)
+  aggregate_result_functor(values_child0, helper, cache, expose_intermediates, stream, mr)
     .operator()<aggregation::MEAN>(*mean_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream, mr)
+  aggregate_result_functor(values_child1, helper, cache, expose_intermediates, stream, mr)
     .operator()<aggregation::MEAN>(*mean_agg);
 
   auto const mean0 = cache.get_result(values_child0, *mean_agg);
@@ -682,8 +485,9 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
 
   cache.add_result(values,
                    agg,
-                   detail::group_covariance(get_unordered_grouped_values().child(0),
-                                            get_unordered_grouped_values().child(1),
+                   detail::group_covariance(values_child0,
+                                            values_child1,
+                                            helper.reduction_groups(stream),
                                             helper.group_labels(stream),
                                             helper.num_groups(stream),
                                             count,
@@ -721,15 +525,19 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto std_agg = make_std_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream, mr)
+  aggregate_result_functor(values_child0, helper, cache, expose_intermediates, stream, mr)
     .operator()<aggregation::STD>(*std_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream, mr)
+  aggregate_result_functor(values_child1, helper, cache, expose_intermediates, stream, mr)
     .operator()<aggregation::STD>(*std_agg);
 
   // Compute covariance here to avoid repeated computation of mean & count
   auto cov_agg = make_covariance_aggregation(corr_agg._min_periods);
   if (not cache.has_result(values, *cov_agg)) {
-    auto mean_agg    = make_mean_aggregation();
+    auto mean_agg = make_mean_aggregation();
+    aggregate_result_functor(values_child0, helper, cache, expose_intermediates, stream, mr)
+      .operator()<aggregation::MEAN>(*mean_agg);
+    aggregate_result_functor(values_child1, helper, cache, expose_intermediates, stream, mr)
+      .operator()<aggregation::MEAN>(*mean_agg);
     auto const mean0 = cache.get_result(values_child0, *mean_agg);
     auto const mean1 = cache.get_result(values_child1, *mean_agg);
     auto count_agg   = make_count_aggregation();
@@ -738,8 +546,9 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
     auto const& cov_agg_obj = dynamic_cast<cudf::detail::covariance_aggregation const&>(*cov_agg);
     cache.add_result(values,
                      *cov_agg,
-                     detail::group_covariance(get_unordered_grouped_values().child(0),
-                                              get_unordered_grouped_values().child(1),
+                     detail::group_covariance(values_child0,
+                                              values_child1,
+                                              helper.reduction_groups(stream),
                                               helper.group_labels(stream),
                                               helper.num_groups(stream),
                                               count,
@@ -930,29 +739,72 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
 
 }  // namespace detail
 
-// Sort-based groupby
-std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort_aggregate(
+// All aggregations share one grouping and one result cache.
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> detail::hash::groupby(
   std::span<aggregation_request const> requests,
+  detail::groupby_helper& helper,
   cuda::stream_ref stream,
-  rmm::device_async_resource_ref mr)
+  cudf::memory_resources mr)
 {
-  // We're going to start by creating a cache of results so that aggs that
-  // depend on other aggs will not have to be recalculated. e.g. mean depends on
-  // sum and count. std depends on mean and count
+  // Build ordered rows directly when any request needs them, before metadata or unordered
+  // requests can materialize an intermediate permutation. Existing cached groups are reused.
+  auto const any_agg = [&](auto predicate) {
+    return std::ranges::any_of(requests, [&](auto const& request) {
+      return std::ranges::any_of(request.aggregations,
+                                 [&](auto const& agg) { return predicate(agg->kind); });
+    });
+  };
+  auto const has_specialized =
+    any_agg([](auto kind) { return !detail::is_hash_aggregation(kind); });
+  if (any_agg(detail::needs_stable_groups)) {
+    helper.grouped_order(any_agg(detail::uses_group_labels), stream);
+  } else if (has_specialized) {
+    // Specialized aggregations need grouped rows too. Establish their final group order before
+    // a preceding counts-only reduction can cache results using the same group indices.
+    helper.unordered_grouped_order(stream);
+  }
+
+  // Share primitive results and compound dependencies across all requests.
   cudf::detail::result_cache cache(requests.size());
 
+  // A host UDF can request any dependency from the shared cache. Preserve its public result
+  // semantics and output resource ownership even when it is initially only an intermediate.
+  auto const expose_intermediates =
+    any_agg([](auto kind) { return kind == aggregation::HOST_UDF; });
+
+  if (!has_specialized) {
+    detail::hash::compute_groupby(requests, helper, &cache, expose_intermediates, stream, mr);
+  } else {
+    // Batch reducible requests together even when other requests need specialized algorithms.
+    std::vector<aggregation_request> reductions;
+    reductions.reserve(requests.size());
+    for (auto const& request : requests) {
+      aggregation_request direct;
+      direct.values = request.values;
+      for (auto const& agg : request.aggregations) {
+        if (detail::is_hash_aggregation(agg->kind)) {
+          direct.aggregations.emplace_back(
+            dynamic_cast<groupby_aggregation*>(agg->clone().release()));
+        }
+      }
+      if (!direct.aggregations.empty()) { reductions.push_back(std::move(direct)); }
+    }
+    if (!reductions.empty()) {
+      detail::hash::compute_groupby(reductions, helper, &cache, expose_intermediates, stream, mr);
+    }
+  }
+
   for (auto const& request : requests) {
-    auto store_functor =
-      detail::aggregate_result_functor(request.values, helper(), cache, stream, mr);
+    auto store_functor = detail::aggregate_result_functor(
+      request.values, helper, cache, expose_intermediates, stream, mr);
     for (auto const& agg : request.aggregations) {
-      // TODO (dm): single pass compute all supported reductions
       cudf::detail::aggregation_dispatcher(agg->kind, store_functor, *agg);
     }
   }
 
-  auto results = detail::extract_results(requests, cache, stream, mr);
+  auto results = detail::extract_results(requests, cache, stream, mr.get_output_mr());
 
-  return std::pair(helper().unique_keys(stream, mr), std::move(results));
+  return std::pair(helper.distinct_keys(stream, mr.get_output_mr()), std::move(results));
 }
 }  // namespace groupby
 }  // namespace cudf
