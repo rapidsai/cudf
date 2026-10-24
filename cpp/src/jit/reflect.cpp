@@ -316,6 +316,7 @@ std::string reflect_udf_signature(bool is_null_aware,
 
   return std::format("int({})", joined);
 }
+
 std::string reflect_udf_signature(bool is_null_aware,
                                   bool has_user_data,
                                   std::span<transform_input const> inputs,
