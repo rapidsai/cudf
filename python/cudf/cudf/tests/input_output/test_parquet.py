@@ -3086,6 +3086,10 @@ def test_parquet_reader_one_level_list(datadir, fname):
     assert_eq(pd.concat([expect] * 3, ignore_index=True), got)
 
 
+@pytest.mark.skipif(
+    version.parse(pa.__version__) < version.parse("24"),
+    reason="pyarrow < 24 cannot read a one-level list under a stub",
+)
 def test_parquet_reader_one_level_list_in_stub(datadir):
     fname = datadir / "one_level_list_in_stub.parquet"
 
